@@ -1,0 +1,410 @@
+# IntelliFleet Connected Logistics Platform
+## Frontend Build PRD — "Uber Freight" Black & White Edition
+**Prepared for:** Rare Global Food Trading Corp. (RGF)
+**Prepared for build execution by:** AI coding agent (Kimi K2 or equivalent)
+**Document type:** Product & Design Requirements Document (frontend-only phase)
+**Status:** Ready for build — backend integration deferred
+**Version:** 1.0 — 26 August 2026
+
+---
+
+## 0. How to Use This Document
+
+This PRD is written to be handed directly to an AI coding agent (Kimi K2, Claude Code, Cursor, etc.) as a **single source of truth** for building the IntelliFleet frontend. It intentionally over-specifies design tokens, component behavior, page structure, and data shapes so the agent does not need to guess.
+
+**Scope of this phase:** Frontend only, fully mocked data. No live backend, no real WhatsApp/Viber/SMS/Voice providers. Every screen must work end-to-end against local mock data/JSON fixtures so RGF stakeholders can click through a real, animated, production-quality experience. The mock data layer must be swappable for the real API later with minimal refactor (see Section 12).
+
+**Source of truth for functional scope:** the "IntelliFleet Connected Logistics Platform — RGF Client Proposal" (19 Aug 2026). Every page, workflow, and data entity in this PRD is traceable back to that proposal. Do not invent new business features; do polish and animate what's already scoped.
+
+---
+
+## 1. Product Vision
+
+IntelliFleet is RGF's cold-chain logistics control platform. The frontend must feel like **Uber Freight meets a premium EV dashboard**: confident, monochrome, data-dense but never cluttered, with cinematic motion that makes fleet operations feel alive rather than like a spreadsheet.
+
+**One-sentence brief:** *A black-and-white, cinematically-animated operations platform where a dispatcher can watch a live cold-chain fleet move across the Philippines, and where drivers, customers, and warehouse managers each get a purpose-built view of the same truth.*
+
+**Non-negotiables:**
+- Pure black/white/grayscale palette with a single restrained accent (see Section 4).
+- A real, licensed/stock **video** hero (trucks, cold-chain warehouses, highways, night driving) — never an AI-generated or illustrated hero video. Treat the hero video the way Uber Freight, Flexport, or Convoy treat theirs: cinematic, desaturated, slow motion, confident.
+- 3D/motion elements must be built with real WebGL/CSS technology (Three.js, Spline export, or GSAP + SVG/Canvas) — not static mockups pretending to be 3D.
+- The product must read as **enterprise-grade freight tech**, not a marketing site. Motion serves comprehension (state changes, live positions, transitions) more than decoration.
+
+---
+
+## 2. Goals & Non-Goals
+
+### 2.1 Goals for this build phase
+1. Ship a fully navigable, responsive, animated frontend covering all 5 user roles from the proposal (Dispatcher, Driver, Warehouse Manager, Customer/Client, Superadmin).
+2. Build the **Operations Control Tower** (dispatcher home) as the flagship screen — live map, fleet, alerts, communications timeline.
+3. Build the **public marketing/landing site** for IntelliFleet + RGF (Uber Freight-style) as the front door before login.
+4. Build every page implied by the proposal's functional scope (Section 5 of proposal): fleet map, routes, load planning, alerts, communications gateway/timeline, client portal, admin/settings.
+5. Establish a component library, design token system, and mock-data contract that a backend team can plug into later without redesigning UI.
+6. Make it feel "world-class": smooth 60fps interactions, considered empty/error/loading states, accessible, mobile-responsive down to driver's phone width.
+
+### 2.2 Non-Goals (explicitly out of scope for this phase)
+- No real WhatsApp/Viber/SMS/Voice provider integration (mock only, per proposal Section 3.2/6).
+- No real Cartrack GPS feed — use a simulated/mocked live-position generator.
+- No authentication backend — use a mocked auth/session layer with role-switcher for demo purposes.
+- No payment, Shopify, or sensor integrations (proposal explicitly defers these to later phases).
+- No pricing/commercial content on the public site (proposal Section 17 explicitly withholds pricing).
+
+---
+
+## 3. Target Users & Core Jobs-to-be-Done
+
+| Role | Primary screen(s) | Core job |
+|---|---|---|
+| Dispatcher / Ops Manager | Control Tower, Routes, Load Planning, Communications | See everything, act fast, resolve exceptions |
+| Driver | Driver Mobile View | Get assignment, acknowledge, report status, hands-free-first |
+| Warehouse Manager | Warehouse Console | Confirm loading/receiving, see temperature exceptions |
+| Customer / Client | Client Portal | See order status, ETA, delivery outcome, no login friction |
+| Superadmin | Admin Console | Users, roles, templates, integrations, audit log |
+| Prospect / Visitor | Public Marketing Site | Understand IntelliFleet, request a demo |
+
+---
+
+## 4. Brand & Design System
+
+### 4.1 Design direction — CORRECTED per client reference (Uber Freight, actual)
+**Client-approved reference:** RGF supplied an actual Uber Freight page screenshot as the target look. This supersedes any dark/"tech noir" direction. The final direction is:
+
+- **Predominantly white / very light warm-gray background** (`#FAFAFA`–`#F5F5F5`), not black, not dark mode, as the default surface everywhere — public site AND internal dashboards.
+- **Black or near-black text** on white — bold, large, confident headlines set in a clean grotesque sans (Uber's own type feel: think Helvetica Neue / Inter Tight, heavy weight for headlines, regular for body).
+- **Real photography only** — actual trucks, drivers, warehouses, cold-chain operations, people at work. No stock "tech" imagery, no illustrations standing in for real content.
+- **No decorative icons.** Navigation, industry/category tabs, and section labels are plain text links (underline or weight change on active state) — exactly like the reference: `Auto  Chemical  Construction  CPG  Food & Beverage  Manufacturing  Packaging`. Functional icons inside the operational dashboards (map markers, status glyphs) are the only exception, and even there keep them minimal and monochrome.
+- **One CTA style:** solid black pill/rounded-rect button with white text ("Learn more", "Request a demo") — no gradients, no color CTA.
+- **Color is used sparingly and only where it's operationally meaningful** (a status dot for "critical" vs "on time" in the ops dashboards) — the public marketing site and most of the app should read as pure black/white/gray.
+
+### 4.2 Color tokens (corrected — light-first)
+
+```
+--paper:          #FAFAFA   /* primary page background everywhere, incl. app */
+--surface:        #FFFFFF   /* cards, panels */
+--surface-alt:    #F2F2F0   /* secondary section backgrounds, alternating bands */
+--hairline:       #E4E4E2   /* borders, dividers */
+--ink:            #0B0B0B   /* primary text, headlines — near-black not pure black */
+--ink-secondary:  #55565A   /* body copy, secondary text */
+--ink-muted:      #8A8B8E   /* captions, timestamps, placeholders */
+--cta-black:      #0B0B0B   /* solid CTA button fill */
+--cta-black-hover:#242424
+--danger:         #C4291F   /* critical alerts only — operational screens only */
+--success:        #1E7B44   /* delivered/on-time only — operational screens only */
+```
+
+Rule: this is a **light theme throughout** — public site, dispatcher tower, admin, client portal. There is no separate dark theme in this build. `--danger`/`--success` appear only as small status dots/chips inside operational screens (Control Tower, Alerts, Orders) — never on the marketing site, never as page backgrounds.
+
+### 4.3 Typography
+
+- **Display face:** `Neue Machina` or `General Sans` (fallback: `Inter Tight`) — used for hero headlines, page titles, big metrics. Set tight (-2% to -4% tracking), heavy weight (700–800).
+- **Body face:** `Inter` — used for all UI copy, tables, forms. Regular/medium weights only.
+- **Data/mono face:** `JetBrains Mono` or `IBM Plex Mono` — used for vehicle IDs, coordinates, timestamps, reference numbers (e.g. "A-1842", "DCD8953"), reinforcing the "operational truth" feel.
+
+Type scale (rem, base 16px):
+`Display XL 4.5 / Display L 3 / Display M 2.25 / H1 1.75 / H2 1.375 / Body 1 / Small 0.875 / Micro 0.75 (mono, uppercase, tracked +4%)`
+
+### 4.4 Layout & spacing
+- 8px base grid. Container max-width 1440px on marketing pages; full-bleed edge-to-edge on operational dashboards (map/table screens use every pixel).
+- Card radius: 12px on marketing/consumer surfaces, 4px (near-sharp, "industrial") on operational dashboards — this radius contrast is intentional and reinforces "consumer vs. operator" surfaces.
+- Hairline borders (`1px solid var(--hairline)`), no drop shadows, no glow effects. Emphasis comes from weight and spacing, not color — matches the flat, clean look of the reference.
+
+### 4.5 Motion principles
+- **Page load:** one orchestrated entrance per page (staggered fade+rise, 400ms, ease `cubic-bezier(.16,1,.3,1)`), not scattered per-element animation.
+- **Industry/category tabs:** clicking a tab (e.g. "Auto", "Food & Beverage" — reference pattern) crossfades the image + headline + body copy panel below it, exactly like the Uber Freight reference. This is the primary interaction pattern on the homepage, reused for role tabs (Dispatcher/Driver/Customer/Warehouse).
+- **Live data (ops dashboards only):** vehicle dots on the map pulse subtly and leave a short fading trail on movement — kept quiet and monochrome (dark dot on light map), not a glowing neon effect.
+- **State transitions:** status chips crossfade label changes (e.g. "En Route" → "Arrived") over 200ms rather than instant swap.
+- **Scroll (marketing site only):** scroll-triggered fade/rise reveals for feature sections; parallax on the dedicated home-page 3D/video background section (see 4.6).
+- **Respect `prefers-reduced-motion`:** all continuous animation (pulses, trails, parallax, tab crossfades) must fall back to static/instant states.
+- **Photography, not stock-tech imagery:** every hero and section image must be real, specific, on-brand photography — actual trucks, drivers, cold-chain warehouses, RGF-relevant industries — desaturation is optional but images should read as authentic documentary photography, matching the reference exactly (natural light, real work environments, no CGI look).
+
+### 4.6 Dedicated 3D/video home-page section
+Per the corrected brief: the homepage gets **one dedicated full-width section** (not the whole page) that explains the platform's features using a **3D and/or video background** — this is the one "wow" moment, everything else on the page is calm white/black editorial layout like the reference.
+- Placement: directly below the hero (which itself is a plain white/black headline + real photo, matching the reference — no video in the very first fold).
+- Content: a looping real video (cold-chain trucks, warehouse, live dispatch) OR a subtle 3D visualization (e.g. a rotating low-poly Philippines map with route lines connecting warehouse → delivery nodes), rendered in **grayscale/duotone (black, white, one gray)** so it stays consistent with the rest of the page rather than looking like a separate dark-mode intrusion.
+- As the user scrolls through this section, feature callouts (Live tracking / Route optimization / Cold-chain alerts / Connected channels) reveal one at a time, each with a short black headline and one line of body copy on a translucent white card over the video/3D, keeping text fully legible per accessibility requirements.
+- Built with **React Three Fiber** (3D option) or a compressed real-video loop with `object-fit: cover` (video option) — background must never use a neon/dark theme; treat it as a monochrome documentary layer, not a sci-fi dashboard layer.
+
+---
+
+## 5. Information Architecture / Sitemap
+
+```
+PUBLIC (marketing, light-touch auth wall)
+├── / (Landing / Home)
+├── /platform (Product overview — control tower, driver, customer, warehouse tabs)
+├── /how-it-works (Assignment → ETA → Delivery → Cold-chain workflows, visualized)
+├── /channels (WhatsApp / Viber / SMS / Voice AI explainer)
+├── /security (RBAC, audit, data policy — trust page)
+├── /about-rgf (About Rare Global Food Trading Corp.)
+├── /request-demo (Lead form)
+└── /login
+
+AUTHENTICATED — DISPATCHER / OPS MANAGER
+├── /app/tower                 (Operations Control Tower — flagship screen)
+├── /app/fleet                 (Fleet & vehicle detail)
+├── /app/routes                (Route planning & optimization)
+├── /app/loads                 (Load planning workspace)
+├── /app/orders                (Delivery orders & manifests)
+├── /app/alerts                (Alert center)
+├── /app/comms                 (Communications gateway: inbox + timeline)
+├── /app/comms/templates       (Message template manager)
+└── /app/reports               (Communication & ops analytics)
+
+AUTHENTICATED — DRIVER (mobile-first)
+├── /driver/today               (Today's assignment)
+├── /driver/route/:id           (Active route + stop list)
+├── /driver/status              (Status update / voice command sheet)
+└── /driver/history
+
+AUTHENTICATED — WAREHOUSE MANAGER
+├── /warehouse/dashboard
+├── /warehouse/loading
+├── /warehouse/receiving
+└── /warehouse/exceptions
+
+AUTHENTICATED — CLIENT / CUSTOMER (simplified, consumer-friendly layout)
+├── /portal/orders
+├── /portal/orders/:id           (Live tracking + ETA)
+└── /portal/support
+
+AUTHENTICATED — SUPERADMIN
+├── /admin/users
+├── /admin/roles
+├── /admin/integrations          (Provider status — mocked WhatsApp/Viber/SMS/Voice)
+├── /admin/templates
+└── /admin/audit-log
+```
+
+---
+
+## 6. Page-by-Page Specifications
+
+For every page below: **Purpose → Key components → States → Motion notes.**
+
+### 6.1 Public Landing (`/`)
+- **Hero:** White/light background, large bold black headline "One platform. Every mile. Every channel." Subhead in `--ink-secondary` referencing cold-chain reliability. Real photograph (not video) to the side or below, matching the reference's split hero layout. Primary CTA "Request a demo" (solid black pill button), secondary "See the platform" (text link with underline).
+- **Industry/role tabs:** directly below the hero, a plain-text tab row exactly like the reference (`Dispatcher  Driver  Warehouse  Customer`) — clicking a tab crossfades a real photo + headline + short copy block + CTA, reusing proposal Section 4.3's role list as content.
+- **Dedicated 3D/video feature section:** placed after the tabbed hero block, per Section 4.6 — this is the one monochrome 3D/video moment on the page, not the hero itself.
+- **Live pulse map strip:** immediately below hero, a horizontal band showing the animated PH map with 8–12 simulated moving vehicle dots and a live-looking counter ("247 active deliveries" — mocked, ticking).
+- **Role tabs section:** four tabs (Dispatcher / Driver / Customer / Warehouse) — clicking swaps a large product screenshot/mock UI panel with a 3-bullet value list. Animate the panel swap with a slide+fade.
+- **Channels band:** WhatsApp / Viber / SMS / Voice AI logos with a one-line note that these are the channels IntelliFleet unifies (be accurate: describe as "connected channels," do not claim these integrations are live in this build).
+- **Trust/security strip:** RBAC, audit trail, encrypted-in-transit — 4 short claims with icons.
+- **Footer CTA + footer nav.**
+- Motion: scroll-triggered fade/rise per section, hero video parallax, optional 3D globe moment per 4.6.
+
+### 6.2 Platform Overview (`/platform`)
+Deep-dive version of the role tabs, one full section per role reusing the proposal's 4.3 "Primary user groups" and 5.x functional scope bullets as real copy content (reworded in plain UI voice, not sales copy).
+
+### 6.3 How It Works (`/how-it-works`)
+Turn proposal Section 7 workflows (Assignment, ETA/Exception, Delivery Completion, Cold-Chain Breach) into **animated horizontal step diagrams** — each step reveals on scroll with a connecting line that draws itself (SVG stroke-dashoffset animation). This page is the closest thing to "Figure 2/3" from the proposal, but interactive instead of static.
+
+### 6.4 Channels (`/channels`)
+Four cards (WhatsApp, Viber, SMS, Voice AI) each expandable to show planned functionality bullets from proposal Section 6.2–6.5. Label clearly as "Planned capability" where the proposal marks it as not-yet-implemented (proposal Section 3.2) — this is a credibility/trust detail worth keeping even in marketing.
+
+### 6.5 Security (`/security`)
+RBAC, tenant scoping, audit logging, credential handling — pull directly from proposal Section 8.3. Present as a simple trust page, not deep technical docs.
+
+### 6.6 Request Demo (`/request-demo`)
+Simple lead form (name, company, role, fleet size, message) — mock submit with a success state animation (checkmark draw-on).
+
+### 6.7 Login (`/login`)
+Split-screen on white background: left = clean form panel (email/password + "Continue with SSO" placeholder) in black text on white, right = a real photograph (driver, warehouse, or dispatch floor) with a light overlay. Include a **role switcher demo affordance** ("Preview as: Dispatcher / Driver / Warehouse / Client / Admin") since backend auth doesn't exist yet — this is what lets stakeholders click through every role without needing 5 real accounts.
+
+### 6.8 Operations Control Tower (`/app/tower`) — FLAGSHIP SCREEN
+This is the single most important screen in the build. Layout: full-bleed light map (60–70% of viewport) + right-hand docked panel (30–40%) + top command bar, all on the same white/off-white background as the rest of the product — no dark dashboard theme.
+
+**Top command bar:** RGF logo mark, global search (order/vehicle/driver/route), live clock, alert bell (badge count), user menu.
+
+**Map (center/left, dominant):**
+- Light/muted styled map (Mapbox GL or MapLibre "light" style, or a custom SVG PH map with light-gray landmass on white if no mapping license is available) showing live vehicle markers (mocked movement — see 12.2).
+- Each vehicle marker = a solid black dot + heading indicator + short fading gray trail — monochrome, no glow. Only alert-state markers use `--danger` (red) or `--success` (green), and only as small status dots, never as large fills.
+- Clicking a vehicle opens a slide-up mini card: driver name, vehicle ID (mono font), speed, fuel, ignition state, current route, ETA.
+- Geofence zones rendered as soft dashed polygons.
+- Map toggles: Live / Routes / Alerts / Heatmap (heatmap can be a stub for this phase).
+
+**Right panel (tabbed):**
+- **Fleet tab:** scrollable vehicle list, each row = status dot, vehicle ID, driver, speed, last-updated timestamp, mini sparkline of recent speed.
+- **Alerts tab:** live-updating list of alert types from proposal Section 3.1 (temperature, inventory, overdue, idling, geofence, route deviation, ETA drift) — each with severity color, timestamp, "Acknowledge / Escalate / Resolve" actions.
+- **Comms tab:** communication timeline per Figure 1 of the proposal — event → policy check → template → channel → provider → delivery status, rendered as a vertical timeline with channel icons (WhatsApp/Viber/SMS/Voice/Web) and status badges (Sent/Delivered/Failed/Acknowledged/Escalated).
+
+**Bottom strip (optional, collapsible):** KPI row — active vehicles, on-time %, open alerts, avg response time — each a small animated counter (count-up on load).
+
+**Empty/loading states:** skeleton map + skeleton list rows with shimmer, never a blank screen.
+
+**Motion:** marker pulse is subtle and continuous; panel tab switches crossfade; new alert arrival slides in from top with a brief `--danger` or `--success` flash (matched to severity) on the row, then settles to a plain hairline card.
+
+### 6.9 Fleet & Vehicle Detail (`/app/fleet`)
+Table view of all vehicles (sortable, filterable by status/type/zone) + detail drawer per vehicle showing GPS trail history (mocked polyline), maintenance-style metadata, and assigned driver.
+
+### 6.10 Route Planning (`/app/routes`)
+Route builder: origin/destination/stops list on the left, map with computed route on the right, mode toggle (Fastest / Cheapest / Shortest / Multimodal) per proposal 3.1, cost/duration/distance summary card, "Save & Assign" CTA. Route comparison view: 2–3 candidate routes shown as overlaid lines with a comparison table below (distance/time/cost).
+
+### 6.11 Load Planning (`/app/loads`)
+Drag-and-drop-feeling workspace (can be simplified to click-to-assign for this phase): cargo items grouped by cold-chain category, vehicle capacity gauges (visual fill bars per vehicle), draft vs. confirmed manifest states, per proposal 3.1.
+
+### 6.12 Orders & Manifests (`/app/orders`)
+Standard data table: order ID, customer, route, vehicle, status chip (Scheduled/Dispatched/En Route/Delivered/Failed/Partial), ETA, actions. Row click → order detail panel showing the full lifecycle (mirrors proposal 5.3 customer event list) as a vertical status tracker.
+
+### 6.13 Alert Center (`/app/alerts`)
+Full-page version of the Alerts tab — filterable by type/severity/vehicle/route/status, bulk-acknowledge, and a resolution workflow modal (per proposal 7.4 cold-chain breach workflow: acknowledge → resolve → escalate, with audit trail visible).
+
+### 6.14 Communications Gateway (`/app/comms`)
+This page visualizes proposal Figure 1 as a **living system diagram** at the top (Notification Event → Policy Check → Template → Channel Selection → Provider → Delivery/Status → Timeline), built as an animated SVG flow where a small dot travels the pipeline for the most recent event (mocked). Below it: searchable message/conversation list (per proposal 9.1 endpoints) with conversation detail view showing full thread across channels.
+
+- Manual send composer: pick recipient (driver/customer/route/group), pick or auto-select channel, template picker, preview, send (mocked network delay + status progression Sent→Delivered→Read).
+- Retry action on failed messages.
+
+### 6.15 Message Templates (`/app/comms/templates`)
+List of versioned templates (per proposal Section 10 examples: driver acknowledgement, customer ETA, critical escalation) with approve/draft states, variable placeholders highlighted in mono font, and a live preview pane per channel (WhatsApp bubble mock, SMS bubble mock, Voice script mock).
+
+### 6.16 Reports (`/app/reports`)
+Charts (mocked data): delivery success rate, channel delivery performance, fallback rate, escalation rate, cost-per-notification trendline — per proposal Section 13 monitoring metrics. Use simple black/gray bar and line charts on white, with `--danger`/`--success` reserved only for genuinely bad/good data points (e.g. a failed-delivery spike), never as a default palette.
+
+### 6.17 Driver — Today (`/driver/today`, mobile-first)
+Large single-assignment card: route name, stop count, cargo summary, "ACCEPT / DECLINE / CALL DISPATCH" as huge thumb-friendly buttons (mirrors proposal 5.2). Big, glanceable, minimal text — this screen is designed to be used one-handed, dashboard-mounted.
+
+### 6.18 Driver — Active Route (`/driver/route/:id`)
+Stop list with big status buttons per stop (En Route / Arrived / Loading / Loaded / Delivered / Failed / Vehicle Issue / Temperature Issue) per proposal 5.2. Include a prominent mocked "Voice Command" mic button with a simple listening-state animation (pulsing ring) — actual speech recognition is out of scope, but the interaction pattern must be built and demoable with a scripted mock response.
+
+### 6.19 Warehouse Console (`/warehouse/*`)
+Loading/receiving checklists, manifest confirmation, temperature exception cards (red-flagged, per proposal 5.4), simple and high-contrast for warehouse floor tablet use.
+
+### 6.20 Client Portal (`/portal/*`, simplified consumer layout)
+Consumer-simple: order card with live ETA countdown, a simplified map showing "your delivery" as a single moving dot, delivery outcome states, and a support/escalation button. This is deliberately the friendliest, lightest-touch screen in the whole product (per proposal 5.3 — "without requiring a dashboard login for every update").
+
+### 6.21 Admin Console (`/admin/*`)
+Users/roles table (RBAC per proposal 8.3), integrations status page showing WhatsApp/Viber/SMS/Voice as mocked "Not Connected / Sandbox / Live" states (be explicit these are mocked, matching the proposal's honesty about current implementation status), audit log table (append-only feel, mono timestamps).
+
+---
+
+## 7. Component Library (build these as reusable primitives first)
+
+- `Button` (primary/solid-black, secondary/outline, ghost/text-link, destructive) — all with pressed/hover/focus-visible states. No icon-only buttons on marketing pages per the no-icons rule; icon-only buttons are permitted only inside operational dashboards (e.g. map zoom controls).
+- `StatusChip` (animated color+label morph, per Section 4.5)
+- `LiveMarker` (map dot with pulse + trail, configurable severity color)
+- `Timeline` (vertical, used in Comms and Order detail)
+- `KpiCounter` (count-up animated number)
+- `DataTable` (sortable, filterable, row-expand, skeleton-loading variant)
+- `SlideUpPanel` / `Drawer`
+- `ChannelBadge` (WhatsApp/Viber/SMS/Voice/Web icons, consistent set)
+- `TemplatePreviewBubble` (per-channel message mock)
+- `AlertCard` (severity-coded, action buttons)
+- `RoleSwitcher` (demo-only, persists selection to local mock session)
+- `EmptyState` / `ErrorState` (per frontend-design writing guidance — explain what happened, what to do next, in-product voice)
+- `SectionReveal` (scroll-triggered wrapper for marketing pages)
+
+---
+
+## 8. Tech Stack Recommendation
+
+Match the existing IntelliFleet frontend stack referenced in the proposal (React/Vite) so this build can later merge into the real repo (`rgf-web/frontendmain/`) with minimal friction.
+
+- **Framework:** React 18 + Vite + TypeScript
+- **Routing:** React Router v6
+- **Styling:** Tailwind CSS (config extended with the token system in Section 4) + CSS variables. Single light theme throughout — no dark-mode toggle in this build.
+- **State/data:** React Query (TanStack Query) against a **mock API layer** (see Section 12) so the swap to real endpoints later is a base-URL/config change, not a rewrite
+- **Maps:** MapLibre GL JS (open-source, no vendor lock, supports a light/muted custom style) — fallback to a custom SVG Philippines map component if a mapping tile provider isn't available in the build environment
+- **3D:** React Three Fiber + drei (landing page hero only)
+- **Animation:** Framer Motion (component/page transitions), GSAP + ScrollTrigger (marketing scroll reveals, SVG path draw-ons)
+- **Charts:** Recharts (kept strictly black/gray/white with severity color as the only exception)
+- **Forms:** React Hook Form + Zod validation
+- **Icons:** Lucide React
+- **Testing:** Vitest + React Testing Library for components; Playwright for critical-path e2e (login → tower → alert acknowledge, driver flow, portal tracking)
+
+---
+
+## 9. Responsive & Accessibility Requirements
+
+- Breakpoints: 375 / 768 / 1024 / 1440 / 1920.
+- Driver screens: mobile-first, designed at 375–430px first, then scaled up.
+- Dispatcher/Admin screens: desktop-first (1440+), but must degrade gracefully to 1024 (tablet ops use) — not required to be usable at 375.
+- Client Portal: mobile-first, since customers primarily open tracking links on phones.
+- WCAG 2.1 AA: color contrast checked against the light palette (verify `--ink-secondary` and `--ink-muted` on `--paper`/`--surface` meet 4.5:1 for body text; use `--ink` where they don't), visible focus rings (2px black outline offset), full keyboard navigation, `aria-live` regions for live alert/status updates, `prefers-reduced-motion` fallback for all continuous motion.
+
+---
+
+## 10. Performance Budget
+
+- Landing page hero video: compressed, adaptive-bitrate or at minimum a ≤6MB optimized MP4/WebM with poster image; lazy-load below-the-fold sections.
+- Control Tower initial load: skeleton in <300ms, interactive map in <2s on a mid-tier laptop.
+- 3D hero: must not block main-thread hero text render — mount Three.js canvas after critical text paints.
+- Lighthouse targets: Performance ≥85, Accessibility ≥95, Best Practices ≥95 on the public landing page.
+
+---
+
+## 11. Content & Copy Guidance
+
+Follow the frontend-design writing principles: name things by what the user controls, active voice, no filler, consistent vocabulary end-to-end (if a button says "Acknowledge," the resulting toast says "Acknowledged," matching proposal terminology). Use the proposal's own example templates (Section 10) verbatim where they're already customer-facing copy (driver ACCEPT/DECLINE prompt, customer ETA message, critical escalation message) — these are real, approved-style copy, not placeholders.
+
+Do not fabricate claims the proposal doesn't support (e.g., don't say "WhatsApp integration live" — say "WhatsApp, Viber, SMS, and Voice AI, unified in one gateway" and mark implementation status honestly on `/channels` and `/admin/integrations`).
+
+---
+
+## 12. Mock Data Layer (so backend can plug in later)
+
+### 12.1 Principle
+Every screen fetches through a single `services/api/*.ts` abstraction using the entity shapes below (directly mapped from proposal Section 8.2 and 9.2). Swapping mock fetchers for real HTTP calls to the future backend should require no component changes.
+
+### 12.2 Core mock entities (TypeScript interfaces to implement)
+```
+Vehicle { id, plateNo, driverId, lat, lng, heading, speedKph, fuelPct, ignitionOn, status, lastUpdated }
+Driver { id, name, phone, preferredChannel, currentVehicleId, status }
+Route { id, name, stops[], mode: 'fastest'|'cheapest'|'shortest'|'multimodal', distanceKm, durationMin, cost }
+Order { id, customerId, routeId, vehicleId, status, etaWindow, createdAt, events[] }
+Alert { id, type, severity, vehicleId, orderId, message, status, createdAt, resolvedAt }
+Conversation { id, subjectType, subjectId, channel, messages[] }
+Message { id, conversationId, direction, channel, templateId, content, status, timestamps }
+NotificationTemplate { id, name, channel, language, body, variables[], status }
+User { id, name, role, email, permissions[] }
+AuditEvent { id, actorId, action, target, timestamp }
+```
+### 12.3 Live simulation
+Build a small mock "vehicle mover" utility that ticks every 2–3 seconds and nudges each mocked vehicle's lat/lng along a predefined polyline, so the Control Tower map always feels alive during demos — this is the single most important illusion for stakeholder buy-in.
+
+### 12.4 Fixtures
+Seed at least: 12 vehicles, 8 drivers, 15 orders across all status states, 10 alerts across all types/severities, 20 messages across all 5 channels and all status states, 6 templates, 5 users (one per role).
+
+---
+
+## 13. Delivery Plan for This Frontend Phase
+
+| Milestone | Scope |
+|---|---|
+| M1 — Design system | Tokens, typography, component library, Storybook (or equivalent) shell |
+| M2 — Public site | Landing, Platform, How-it-Works, Channels, Security, Request Demo, Login (incl. hero video + 3D moment) |
+| M3 — Control Tower | Flagship dispatcher screen fully working against mock live data |
+| M4 — Ops depth | Fleet, Routes, Loads, Orders, Alerts, Comms + Templates, Reports |
+| M5 — Role surfaces | Driver mobile flow, Warehouse console, Client Portal (light theme) |
+| M6 — Admin | Users/roles, integrations status, audit log |
+| M7 — Polish pass | Motion QA, accessibility audit, performance pass, empty/error states, responsive QA |
+
+---
+
+## 14. Acceptance Criteria (Frontend Phase)
+
+1. Every route in Section 5 renders with real (mocked) data, no dead links, no lorem ipsum in production copy.
+2. Control Tower shows continuously moving vehicles with pulse/trail animation and live-feeling alert arrivals.
+3. Hero uses a real video asset (not AI-generated), correctly overlaid and legible.
+4. One genuine 3D/WebGL moment exists on the public site and runs at acceptable frame rate on a mid-tier laptop.
+5. Role switcher allows a reviewer to preview all 5 role experiences without a real backend.
+6. All interactive elements have visible focus states and pass a basic keyboard-navigation walkthrough.
+7. `prefers-reduced-motion` correctly disables continuous animation.
+8. Design tokens are centralized (Tailwind config / CSS variables) — no hard-coded hex values scattered in components.
+9. Mock API layer is isolated behind a single service interface per entity, ready for backend swap.
+10. Lighthouse scores meet Section 10 targets on the landing page.
+
+---
+
+## 15. Explicit Instructions for the Build Agent (Kimi K2 / equivalent)
+
+0. **Visual reference is Uber Freight's actual public site** (white/off-white background, black bold headlines, real photography, plain-text navigation with no decorative icons, solid black pill CTA buttons). Do not build a dark "tech dashboard" theme anywhere in this product — public site, dispatcher tower, admin, and portal all share the same light theme. The only color beyond black/white/gray is `--danger` (red) and `--success` (green), and only as small status indicators inside operational screens, never as backgrounds or marketing accents.
+1. Read this entire document before writing code. Build the design token system and component library (M1) before any full page.
+2. Do not use AI-generated or illustrated video for the hero — use a placeholder real stock video URL/asset and flag it clearly with a `// TODO: replace with licensed RGF footage` comment; do not attempt to synthesize a "video" from generated images.
+3. Prefer fewer, well-executed motion moments over many small effects, per Section 4.5 — the live map pulse is the one continuous animation; everything else is triggered (load/scroll/state-change).
+4. Keep the mock data layer honest and swappable (Section 12) — this is what lets RGF's real backend plug in later without a frontend rewrite.
+5. When the proposal marks something as "not yet implemented" (Section 3.2 of the proposal), the frontend may still show the UI (since this is a frontend-first build), but any user-facing copy about it must be accurate — do not claim live provider integrations exist.
+6. Ask no clarifying questions about business logic that's already defined in the source proposal — this PRD and the proposal together are the complete spec for this phase. Only ask if something is a pure implementation/library choice not covered here.
+
+---
+
+*End of PRD. This document should be paired with the original "IntelliFleet Connected Logistics Platform — RGF Client Proposal" (19 Aug 2026) when handed to the build agent, since this PRD assumes familiarity with that proposal's functional and data scope.*

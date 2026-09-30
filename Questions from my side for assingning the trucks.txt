@@ -1,0 +1,18 @@
+Here's the full list, bro, all in one sequence you can send as-is:
+
+Truck/Driver Assignment — Questions for the Team
+
+What factors determine which truck gets which order? Specifically:
+Does a truck "own" a fixed set of delivery areas or cities?
+Does a truck only pull from Mets, only from Glacier, or both?
+Does a truck have a fixed cold-chain zone, so certain products can only go on certain trucks?
+Is assignment based on order size/volume vs. how much a truck can physically fit?
+Does a specific customer always get the same truck/driver for familiarity?
+Do customer delivery time windows limit which truck can realistically make it there?
+Is this assignment decision made once per day, or does it change order-by-order as the day progresses?
+When a truck is full or unavailable, what's the fallback rule — does the order go to a specific backup truck, a third-party courier (ASIAN CONNECT, BHENTZ, etc.), or does it just wait?
+Are there any hard constraints that can never be violated — e.g. frozen goods must never share a compartment with ambient goods, a specific customer refuses a specific courier, etc.?
+Do the third-party couriers (ASIAN CONNECT/2/3, BHENTZ, WETMARKET, RAPID, FCL 2T, INHOUSE RIDER) get assigned by the same logic as our own Cartrack-tracked trucks, or are they handled completely differently — e.g. only used as overflow when our own trucks are full?
+Does each truck have a recorded weight/volume capacity limit anywhere today (even informally, like "DCD8953 can usually handle about X kg"), or has this never been tracked as a number?
+Is a product's cold-chain requirement (e.g. "-18°C frozen" vs. "2-4°C chilled" vs. "ambient") something that's recorded anywhere per product/SKU today, or is it just known informally by staff?
+Is a driver tied to one specific truck long-term, or can the same truck have different drivers on different days? In other words, when we assign "DCD8953," are we really assigning a driver too, or just the vehicle?

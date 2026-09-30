@@ -1,0 +1,17 @@
+name = "logistics-fish-tts-relay"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+preview_urls = false
+
+[observability]
+enabled = true
+
+[vars]
+FISH_AUDIO_REFERENCE_ID = "c1b0dc7374694185b876d65a63679a5b"
+FISH_AUDIO_MODEL = "s2.1-pro-free"
+FISH_AUDIO_LATENCY = "balanced"  # "normal" buffers the whole sentence before sending
+
+# Secrets (set with `wrangler secret put <NAME>`, never committed):
+#   FISH_AUDIO_API_KEY
+#   VAPI_SHARED_SECRET

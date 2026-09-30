@@ -1,0 +1,126 @@
+{
+  "test1": {
+    "beforeCount": "55",
+    "cardCount": 55,
+    "so": "WM-SO26-00187",
+    "client": "(CAVITE WET MARKET ) LUCAS",
+    "beforeScreenshot": "artifacts/intellifleet/verification/01-load-planning-before.png",
+    "assignedTruck": "DCD8953",
+    "assignedDriverId": "13",
+    "afterAssignmentText": "RARECHAIN.\nRGF operations\nCONTROL\nControl Tower\nFleet\nRoutes\nLoad planning\nEXECUTION\nOrders\nAlerts\n3\nCommunications\nReports\nWORKSPACE\nTemplates\nAdmin\nMS\nMara Santos\nOperations admin\nSearch orders, vehicles, drivers\n⌘ K\nLive feed\n16:27:29 PHT\nDispatcher\nDriver\nWarehouse\nClient\nAdmin\nMS\nWORKSPACE / LOAD PLANNING\nLoad planning\n\nBalance cargo, capacity, and cold-chain requirements before dispatch.\n\nInventory\nLoad Planning\nConfirmed SO\nTRUCK ASSIGNMENT QUEUE\nUnassigned Sales Orders 54\nDate from\nDate to\nWM-SO26-00186\n( CAVITE WET MARKET ) ESTILITA ILANDINO MEAT STORE\nUNASSIGNED\n0.0 kg\nTotal weight\n195.328\nTotal packs\nPHP 30,439.11\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nF 40-41 Kadiwa,Market Dasmariñas, Cavite City, Metro Manila\nSO26-17749\nMeat and Seafood Specialist Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n1000\nTotal packs\nPHP 261,785.64\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nVIRTUAL METS, Cavite City, Cavite, 1780\nSO26-17748\nMeat and Seafood Specialist Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n1000\nTotal packs\nPHP 261,785.64\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nVIRTUAL METS, Cavite City, Cavite, 1780\nSO26-17746\nMeat and Seafood Specialist Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n1000\nTotal packs\nPHP 261,785.64\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nVIRTUAL METS, Cavite City, Cavite, 1780\nSO26-17745\nMeat and Seafood Specialist Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n1000\nTotal packs\nPHP 261,785.64\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nVIRTUAL METS, Cavite City, Cavite, 1780\nSO26-17744\nMeat and Seafood Specialist Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n255\nTotal packs\nPHP 410,404.38\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nVIRTUAL METS, Cavite City, Cavite, 1780, Philippines\nSO26-17743\nMeat and Seafood Specialist Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n270\nTotal packs\nPHP 433,349.93\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nUnit 1210 Entrata Urban Complex, 26009 Civic Drive Filinvest, Muntinlupa, National Capital Region (Manila), 1780, Philippines\nSO26-17739\nTOPERTZ MEATSHOP & MINIMART\nUNASSIGNED\n0.0 kg\nTotal weight\n134.54000000000002\nTotal packs\nPHP 29,932.70\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nPoblacion Pto. Gal. Or. Min., Puerto Galera, Oriental Mindoro, Philippines\nSO26-17738\nMAKATI SHANGRI-LA HOTEL AND RESORT INCORPORATED\nUNASSIGNED\n0.0 kg\nTotal weight\n20\nTotal packs\nPHP 6,732.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nAyala Avenue cor Makati Ave San Lorenzo, Makati, National Capital Region (Manila), 1223, Philippines\nSO26-17736\nMANILA HOUSE PRIVATE CLUB\nUNASSIGNED\n0.0 kg\nTotal weight\n20\nTotal packs\nPHP 2,960.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nSeven Neo, Building 4th ave entrance basement, Bonifacio Global, Taguig, Metro Manila, 1632\nSO26-17726\nEntrata Hotel Services Inc\nUNASSIGNED\n0.0 kg\nTotal weight\n40\nTotal packs\nPHP 63,360.00\nOrder total\nGlacier South RGF\nPickup warehouse\nK316.1 Festival Mall Expansion Filinvest City Alabang, Muntinlupa City, National Capital Region (Manila), PHILIPPINES\nSO26-17725\nILUSTRADO RESTAURANT\nUNASSIGNED\n864.0 kg\nTotal weight\n72\nTotal packs\nPHP 18,792.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n744 GENERAL LUNA STREET ZONE 70, Manila, Metro Manila\nSO26-17720\nLe Chef\nUNASSIGNED\n0.0 kg\nTotal weight\n7\nTotal packs\nPHP 0.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nThe King at Alpha Land INC. 16 Villongco Road Sucat (West Service Road ), Paranaque City, National Capital Region (Manila), 1700, PHILIPPINES\nSO26-17715\nMakati North Hotel Ventures Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n32\nTotal packs\nPHP 5,959.80\nOrder total\nGlacier South RGF\nPickup warehouse\n6796 Ayala Avenue Corner Amorsolo & Salcedo Street, Makati City, National Capital Region (Manila), PHILIPPINES\nSO26-17714\nAO TRADE SAVERS OPC\nUNASSIGNED\n0.0 kg\nTotal weight\n460\nTotal packs\nPHP 150,282.00\nOrder total\nGlacier South RGF\nPickup warehouse\nG/f Jm Compound,Rockefeller St. Cor. South Superhighway, Makati City, National Capital Region (Manila), 1233, PHILIPPINES\nSO26-17712\nKENNETH LEIGH FLORES\nUNASSIGNED\n0.0 kg\nTotal weight\n27000\nTotal packs\nPHP 3,658,500.00\nOrder total\nGlacier South RGF\nPickup warehouse\nBatasan, Quezon City, National Capital Region (Manila)\nSO26-17665\nBungalow Cafe\nUNASSIGNED\n0.0 kg\nTotal weight\n20\nTotal packs\nPHP 6,336.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nBuilding Number 4 Molito Lifestyle Centre, Muntinlupa City, National Capital Region (Manila), PHILIPPINES\nSO26-17664\nBungalow Cafe\nUNASSIGNED\n0.0 kg\nTotal weight\n11.41\nTotal packs\nPHP 12,425.49\nOrder total\nGlacier South RGF\nPickup warehouse\nBuilding Number 4 Molito Lifestyle Centre, Muntinlupa City, National Capital Region (Manila), PHILIPPINES\nSO26-17663\nKUMPADRES TRADING CORP\nUNASSIGNED\n0.0 kg\nTotal weight\n300\nTotal packs\nPHP 66,600.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nMurang Karne seafoods atbp. Kaybagal north, tagaytay\nSO26-17661\nSAMGYUPSALAMAT - SAN JUAN\nUNASSIGNED\n720.0 kg\nTotal weight\n60\nTotal packs\nPHP 13,800.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nU-2F07 Metro Pointe Center P. Guevarra Cor N. Averilla San Juan, 1500, San Juan City, National Capital Region (Manila)\nSO26-17659\nSAMGYUPSALAMAT - UPAD\nUNASSIGNED\n720.0 kg\nTotal weight\n60\nTotal packs\nPHP 13,800.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nMGFC - UPAD 912 Pablo Ocampo St Manila, 1004\nSO26-17658\nSAMGYUPSALAMAT- CUBAO\nUNASSIGNED\n720.0 kg\nTotal weight\n60\nTotal packs\nPHP 13,800.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nEightplates Inc.(Cubao) Unit Pvgf016R Manhattan Parkview Araneta Center Gen Malvar Cor Gen Romulo Quezon, 1109\nSO26-17650\nIRA DAVID TABUNAN\nUNASSIGNED\n0.0 kg\nTotal weight\n15.82\nTotal packs\nPHP 949.20\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n-\nSO26-17648\nSimple Recipe Food Corporation\nUNASSIGNED\n0.0 kg\nTotal weight\n80\nTotal packs\nPHP 11,880.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nG&W Terraza Bldg Gil Fernando Ave Brgy San Roque, Marikina City, National Capital Region (Manila), PHILIPPINES\nSO26-17647\nALEEZA JOY MENDOZA\nUNASSIGNED\n0.0 kg\nTotal weight\n15\nTotal packs\nPHP 900.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n-\nSO26-17644\nMARIA DONNA BUTAD\nUNASSIGNED\n0.0 kg\nTotal weight\n9.7\nTotal packs\nPHP 1,028.20\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n-\nSO26-17624\nPRIME PACIFIC FOODS CORPORATION\nUNASSIGNED\n0.0 kg\nTotal weight\n521\nTotal packs\nPHP 144,421.20\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nArctic Cold Refrigeration, 1900 Mercedes Ave., Cainta, Rizal\nSO26-17622\nSODEXO ON-SITE SERVICES PHILIPPINES INC. - JP Morgan Chase- Food Service\nUNASSIGNED\n0.0 kg\nTotal weight\n100\nTotal packs\nPHP 26,670.60\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n6th Floor, JPMorgan Chase & Co Tower, Manila, 38th Street cor. 9th Avenue, Uptown Bonifacio, Bonifacio Global City, Taguig City, Metro Manila\nSO26-17613\nHOFICAD HIGH INC.-BGC\nUNASSIGNED\n0.0 kg\nTotal weight\n20\nTotal packs\nPHP 29,502.00\nOrder total\nGlacier South RGF\nPickup warehouse\nC3 Unit No. NELG-104A, Bonifacio High Street Central,, Taguig City, National Capital Region (Manila), 1630, PHILIPPINES\nSO26-17592\nBISTRO AMERICANO CORP. MODERN SHANGHAI AYALA FAIRVIEW\nUNASSIGNED\n0.0 kg\nTotal weight\n20\nTotal packs\nPHP 7,326.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nModern Shanghai - Fairview U010A,U011, Upper Ground Floor, Ayala Malls Fairview Terraces Quirino Highway Cor. Maligaya Drive Pasong Putik Proper Novaliches1118, Quezon City, National Capital Region (Manila), PHILIPPINES\nSO26-17567\nSMMEGA FOOD INC.\nUNASSIGNED\n0.0 kg\nTotal weight\n10\nTotal packs\nPHP 5,900.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nC3 Unit 207 UG Flr Bonifacio High Street Central BGC Fort Bonifacio, Taguig, National Capital Region (Manila)\nSO26-17565\nGENESIS BBQ CHICKEN ASIA INCORPORATED-BGC\nUNASSIGNED\n0.0 kg\nTotal weight\n10\nTotal packs\nPHP 5,900.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nC3 UNIT 207 UG FLR BONIFACIO HIGH STREET CENTRAL BGC FORT BONIFACIO,, TAGUIG CITY\nSO26-17561\nBISTRO AMERICANO CORP. MODERN SHANGHAI GLORIETTA\nUNASSIGNED\n0.0 kg\nTotal weight\n40\nTotal packs\nPHP 13,860.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nModern Shanghai Glorietta Unit 302 C Third Floor Glorietta 3 Parkway Drive Ayala Center San Lorenzo, 1223, Makati City, National Capital Region (Manila), PHILIPPINES\nSO26-17559\nBISTRO AMERICANO CORP MODERN SHANGHAI- TRINOMA\nUNASSIGNED\n0.0 kg\nTotal weight\n20.14\nTotal packs\nPHP 7,377.28\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nModern Shanghai - Trinoma Unit 4011-4012 M4 Level, Trinoma Mall1100, Quezon City, National Capital Region (Manila), PHILIPPINES\nSO26-17548\nMakati North Hotel Ventures Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n25\nTotal packs\nPHP 4,702.50\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n6796 Ayala Avenue Corner Amorsolo & Salcedo Street, Makati City, National Capital Region (Manila), PHILIPPINES\nSO26-17532\nJESS FINE FOOD INC.\nUNASSIGNED\n0.0 kg\nTotal weight\n88\nTotal packs\nPHP 21,344.40\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nJESS FINE FOOD INC\nSO26-17526\nFnb Essentials Management Inc (Tipsy Pig)\nUNASSIGNED\n0.0 kg\nTotal weight\n180\nTotal packs\nPHP 57,600.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n2A San Martin St. corner San Rafael Brgy. Kapitolyo, 1603, Pasig City, National Capital Region (Manila), PHILIPPINES\nSO26-17467\nRed Lotus Opus\nUNASSIGNED\n0.0 kg\nTotal weight\n20\nTotal packs\nPHP 6,534.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nLevel 1,Tenant 1038B-1040 Robinson's Place Opus Bridgetowne Blvd.,E.Rodriguez Jr.Ave.,Ugong Norte, Quezon City\nSO26-17462\nBISTRO AMERICANO CORP DENNY'S EASTWOOD\nUNASSIGNED\n0.0 kg\nTotal weight\n1\nTotal packs\nPHP 8,415.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nTCP Lobby G/F Eastwood Mall, Eastwood Avenue, Bagumbayan, Quezon city, Philippined\nSO26-17444\nTEXAS ROADHOUSE (MARIDIEN)\nUNASSIGNED\n0.0 kg\nTotal weight\n3\nTotal packs\nPHP 8,280.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nUnit 1 & 2, Ground Floor, Two Maridien Tower, 26th St, Bonifacio Global City,, Taguig City\nSO26-17438\nBISTRO AMERICANO CORP BULGOGI BROTHERS-NEWPORT\nUNASSIGNED\n0.0 kg\nTotal weight\n1\nTotal packs\nPHP 2,732.40\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nBulgogi Brothers - Newport F&B 5A, 2nd Level, Newport Mall, Resorts World, Pasay City, National Capital Region (Manila), 1309, PHILIPPINES\nSO26-17436\nBISTRO AMERICANO CORP MODERN SHANGHAI - MCKINLEY\nUNASSIGNED\n0.0 kg\nTotal weight\n2\nTotal packs\nPHP 5,464.80\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nModern Shanghai - Mckinley A112A G/F Venice Grand Canal Mckinley Hill, Pinagsama., Taguig City, National Capital Region (Manila), PHILIPPINES\nSO26-17410\nBISTRO - ULTRAX ENTERPRISES OPC\nUNASSIGNED\n600.0 kg\nTotal weight\n20\nTotal packs\nPHP 10,395.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n2F Mezza Food Hall, Watami NAIA Terminal 3, Pasay City, National Capital Region (Manila)\nSO26-17391\nCebu Coffee Ventures Inc.\nUNASSIGNED\n0.0 kg\nTotal weight\n90.50999999999999\nTotal packs\nPHP 31,992.18\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nAJI Warehouse, Brixton Street, Pasig City, National Capital Region (Manila), Philippines\nSO26-17371\nRED LOTUS (SHANGRILA)\nUNASSIGNED\n0.0 kg\nTotal weight\n2\nTotal packs\nPHP 5,520.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nUnits 7 & 8 Shangri-la Plaza Level 1 Main Wing Corner Shaw Blvd Wack Wack Greenhills Mandaluyong City\nSO26-17347\nRed Lotus Opus\nUNASSIGNED\n0.0 kg\nTotal weight\n2\nTotal packs\nPHP 5,520.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nLevel 1,Tenant 1038B-1040 Robinson's Place Opus Bridgetowne Blvd.,E.Rodriguez Jr.Ave.,Ugong Norte, Quezon City\nSO26-17343\nBISTRO AMERICANO CORP. FRIDAYS-SOUTHWOODS\nUNASSIGNED\n0.0 kg\nTotal weight\n2\nTotal packs\nPHP 5,464.80\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nFridays - Southwoods Fridays Southwoods - GF A1-A2 Southwoods Mall, Southwood city San Francisco (Halang),, San Francisco City, Laguna, 4024, PHILIPPINES\nSO26-17331\nMODERN SHANGHAI (MOA)\nUNASSIGNED\n0.0 kg\nTotal weight\n5\nTotal packs\nPHP 13,662.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n130 Entertainment Mall, SM Mall of Asia, Bay City,, Pasay, National Capital Region (Manila), 1300\nSO26-17327\nBonifacio Hotel Ventures Inc\nUNASSIGNED\n0.0 kg\nTotal weight\n80\nTotal packs\nPHP 17,820.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n30th Street Corner 11th Avenue, Bonifacio Global City, Taguig City, National Capital Region (Manila), 1630, PHILIPPINES\nSO26-17304\nTEXAS ROADHOUSE (VERMOSA)\nUNASSIGNED\n0.0 kg\nTotal weight\n3\nTotal packs\nPHP 8,280.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nGround Floor F11-F12 Ayala Malls Vermosa, Daang Hari Road, Pasong Buaya II Imus Cavite Imus City, Cavite City\nSO26-17299\nTHE TEXAS ROADHOUSE-UPTOWN\nUNASSIGNED\n0.0 kg\nTotal weight\n3\nTotal packs\nPHP 8,280.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n4th floor Uptown Mall, 36th St., BGC, Taguig City, National Capital Region (Manila), PHILIPPINES\nSO26-17223\nArmy Navy Burger Inc\nUNASSIGNED\n0.0 kg\nTotal weight\n20\nTotal packs\nPHP 5,544.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nF2 COLD Logistics Warehouse H Filipinas Benson Compound Dona Irenea Ave,, Paranaque City, Philippines\nSO26-17158\nWATAMI (AYALA NORTH EXCHANGE)\nUNASSIGNED\n0.0 kg\nTotal weight\n5\nTotal packs\nPHP 13,662.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nWatami - Ayala North Exchange Unit 25 2F Shops at Ayala North Exchange, Ayala Ave. Cor Amorsolo and Salcedo St. San Lorenzo 1229, Makati City, National Capital Region (Manila), 1229, PHILIPPINES\nSO26-16660\nPA PAMPANGA FOOD VENTURES INC.-VIKINGS PAMPANGA\nUNASSIGNED\n0.0 kg\nTotal weight\n200\nTotal packs\nPHP 26,730.00\nOrder total\nGlacier South RGF\nPickup warehouse\nAx3 127-130 Sm City Pampanga, Lagundi, Mexico City, Pampanga, PHILIPPINES",
+    "afterAssignmentVisible": false,
+    "confirmedText": "RARECHAIN.\nRGF operations\nCONTROL\nControl Tower\nFleet\nRoutes\nLoad planning\nEXECUTION\nOrders\nAlerts\n3\nCommunications\nReports\nWORKSPACE\nTemplates\nAdmin\nMS\nMara Santos\nOperations admin\nSearch orders, vehicles, drivers\n⌘ K\nLive feed\n16:27:32 PHT\nDispatcher\nDriver\nWarehouse\nClient\nAdmin\nMS\nWORKSPACE / LOAD PLANNING\nLoad planning\n\nBalance cargo, capacity, and cold-chain requirements before dispatch.\n\nInventory\nLoad Planning\nConfirmed SO\n0\norders\nFrom\nTo\nOrder status\nAll\nDraft\nConfirmed\nAcknowledged\nVoid\nExport\nSend to Email\nAcknowledge filtered\nRefresh\nNo orders for this filter - click Refresh to sync Zoho.",
+    "confirmedVisible": false,
+    "confirmedScreenshot": "artifacts/intellifleet/verification/03-confirmed-so.png",
+    "afterHardReloadConfirmed": false,
+    "afterHardReloadLoadPlanningVisible": false,
+    "hardReloadScreenshot": "artifacts/intellifleet/verification/04-hard-reload-load-planning.png"
+  },
+  "test2": {
+    "date19Text": "RARECHAIN.\nRGF operations\nCONTROL\nControl Tower\nFleet\nRoutes\nLoad planning\nEXECUTION\nOrders\nAlerts\n3\nCommunications\nReports\nWORKSPACE\nTemplates\nAdmin\nMS\nMara Santos\nOperations admin\nSearch orders, vehicles, drivers\n⌘ K\nLive feed\n16:27:42 PHT\nDispatcher\nDriver\nWarehouse\nClient\nAdmin\nMS\nWORKSPACE / LOAD PLANNING\nLoad planning\n\nBalance cargo, capacity, and cold-chain requirements before dispatch.\n\nInventory\nLoad Planning\nConfirmed SO\nTRUCK ASSIGNMENT QUEUE\nUnassigned Sales Orders 87\nDate from\nDate to\nSO26-17747\n( CAVITE WET MARKET ) MILD MEATSHOP\nUNASSIGNED\n0.0 kg\nTotal weight\n200\nTotal packs\nPHP 29,800.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nE13 Frozen Meat Section Pasikhay Wet and Dry Market Sabang Naic Cavite, Cavite City, Metro Manila, Philippines\nSO26-17742\nSUSAN CABUYAO\nUNASSIGNED\n0.0 kg\nTotal weight\n200\nTotal packs\nPHP 51,000.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n559 niugan cabuyao lagun, Cabuyao, Laguna, PHILIPPINES\nSO26-17733\nBlessing In These Guys\nUNASSIGNED\n0.0 kg\nTotal weight\n100\nTotal packs\nPHP 57,717.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\n(Collection - Kadluan Management Comp., Unit B 15th Floor Strata 100 Building Ortigas Center, 1605, Pasig, National Capital Region (Manila), PHILIPPINES\nSO26-17731\nBISTRO AMERICANO CORP MODERN SHANGHAI- TRINOMA\nUNASSIGNED\n0.0 kg\nTotal weight\n40\nTotal packs\nPHP 13,200.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nModern Shanghai - Trinoma Unit 4011-4012 M4 Level, Trinoma Mall1100, Quezon City, National Capital Region (Manila), PHILIPPINES\nSO26-17729\nBISTRO AMERICANO CORP. MODERN SHANGHAI AYALA FAIRVIEW\nUNASSIGNED\n0.0 kg\nTotal weight\n40\nTotal packs\nPHP 13,200.00\nOrder total\nMets Cold Storage Services Inc. RGF\nPickup warehouse\nModern Shanghai - Fairview U010A,U011, Upper Ground Floor, Ayala Malls Fairview Terraces Quirino Highway Cor. Maligaya Drive Pasong Putik Proper Novaliches1118, Quezon City, National Capital Re",
+    "requestUrls": [
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=unassigned",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-18&page=1&per_page=100&status=All&assignment=unassigned",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-18&page=1&per_page=100&status=All&assignment=unassigned",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=assigned",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=unassigned",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=unassigned",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-18&page=1&per_page=100&status=All&assignment=unassigned",
+        "postData": null
+      }
+    ],
+    "returnedTo18": true
+  },
+  "test3": {
+    "filters": {
+      "dateInputs": 2,
+      "searchInputs": 1,
+      "statusSelects": 2
+    },
+    "confirmedRows": 101,
+    "drawerHasLineItems": false
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=unassigned",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=unassigned",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-18&page=1&per_page=100&status=All&assignment=unassigned",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-18&page=1&per_page=100&status=All&assignment=unassigned",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=assigned",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-19&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=unassigned",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-19&page=1&per_page=100&status=All&assignment=unassigned",
+      "postData": null
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8003/api/load-planning/inventory/sales-orders?date_from=2026-09-18&date_to=2026-09-18&page=1&per_page=100&status=All&assignment=unassigned",
+      "postData": null
+    }
+  ]
+}

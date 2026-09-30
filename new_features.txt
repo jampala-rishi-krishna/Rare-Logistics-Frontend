@@ -1,0 +1,106 @@
+# IntelliFleet — Future Feature Roadmap
+### Sourced from Fleet-Ops (Fleetbase) feature analysis — for later phased build
+
+**Status:** Backlog / not started. Reference this after all current active workstreams (RGF Logistics Report, Control Tower socket fix, Send to Email, Zoho OAuth) are fully closed out.
+
+**How to use this file:** each item below is scoped to be turned into its own PRD when picked up — paste the relevant section to Claude/Claude Code when starting that item. Don't build multiple items in parallel; go one at a time per the sequencing notes.
+
+---
+
+## What IntelliFleet already covers (not gaps — for context)
+
+- Live fleet tracking (Control Tower, Cartrack GPS via WebSocket)
+- Sales order data (Load Planning, Reports tab, Zoho Inventory integration)
+- Route optimization (Google OR-Tools, Capacitated VRP with Time Windows)
+- Internal comms tab (exists in sidebar)
+- Reporting (Delivery Performance, RGF Logistics Report)
+
+---
+
+## Phase 1 — High value, foundational
+
+### 1. Driver-side mobile app
+**Why first:** this gates almost everything else below. Right now drivers are tracked passively via GPS only — there's no way for a driver to confirm pickup, arrival, delivery, or submit proof, without a phone call or text to dispatch.
+
+**Scope to define later:**
+- Native or PWA? (native = better camera/GPS access, PWA = faster to ship, no app store approval)
+- Core actions: view assigned orders/route for the day, mark "picked up" / "arrived" / "delivered", capture POD (see #2)
+- Auth: how drivers log in (phone number? PIN? shared device per truck?)
+- Offline handling: PH road conditions mean spotty signal is common — app needs to queue actions and sync when back online, not just fail silently
+
+### 2. Proof of Delivery (POD)
+**Depends on:** #1 (driver app) — needs a submission mechanism.
+**Why:** resolves delivery disputes fast, especially with restaurant-chain customers (Bistro Americano, Texas Roadhouse, etc.) who may dispute what arrived/when.
+
+**Scope to define later:**
+- Photo capture, and/or signature capture, at point of delivery
+- Stored against the specific SO — needs a storage location decision (Neon + object storage, or a simpler approach)
+- Should this also flow back into Zoho Inventory as an attachment, or stay IntelliFleet-only?
+
+### 3. Vehicle maintenance tracking
+**Why:** currently zero coverage in IntelliFleet. For 6 trucks running cold-chain routes daily, an unplanned breakdown is a direct spoilage/revenue risk, not just an inconvenience.
+
+**Scope to define later (start simple, don't over-build):**
+- Per-vehicle: last service date, next service due date, basic maintenance log entries
+- Optional later: work orders, parts/equipment tracking, warranty tracking (Fleet-Ops has all of this — RGF almost certainly doesn't need the full depth at 6 vehicles)
+- Who logs entries — manual admin entry is fine for v1, don't build automation for this yet
+
+---
+
+## Phase 2 — Additive to what already works
+
+### 4. Geofencing on Control Tower
+**Depends on:** nothing new — additive to existing live map.
+**Scope to define later:**
+- Define zones around the two depots (Mets Cold Storage, Glacier Cold Storage) at minimum
+- Alert/log when a vehicle enters or exits a defined zone
+- Consider: does this replace or complement manual "arrived at depot" status updates?
+
+### 5. On-time delivery % / top-driver analytics
+**Depends on:** nothing new — fits into existing Reports tab alongside Delivery Performance / RGF Logistics Report.
+**Scope to define later:**
+- Define "on-time" precisely (delivered by the SO's expected shipment_date? by a customer-requested window?)
+- Per-driver breakdown: delivery volume, on-time rate — needs driver identity properly tied to orders (currently some trucks show "NO STAFF" for third-party couriers — decide how/whether to include those)
+
+### 6. Customer-facing order tracking link
+**Why:** currently, if a customer asks where their order is, someone at RGF has to check IntelliFleet and relay it manually. A shareable, read-only tracking link per SO removes that manual step.
+
+**Scope to define later:**
+- Public link, no login — needs careful scoping of exactly what's exposed (live location? ETA only? no exposure of other customers' data)
+- Decide whether this is worth building before or after the driver app — a tracking link showing "in transit" is much more useful once driver-confirmed status (#1) exists
+
+### 7. Order-level internal notes/comments
+**Why:** a dispatcher leaving a note directly on an SO ("customer moved delivery window to 3pm") that's visible inline to whoever else touches that order, instead of a disconnected Cliq/Slack message.
+
+**Scope to define later:**
+- Simple: a notes field/thread per SO, visible in the existing detail drawer
+- Does NOT need to be a full chat system — that's overkill for RGF's scale
+
+---
+
+## Phase 3 — Investigate before committing (may already be partially covered)
+
+### 8. Auto driver/vehicle assignment
+**Before building:** check whether the existing OR-Tools VRP setup already handles driver+vehicle assignment, or only stop-sequencing/routing. If it's only routing, this would add a layer that suggests which driver+truck combination to assign based on capacity/availability — don't duplicate work if OR-Tools already does this.
+
+---
+
+## Explicitly NOT relevant to RGF — skip these
+
+These are Fleet-Ops/Fleetbase features built for multi-tenant SaaS logistics platforms serving many separate companies — not useful for a single company's internal tool:
+- Service quotes / rate cards
+- Payments / Stripe Connect billing integration
+- Multi-vendor onboarding
+- Extension marketplace / plugin architecture
+- Generic telematics-provider abstraction (RGF only uses Cartrack — no need to abstract for other providers)
+
+---
+
+## Sequencing recommendation
+
+1. **Driver app (#1)** first — it unlocks POD (#2) and makes the tracking link (#6) actually meaningful (confirmed status instead of just GPS position).
+2. **POD (#2)** right after, since the app work is already done.
+3. **Vehicle maintenance (#3)** can run in parallel with #1/#2 — it's independent, no shared dependency.
+4. **Geofencing (#4)** and **analytics (#5)** are quick additive wins, good filler between bigger items.
+5. **Tracking link (#6)** and **notes (#7)** — do after the driver app, not before.
+6. **Auto-assignment (#8)** — investigate first, may not need new work at all.

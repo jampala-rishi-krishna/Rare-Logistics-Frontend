@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Approval Request: Monthly IntelliFleet Hosting Budget</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #fafaf8;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #0b0b0b;
+      line-height: 1.6;
+    }
+
+    .email-wrapper {
+      width: 100%;
+      padding: 32px 0;
+      background-color: #fafaf8;
+    }
+
+    .container {
+      width: 640px;
+      max-width: 640px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+
+    .header {
+      background-color: #0b0b0b;
+      padding: 28px 32px;
+      border-bottom: 3px solid #b7b6b1;
+    }
+
+    .badge {
+      display: inline-block;
+      background-color: transparent;
+      border: 1px solid #77787b;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      padding: 4px 10px;
+      border-radius: 2px;
+      margin-bottom: 8px;
+    }
+
+    .header h1 {
+      margin: 0;
+      color: #ffffff;
+      font-size: 25px;
+      line-height: 1.3;
+    }
+
+    .header p {
+      margin: 6px 0 0 0;
+      color: #d8d7d2;
+      font-size: 13px;
+    }
+
+    .content {
+      padding: 32px;
+    }
+
+    .content p {
+      margin: 0 0 16px 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .cost-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0 24px 0;
+    }
+
+    .cost-table th {
+      background-color: #f2f2ef;
+      text-align: left;
+      padding: 11px 12px;
+      font-size: 13px;
+      font-weight: bold;
+      border-bottom: 2px solid #0b0b0b;
+    }
+
+    .cost-table td {
+      padding: 11px 12px;
+      font-size: 13px;
+      border-bottom: 1px solid #efeeeb;
+      vertical-align: top;
+    }
+
+    .cost-table .total-row td {
+      font-weight: bold;
+      background-color: #edf6f0;
+      color: #1e7b44;
+      border-bottom: none;
+    }
+
+    .signoff {
+      margin-top: 26px;
+      font-size: 14px;
+    }
+
+    .footer {
+      padding: 20px 32px;
+      border-top: 1px solid #dfe3e6;
+      color: #77787b;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px 0;
+      color: #77787b;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+    }
+
+    .section-label {
+      margin: 24px 0 8px 0;
+      color: #6b7280;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    @media only screen and (max-width: 680px) {
+      .email-wrapper {
+        padding: 0;
+      }
+
+      .container {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+
+      .header,
+      .content,
+      .footer {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+
+      .cost-table th,
+      .cost-table td {
+        padding: 9px 8px;
+        font-size: 12px;
+      }
+
+      .header h1 {
+        font-size: 19px;
+      }
+
+      .content {
+        padding-top: 24px;
+        padding-bottom: 24px;
+      }
+
+      .cost-table th,
+      .cost-table td {
+        vertical-align: top;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="email-wrapper">
+
+    <div class="container">
+
+      <!-- HEADER -->
+      <div class="header">
+
+        <p class="eyebrow">RareChain · Operations infrastructure</p>
+
+        <span class="badge">Approval request</span>
+
+        <h1>
+          Monthly hosting budget — IntelliFleet
+        </h1>
+
+        <p>
+          Logistics platform · Recurring monthly expense
+        </p>
+
+      </div>
+
+      <!-- CONTENT -->
+      <div class="content">
+
+        <p>Hi Manager,</p>
+
+        <p>
+          I am requesting approval for the recurring production hosting cost of
+          the <strong>RareChain (IntelliFleet) Logistics Platform</strong>.
+          The platform supports daily fleet dispatch, load planning, live GPS
+          visibility, order operations, communications, and route optimization.
+        </p>
+
+        <p class="section-label">Monthly operating estimate</p>
+
+        <!-- COST TABLE -->
+        <table class="cost-table" cellpadding="0" cellspacing="0">
+
+          <tr>
+            <th>Component</th>
+            <th>Provider</th>
+            <th>Monthly Cost</th>
+          </tr>
+
+          <tr>
+            <td>Frontend hosting</td>
+            <td>Cloudflare Pages</td>
+            <td>$0.00</td>
+          </tr>
+
+          <tr>
+            <td>Backend hosting (Singapore region)</td>
+            <td>Render — Starter tier</td>
+            <td>$7.00</td>
+          </tr>
+
+          <tr>
+            <td>Database</td>
+            <td>Neon (free tier)</td>
+            <td>$0.00</td>
+          </tr>
+
+          <tr class="total-row">
+            <td colspan="2">
+              Total monthly recurring cost
+            </td>
+            <td>
+              ~$7.00 / month
+            </td>
+          </tr>
+
+        </table>
+
+        <p>
+          The requested recurring amount is approximately
+          <strong>$7.00 per month</strong>. This covers the always-on backend
+          service required for live GPS tracking, websocket connections, and
+          scheduled Zoho synchronization. Frontend hosting and the current
+          database tier remain within their planned free-tier allocation.
+        </p>
+
+        <p>
+          Please approve this monthly operating expense so the platform can be
+          deployed and kept available for daily operations. I can provide the
+          deployment details or review lower-cost alternatives if required.
+        </p>
+
+        <!-- SIGN OFF -->
+        <div class="signoff">
+
+          <p>
+            Thank you,<br>
+            <strong>Rishi</strong>
+          </p>
+
+        </div>
+
+      </div>
+
+      <!-- FOOTER -->
+      <div class="footer">
+
+        RareChain · Rare Global Food Trading Corp. · Logistics Platform Infrastructure
+
+      </div>
+
+    </div>
+
+  </div>
+
+</body>
+</html>

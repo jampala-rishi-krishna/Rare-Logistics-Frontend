@@ -1,0 +1,75 @@
+IntelliFleet local startup
+=========================
+
+Use two PowerShell terminals. Start the backend first, then the frontend.
+
+TERMINAL 1 - Backend
+--------------------
+
+Set-Location "C:\Users\dexte\Downloads\RGF\RGF\projects\IntelliFleet-Logistics-Platform\IntelliFleet-Logistics-Platform\backend"
+
+If port 8003 is already in use, do not start a second backend. Check which process owns it:
+
+$portProcessIds = Get-NetTCPConnection -LocalPort 8003 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+if ($portProcessIds) { Get-Process -Id $portProcessIds | Select-Object Id,ProcessName,Path }
+
+If the existing process is the IntelliFleet backend, reuse it and open the frontend.
+If it is stale, press Ctrl+C in the terminal that started it. If that terminal is unavailable,
+open PowerShell as Administrator and run:
+
+Stop-Process -Id <PID> -Force
+
+Replace <PID> with the numeric owner returned above. Do not type the angle brackets.
+
+Then start the backend:
+
+Start the backend using the virtual-environment executable directly (this avoids blocked system Python policies):
+
+.\venv\Scripts\Activate.ps1
+
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8003
+
+If this reports `uv trampoline failed to spawn Python child process` / `os error 4551`,
+Windows Application Control is blocking the Python runtime. Ask IT/security to allow
+these project runtime paths, then rerun the command:
+
+C:\Users\dexte\Downloads\RGF\RGF\projects\IntelliFleet-Logistics-Platform\IntelliFleet-Logistics-Platform\backend\venv\Scripts\python.exe
+C:\Users\dexte\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\python.exe
+
+Verify the policy issue with:
+
+.\venv\Scripts\python.exe --version
+
+Wait for:
+Application startup complete.
+
+Keep this terminal running.
+
+TERMINAL 2 - Frontend
+---------------------
+
+Set-Location "C:\Users\dexte\Downloads\RGF\RGF\projects\IntelliFleet-Logistics-Platform\IntelliFleet-Logistics-Platform"
+pnpm.cmd --filter @workspace/intellifleet dev
+
+Open:
+http://localhost:5173/login
+
+Dispatcher login:
+Email: dispatcher@rgf.com
+Password: @123
+
+Admin login:
+Email: admin@rgf.com
+Password: IntelliFleet@2026!
+
+Reports tab:
+- Uses Zoho Inventory only.
+- Includes 6 KPIs, 4 Order Fulfillment cards, and 4 Transaction cards.
+- Does not include Gmail, Zoho Projects, Google Calendar, or Pallet Efficiency cards.
+- If Zoho module permissions are missing, the affected card shows an unavailable message.
+- Required Zoho OAuth scopes:
+  ZohoInventory.salesorders.READ,ZohoInventory.packages.READ,ZohoInventory.transferorders.READ,ZohoInventory.inventoryadjustments.READ,ZohoInventory.purchasereceives.READ,ZohoInventory.invoices.READ
+- If those scopes change, generate a new Zoho refresh token, update backend\.env ZOHO_REFRESH_TOKEN, then restart the backend.
+
+To stop the application, press Ctrl+C in both terminals.
+If the backend was already running, stop it first with Ctrl+C before starting it again.

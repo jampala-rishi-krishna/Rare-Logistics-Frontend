@@ -1,0 +1,42 @@
+IntelliFleet local startup
+=========================
+
+Use two PowerShell terminals. Start the backend first, then the frontend.
+
+TERMINAL 1 - Backend
+--------------------
+
+Set-Location "C:\Users\dexte\Downloads\RGF\RGF\projects\IntelliFleet-Logistics-Platform\IntelliFleet-Logistics-Platform\backend"
+
+# Stop any existing listener on port 8003, if present.
+$portProcessIds = Get-NetTCPConnection -LocalPort 8003 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+if ($portProcessIds) { Stop-Process -Id $portProcessIds -Force }
+
+# Use the project virtual environment directly. Do not use the blocked system `python` command.
+.\venv\Scripts\uvicorn.exe main:app --reload --host 127.0.0.1 --port 8003
+
+If `uv trampoline failed to spawn Python child process` / `os error 4551` appears,
+Windows Application Control is blocking the Python runtime. Ask IT/security to allow:
+
+C:\Users\dexte\Downloads\RGF\RGF\projects\IntelliFleet-Logistics-Platform\IntelliFleet-Logistics-Platform\backend\venv\Scripts\python.exe
+C:\Users\dexte\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\python.exe
+
+Wait for:
+Application startup complete.
+
+Keep this terminal running.
+
+TERMINAL 2 - Frontend
+---------------------
+
+Set-Location "C:\Users\dexte\Downloads\RGF\RGF\projects\IntelliFleet-Logistics-Platform\IntelliFleet-Logistics-Platform"
+pnpm.cmd --filter @workspace/intellifleet dev
+
+Open:
+http://localhost:5173/login
+
+Dispatcher login:
+dispatcher@rgf.test
+IntelliFleet!2026
+
+To stop the application, press Ctrl+C in both terminals.

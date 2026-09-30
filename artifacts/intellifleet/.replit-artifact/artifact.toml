@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "IntelliFleet Logistics Platform"
+description = "A light-first connected logistics platform for Rare Global Food Trading Corp. with a public product experience, live operations control tower, and role-based mock views for dispatchers, drivers, warehouses, clients, and admins."
+version = "1.0.0"
+id = "artifacts/intellifleet"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22859
+
+[services.development]
+run = "pnpm --filter @workspace/intellifleet run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/intellifleet", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/intellifleet/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22859"
+BASE_PATH = "/"
