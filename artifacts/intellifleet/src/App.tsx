@@ -35,7 +35,7 @@ import type { PendingAction } from "@/services/api/agent";
 import heroBackgroundVideo from "../../../media/Rishi.mp4";
 import dashboardIllustration from "../../../media/dashabord.png";
 import rishiProfilePhoto from "../../../media/rishi_pic.png";
-import chatbotIcon from "../../../media/chatbot icon.png";
+import chatbotIcon from "../../../media/martin.png";
 import {
   ApiError,
   getStoredSessionId,
@@ -443,7 +443,7 @@ function AgentChat({ compact = false }: { compact?: boolean }) {
             : "bottom-6 right-6 h-14 w-14 md:h-24 md:w-24",
         )}
       >
-          <img src={chatbotIcon} alt="Open logistics chat" className="h-full w-full scale-[1.34] object-cover" />
+          <img src={chatbotIcon} alt="Open logistics chat" className="h-full w-full scale-[1.08] object-cover" />
       </button>
     );
   }

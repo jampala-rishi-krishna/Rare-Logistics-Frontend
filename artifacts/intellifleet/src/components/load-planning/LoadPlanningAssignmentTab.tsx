@@ -35,12 +35,14 @@ export default function LoadPlanningAssignmentTab() {
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [citiesOpen, setCitiesOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
-  const citySource = useQuery({
-    queryKey: ["load-planning-city-source", from, to, search],
+  const orders = useQuery({
+    queryKey: ["load-planning-unassigned", from, to, search],
     queryFn: () =>
       inventoryApi.listSalesOrders(from, to, 1, "Acknowledged", search, "unassigned"),
     retry: false,
   });
+  // Both city choices and table rows use the same acknowledged, unassigned page.
+  const citySource = orders;
   const cityOptions = useMemo(() => {
     const values = (citySource.data?.items ?? [])
       .map((order) => {
@@ -53,20 +55,6 @@ export default function LoadPlanningAssignmentTab() {
       .filter((value): value is string => Boolean(value && value !== "-"));
     return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
   }, [citySource.data]);
-  const orders = useQuery({
-    queryKey: ["load-planning-unassigned", from, to, search],
-    queryFn: () =>
-      inventoryApi.listSalesOrders(
-        from,
-        to,
-        1,
-        "Acknowledged",
-        search,
-        "unassigned",
-        [],
-      ),
-    retry: false,
-  });
   const ids = useMemo(() => {
     const items = orders.data?.items ?? [];
     if (!selectedCities.length) return items.map((x) => x.id);
@@ -209,7 +197,6 @@ export default function LoadPlanningAssignmentTab() {
             type="button"
             onClick={() => {
               void orders.refetch();
-              void citySource.refetch();
             }}
             disabled={orders.isFetching || citySource.isFetching}
             className="button-black col-span-2 flex h-10 items-center justify-center gap-2 rounded-[4px] px-4 text-sm disabled:opacity-60 md:col-span-1"
