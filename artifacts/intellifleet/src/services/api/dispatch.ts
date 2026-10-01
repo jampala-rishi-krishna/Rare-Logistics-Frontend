@@ -163,3 +163,33 @@ export interface CommsOverviewMetrics {
 export function getCommsOverview() {
   return api.get<CommsOverviewMetrics>("/api/dispatch/comms-overview");
 }
+
+export interface WhatsAppOutboundLog {
+  sid: string;
+  date_created: string | null;
+  date_sent: string | null;
+  to: string;
+  status: string;
+  error_code: number | null;
+  error_message: string | null;
+  price: string | null;
+  body: string;
+}
+export interface WhatsAppInboundLog {
+  sid: string;
+  from: string;
+  date: string | null;
+  body: string;
+}
+export interface WhatsAppLogs {
+  since: string;
+  from: string;
+  fetched_at: string;
+  cached: boolean;
+  outbound: WhatsAppOutboundLog[];
+  inbound: WhatsAppInboundLog[];
+}
+
+export function getWhatsAppLogs(since: string) {
+  return api.get<WhatsAppLogs>("/api/communications/whatsapp/logs", { since });
+}

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Mail, MessageCircle, Phone, Radio, RefreshCw, Send, Signal, Wifi } from "lucide-react";
 import * as dispatchApi from "@/services/api/dispatch";
 import type { DispatchConversation, SendMessageBody } from "@/services/api/dispatch";
+import WhatsAppPanel from "@/components/dispatch/WhatsAppPanel";
 import * as gmailApi from "@/services/api/gmail";
 import type { GmailThread } from "@/services/api/gmail";
 import overviewHero from "../../../../../media/overview tab.png";
@@ -563,7 +564,7 @@ export function CommsGateway({ onNotice }: { onNotice: (s: string) => void }) {
       </div>
       {tab === "overview" && <CommsMetricsOverview onSelectChannel={setTab} />}
       {tab === "gmail" && <GmailPanel />}
-      {tab === "whatsapp" && <ChannelPanel channel="whatsapp" />}
+      {tab === "whatsapp" && <WhatsAppPanel />}
       {tab === "sms" && <ChannelPanel channel="sms" />}
       {tab === "voice" && <VoicePanel />}
     </div>
