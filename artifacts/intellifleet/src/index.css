@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
@@ -67,6 +67,7 @@
   --sidebar-ring: 0 0% 7%;
   --app-font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   --app-font-display: 'Space Grotesk', 'DM Sans', sans-serif;
+  --app-font-hero: 'Manrope', 'DM Sans', ui-sans-serif, sans-serif;
   --app-font-mono: 'DM Mono', ui-monospace, monospace;
   --radius: 8px;
   --paper: #fafaf8;
@@ -98,10 +99,141 @@ button, a { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; text-decoration: none; }
 .hero { height: clamp(590px, 41vw, 660px); min-height: 590px; max-height: 660px; }
 .hero-image { object-fit: cover; object-position: center 45%; background: #80694b; filter: contrast(1.1) saturate(1.08) brightness(1.04); }
+.hero-brand-overlay {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  width: 160px;
+  height: 40px;
+  place-items: center;
+  background: #fff;
+  color: #0b0b0b;
+  font: 700 11px/1 var(--app-font-mono);
+  letter-spacing: .1em;
+  text-align: center;
+  text-transform: uppercase;
+  pointer-events: none;
+}
 .hero-copy { margin-left: 0; }
+.hero-eyebrow {
+  color: #e8e8e3;
+  font-family: var(--app-font-hero);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.hero-headline {
+  color: #ffffff;
+  font-family: var(--app-font-hero);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+.hero-support {
+  color: #d0d0cc;
+  font-family: var(--app-font-hero);
+  font-weight: 400;
+  letter-spacing: .005em;
+  line-height: 1.5;
+}
 @media (max-width: 767px) {
-  .hero { height: 620px; min-height: 620px; }
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  .public-logo {
+    flex: 1 1 auto;
+    max-width: min(48vw, 190px);
+  }
+  .public-logo .display-face {
+    font-size: clamp(1.05rem, 5.2vw, 1.35rem);
+    line-height: .94;
+  }
+  .public-logo span:last-child {
+    max-width: 100%;
+    font-size: clamp(8px, 2.45vw, 10px);
+    line-height: 1.1;
+    white-space: normal;
+  }
+  .public-demo-link {
+    padding: .58rem .78rem;
+    font-size: .78rem;
+    white-space: nowrap;
+  }
+  .hero {
+    height: clamp(590px, 158vw, 660px);
+    min-height: 590px;
+  }
   .hero-image { object-position: 58% center; }
+  .hero-inner {
+    z-index: 2;
+    width: 100%;
+    max-width: 100%;
+    align-items: center;
+    padding: 54px 16px 86px !important;
+    box-sizing: border-box;
+  }
+  .hero-copy {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    transform: none !important;
+    box-sizing: border-box;
+  }
+  .hero-eyebrow {
+    margin-bottom: 18px;
+    max-width: 100%;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: clamp(9px, 2.5vw, 11px);
+    line-height: 1.35;
+    white-space: normal;
+  }
+  .hero-eyebrow span:last-child {
+    min-width: 0;
+  }
+  .hero-headline.display-xl {
+    width: 100%;
+    max-width: 100%;
+    font-size: clamp(40px, 10vw, 56px) !important;
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    overflow-wrap: normal;
+  }
+  .hero-support {
+    width: 100%;
+    max-width: 100%;
+    margin-top: 22px;
+    font-size: 16px !important;
+    line-height: 1.5;
+  }
+  .hero-brand-overlay {
+    z-index: 3;
+    width: 136px;
+    height: 36px;
+    font-size: 9.5px;
+  }
+  .role-nav-section {
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+    padding-inline: 16px !important;
+  }
+  .role-nav {
+    width: 100%;
+    max-width: 100%;
+    gap: 22px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .role-nav::-webkit-scrollbar { display: none; }
+  .role-nav > * { flex-shrink: 0; }
 }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 

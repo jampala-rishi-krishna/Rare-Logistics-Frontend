@@ -680,15 +680,35 @@ function StatusChip({
     </span>
   );
 }
-function Logo({ light = false }: { light?: boolean }) {
+function Logo({
+  light = false,
+  showCompanyName = false,
+}: {
+  light?: boolean;
+  showCompanyName?: boolean;
+}) {
   return (
-    <Link data-testid="link-logo" href="/" className="flex items-center">
+    <Link
+      data-testid="link-logo"
+      href="/"
+      className="public-logo flex min-w-0 flex-col items-start leading-none"
+    >
       <span
         className={cx("display-face text-2xl font-bold", light && "text-white")}
       >
         RARECHAIN
         <span className={light ? "text-[#d9d9d9]" : "text-[#a1a1a1]"}>.</span>
       </span>
+      {showCompanyName && (
+        <span
+          className={cx(
+            "mt-1 text-[10px] font-semibold leading-none tracking-[.02em]",
+            light ? "text-white/70" : "text-[#55565a]",
+          )}
+        >
+          Rare Global Food Trading Corp
+        </span>
+      )}
     </Link>
   );
 }
@@ -763,7 +783,7 @@ function PublicNav() {
   return (
     <header className="relative border-b border-[#e4e3df] bg-[#f2f2ef]">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-3.5 md:px-10">
-        <Logo />
+        <Logo showCompanyName />
         <nav className="public-nav-links hidden items-center gap-7 text-sm text-[#55565a] md:flex">
           <Link
             data-testid="link-platform"
@@ -805,7 +825,7 @@ function PublicNav() {
           <Link
             data-testid="link-request-demo"
             href="/request-demo"
-            className="button-black rounded-full px-4 py-2.5 text-sm font-semibold"
+            className="public-demo-link button-black rounded-full px-4 py-2.5 text-sm font-semibold"
           >
             Request a demo
           </Link>
@@ -1322,6 +1342,9 @@ function Landing() {
             preload="auto"
             aria-label="RareChain logistics operations"
           />
+          <div aria-hidden="true" className="hero-brand-overlay">
+            RARE &bull; LOGISTICS
+          </div>
           <div
             className="absolute inset-0"
             style={{
@@ -1329,30 +1352,29 @@ function Landing() {
                 "linear-gradient(90deg, rgba(0,0,0,0.43) 0%, rgba(0,0,0,0.26) 40%, rgba(0,0,0,0.07) 70%, rgba(0,0,0,0) 100%)",
             }}
           />
-          <div className="relative mx-auto flex h-full max-w-[1440px] items-center px-5 py-12 md:px-10 md:py-20">
-            <div className="hero-copy entrance max-w-[520px] -translate-y-5 text-white md:-translate-y-8">
-              <div className="micro mb-7 flex items-center gap-3 text-white">
+          <div className="hero-inner relative mx-auto flex h-full max-w-[1440px] items-center px-5 py-12 md:px-10 md:py-20">
+            <div className="hero-copy entrance max-w-[520px] -translate-y-5 md:-translate-y-8">
+              <div className="hero-eyebrow mb-7 flex items-center gap-3">
                 <span className="h-2 w-2 rounded-full bg-[#1e7b44] live-dot" />
                 <span>Cold-chain operations / Philippines</span>
               </div>
-              <h1 className="display-face display-xl max-w-[520px] text-[clamp(2.8rem,5.2vw,4.6rem)] font-bold leading-[1.08] text-white">
+              <h1 className="hero-headline display-xl max-w-[520px] text-[clamp(2.8rem,5.2vw,4.6rem)] leading-[1.08]">
                 Tracking every
                 <br />
                 delivery across
                 <br />
                 The Philippines
               </h1>
-              <p className="mt-8 max-w-md text-[clamp(.95rem,1.3vw,1.125rem)] leading-7 text-white/85">
-                Real-time fleet tracking, cold storage intelligence, inventory
-                visibility, and AI-powered route optimisation power the digital
-                operating system for Rare Global Food's entire logistics
-                network.
+              <p className="hero-support mt-8 max-w-md text-[clamp(1.05rem,1.45vw,1.25rem)]">
+                AI-powered logistics intelligence for fleet, inventory, and
+                delivery operations. Real-time visibility. Smarter decisions.
+                Better control.
               </p>
             </div>
           </div>
         </section>
-        <section className="border-y border-[#e4e3df] bg-[#f2f2ef] px-5 py-4 md:px-10">
-          <div className="mx-auto flex max-w-[1440px] items-center gap-8 overflow-x-auto whitespace-nowrap">
+        <section className="role-nav-section border-y border-[#e4e3df] bg-[#f2f2ef] px-5 py-4 md:px-10">
+          <div className="role-nav mx-auto flex max-w-[1440px] items-center gap-8 overflow-x-auto whitespace-nowrap">
             <span className="micro shrink-0 text-[#77787b]">View by role</span>
             {Object.keys(roleStories).map((key) => (
               <button

@@ -104,6 +104,14 @@ async function request<T>(
       const res = await fetch(url, { method, headers, body, signal: controller.signal });
       const data = await parseResponse(res);
       return { res, data };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error(`Request timed out after ${Math.round((options.timeoutMs ?? 0) / 1000)} seconds. The API may still be processing; please try again.`);
+      }
+      if (error instanceof TypeError) {
+        throw new Error(`Could not reach the IntelliFleet API at ${API_BASE_URL}. Check that the backend is running, CORS allows this frontend origin, and the network connection is available.`);
+      }
+      throw error;
     } finally {
       if (timeout !== undefined) window.clearTimeout(timeout);
     }

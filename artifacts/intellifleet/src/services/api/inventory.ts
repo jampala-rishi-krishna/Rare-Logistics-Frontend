@@ -344,7 +344,7 @@ export interface EmailDraft {
 export function createSalesOrderEmailDraft(
   context: EmailFilterContext,
 ): Promise<EmailDraft> {
-  return api.post<EmailDraft>("/api/load-planning/email/draft", context);
+  return api.post<EmailDraft>("/api/load-planning/email/draft", context, undefined, 30000);
 }
 
 export function sendSalesOrderEmail(
@@ -354,5 +354,5 @@ export function sendSalesOrderEmail(
     htmlBody: string;
   },
 ): Promise<{ success?: boolean; messageId?: string; message?: string }> {
-  return api.post("/api/load-planning/email/send", payload);
+  return api.post("/api/load-planning/email/send", payload, undefined, 90000);
 }
