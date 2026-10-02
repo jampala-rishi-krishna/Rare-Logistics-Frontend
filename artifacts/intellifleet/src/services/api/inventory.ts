@@ -27,7 +27,7 @@ export interface SalesOrderSummary {
   assigned_at?: string | null;
   assigned_by?: number | null;
   product_count?: number;
-  products?: { line_item_id?: string | null; item_id?: string | null; name: string | null; sku: string | null; quantity: number; unit: string | null; total_weight_kg?: number | null; packaging_type?: "pack" | "case" | null; pack_quantity?: number; case_quantity?: number; quantity_packed: number; quantity_shipped: number }[];
+  products?: { mets_qty_available_for_sale?: number | null; glacier_qty_available_for_sale?: number | null; line_item_id?: string | null; item_id?: string | null; name: string | null; sku: string | null; quantity: number; unit: string | null; total_weight_kg?: number | null; packaging_type?: "pack" | "case" | null; pack_quantity?: number; case_quantity?: number; quantity_packed: number; quantity_shipped: number }[];
   pack_count?: number;
   case_count?: number;
   unit_count?: number;
@@ -40,6 +40,12 @@ export interface SalesOrdersPage {
   per_page: number;
   total: number;
   has_more: boolean;
+  /** True while Mets/Glacier stock and item weights are still being fetched in the background. */
+  stock_pending?: boolean;
+  /** Total kg across every filtered order (all pages), from the weights known so far. */
+  total_weight_kg?: number;
+  /** False when some line has no known weight yet (or Zoho has no package weight for it). */
+  weight_complete?: boolean;
 }
 
 export interface AssignmentOptions {

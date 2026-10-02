@@ -13,6 +13,16 @@ import {
   X,
 } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
+import { StockQty } from "./StockQty";
+
+function lineProduct(order: inventoryApi.SalesOrderSummary, item: any) {
+  return (order.products ?? []).find(
+    (entry) =>
+      (entry.line_item_id && entry.line_item_id === item.line_item_id) ||
+      (entry.item_id && entry.item_id === item.item_id) ||
+      entry.sku === item.sku,
+  );
+}
 
 function tomorrowPht() {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -494,6 +504,9 @@ export default function LoadPlanningInventoryTab({
     retry: false,
     staleTime: 0,
     refetchOnMount: "always",
+    // Mets/Glacier stock and item weights fill in on the backend after the list returns;
+    // poll lightly until they're all in.
+    refetchInterval: (query) => (query.state.data?.stock_pending ? 4000 : false),
   });
   const rows = useMemo<FlatRow[]>(
     () =>
@@ -899,10 +912,10 @@ export default function LoadPlanningInventoryTab({
                           {order.notes?.trim() || "—"}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
-                          {order.mets_qty_available_for_sale == null ? "—" : order.mets_qty_available_for_sale.toLocaleString()}
+                          <StockQty value={lineProduct(order, item)?.mets_qty_available_for_sale ?? order.mets_qty_available_for_sale} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
-                          {order.glacier_qty_available_for_sale == null ? "—" : order.glacier_qty_available_for_sale.toLocaleString()}
+                          <StockQty value={lineProduct(order, item)?.glacier_qty_available_for_sale ?? order.glacier_qty_available_for_sale} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="px-3 py-4 align-top capitalize">
                           {status(order.order_status)}
@@ -1100,7 +1113,7 @@ function SalesOrderDetailDrawer({
     ["Salesperson", raw.salesperson_name ?? order.salesperson_name],
     ["Customer PO number", raw.customer_po_number],
     ["Mode of transportation", raw.mode_of_transport],
-    ["Fulfillment type", raw.fulfillment_type],
+    ["Fulfillment type", raw.fulfillment_type ?? raw.cf_fulfillment_type],
     [
       "Payment requirement",
       raw.payment_requirement ?? raw.payment_requirements,

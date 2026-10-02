@@ -215,10 +215,14 @@ function useVehiclesData(liveTracking = true, selectedDate?: string) {
   return { ...query, data: query.data ?? [] };
 }
 
+// Calendar date (YYYY-MM-DD) in Manila, offset by whole days. Fleet and Orders default to the
+// NEXT delivery day, so the date must never depend on the browser's or UTC's idea of "today".
+function manilaDate(offsetDays = 0) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date(Date.now() + offsetDays * 86400000));
+}
+
 function nextExpectedDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().slice(0, 10);
+  return manilaDate(1);
 }
 
 function useOrdersData(dateFrom: string, dateTo: string, options: { search?: string; status?: string; assignment?: "assigned" | "unassigned"; vehicle?: string; customer?: string; deliveryStatus?: string } = {}) {
@@ -3309,9 +3313,10 @@ function DataTablePage({
   const selectedOrderRef = useRef<Order | null>(null);
   selectedOrderRef.current = selectedOrder;
   const client = useQueryClient();
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const [fleetDate, setFleetDate] = useState(today);
+  const today = manilaDate(0);
+  // Fleet opens on the next delivery day. Orders assigned to trucks for later days only show
+  // when that day is picked on the calendar, with that day's own load and fulfillment.
+  const [fleetDate, setFleetDate] = useState(nextExpectedDate);
   // FleetSocketProvider (mounted once at the app root) keeps the ["vehicles"] cache live here
   // too - no per-page connect/disconnect needed.
   const { data: vehiclesData, refetch: refetchVehicles, isFetching: vehiclesFetching } = useVehiclesData(kind !== "fleet", kind === "fleet" ? fleetDate : undefined);
@@ -3321,15 +3326,17 @@ function DataTablePage({
     if (kind !== "fleet" || fleetRefreshing) return;
     setFleetRefreshing(true);
     try {
-      if (fleetDate !== today) {
+      if (fleetDate < today) {
         await refetchVehicles();
         setFleetRefreshAt(new Date());
         setNotice("Historical Fleet refreshed");
         return;
       }
       await fleetApi.triggerFleetPoll();
-      const refreshed = await fleetApi.refreshVehicles(true);
-      client.setQueryData(["vehicles", fleetDate], refreshed.map(adaptVehicle));
+      // Re-syncs Zoho for every assigned order; the response covers all days, so reload the
+      // selected day's own view instead of showing that unscoped result.
+      await fleetApi.refreshVehicles(true);
+      await refetchVehicles();
       const now = new Date();
       setFleetRefreshAt(now);
       setNotice(`Fleet refreshed · ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}`);
@@ -3476,7 +3483,7 @@ function DataTablePage({
               />
             </div>
             <div className="flex min-w-0 flex-wrap gap-2">
-              {kind === "fleet" && <label className="flex items-center gap-2 text-xs text-[#55565a]">Date <input aria-label="Fleet date" type="date" value={fleetDate} max={today} onChange={(e) => setFleetDate(e.target.value || today)} className="border border-[#d8d7d2] bg-white px-2 py-2 text-sm" /></label>}
+              {kind === "fleet" && <label className="flex items-center gap-2 text-xs text-[#55565a]">Date <input aria-label="Fleet date" type="date" value={fleetDate} onChange={(e) => setFleetDate(e.target.value || nextExpectedDate())} className="border border-[#d8d7d2] bg-white px-2 py-2 text-sm" /></label>}
               {kind === "fleet" && <Button variant="outline" className="rounded-[4px] px-3 py-2" onClick={refreshFleetData} disabled={fleetRefreshing}><RefreshCw size={14} className={fleetRefreshing ? "animate-spin" : ""} />{fleetRefreshing ? "Refreshing…" : "Refresh"}</Button>}
               {kind === "orders" && <Button variant="outline" className="rounded-[4px] px-3 py-2" onClick={refreshOrders} disabled={ordersFetching}><RefreshCw size={14} className={ordersFetching ? "animate-spin" : ""} />{ordersFetching ? "Refreshing..." : "Refresh"}</Button>}
               {kind === "orders" && <Button variant="outline" className="rounded-[4px] px-3 py-2" onClick={() => setShowOrderFilters((v) => !v)}>
