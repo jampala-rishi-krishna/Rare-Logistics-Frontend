@@ -895,21 +895,21 @@ function PublicNav() {
 }
 function PublicFooter() {
   return (
-    <footer className="bg-[#0b0b0b] px-5 py-14 text-white md:px-10">
-      <div className="mx-auto grid max-w-[1440px] gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
-        <div>
+    <footer className="bg-[#0b0b0b] px-5 py-9 text-white md:px-10 md:py-14">
+      <div className="mx-auto grid max-w-[1440px] grid-cols-2 gap-x-6 gap-y-7 md:grid-cols-[1.3fr_1fr_1fr_1fr] md:gap-10">
+        <div className="col-span-2 md:col-span-1">
           <Logo light />
-          <p className="mt-5 max-w-xs text-sm leading-6 text-[#a7a7a7]">
+          <p className="mt-3 max-w-xs text-[13px] leading-5 text-[#a7a7a7] md:mt-5 md:text-sm md:leading-6">
             Connected cold-chain operations for every mile between origin and
             customer.
           </p>
-          <div className="mt-12 micro text-[#858585]">
+          <div className="mt-5 micro text-[#858585] md:mt-12">
             Rare Global Food Trading Corp.
           </div>
         </div>
         <div>
-          <div className="micro mb-4 text-[#858585]">Explore</div>
-          <div className="grid gap-3 text-sm text-[#c8c8c8]">
+          <div className="micro mb-3 text-[#858585] md:mb-4">Explore</div>
+          <div className="grid gap-2 text-[13px] text-[#c8c8c8] md:gap-3 md:text-sm">
             <Link data-testid="footer-link-platform" href="/platform">
               Platform
             </Link>
@@ -922,8 +922,8 @@ function PublicFooter() {
           </div>
         </div>
         <div>
-          <div className="micro mb-4 text-[#858585]">Trust</div>
-          <div className="grid gap-3 text-sm text-[#c8c8c8]">
+          <div className="micro mb-3 text-[#858585] md:mb-4">Trust</div>
+          <div className="grid gap-2 text-[13px] text-[#c8c8c8] md:gap-3 md:text-sm">
             <Link data-testid="footer-link-security" href="/security">
               Security
             </Link>
@@ -933,21 +933,21 @@ function PublicFooter() {
             <span>Data policy</span>
           </div>
         </div>
-        <div>
-          <div className="micro mb-4 text-[#858585]">Talk to us</div>
-          <p className="text-sm leading-6 text-[#c8c8c8]">
+        <div className="col-span-2 md:col-span-1">
+          <div className="micro mb-3 text-[#858585] md:mb-4">Talk to us</div>
+          <p className="text-[13px] leading-5 text-[#c8c8c8] md:text-sm md:leading-6">
             See how your team can move with more certainty.
           </p>
           <Link
             data-testid="footer-link-demo"
             href="/request-demo"
-            className="mt-5 inline-block text-sm font-semibold underline underline-offset-4"
+            className="mt-3 inline-block text-sm font-semibold underline underline-offset-4 md:mt-5"
           >
             Request a demo
           </Link>
         </div>
       </div>
-      <div className="mx-auto mt-16 flex max-w-[1440px] justify-between border-t border-[#333] pt-5 text-xs text-[#777]">
+      <div className="mx-auto mt-9 flex max-w-[1440px] flex-col gap-1 border-t border-[#333] pt-4 text-[11px] text-[#777] sm:flex-row sm:justify-between md:mt-16 md:pt-5 md:text-xs">
         <span>© 2026 Rare Global Food Trading Corp.</span>
         <span>Frontend demonstration · mocked data</span>
       </div>
@@ -1536,7 +1536,7 @@ function Landing() {
           <Link
             data-testid="footer-cta-demo"
             href="/request-demo"
-            className="button-black rounded-full px-6 py-3.5 text-sm font-semibold"
+            className="button-black inline-flex items-center gap-2 whitespace-nowrap rounded-full px-6 py-3.5 text-sm font-semibold"
           >
             Request a demo <ArrowRight size={16} />
           </Link>
