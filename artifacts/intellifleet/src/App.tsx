@@ -126,6 +126,7 @@ import {
   Loader2,
 } from "lucide-react";
 import NotFound from "@/pages/not-found";
+import { formatAddress } from "@/lib/address";
 
 type Role = "Dispatcher" | "Planner" | "Driver" | "Warehouse" | "Client" | "Admin";
 // Widened from a fixed enum to a plain string: real order status values come
@@ -3689,7 +3690,7 @@ function OrderDrawer({
               </div>
             </div>
           ) : null}
-          {liveOrder.shipping_address ? <div className="mt-4 border-t border-[#e4e3df] pt-4 text-xs"><div className="text-[#77787b]">Shipping address</div><div className="mt-1">{typeof liveOrder.shipping_address === "string" ? liveOrder.shipping_address : JSON.stringify(liveOrder.shipping_address)}</div></div> : null}
+          {liveOrder.shipping_address ? <div className="mt-4 border-t border-[#e4e3df] pt-4 text-xs"><div className="text-[#77787b]">Shipping address</div><div className="mt-1 whitespace-pre-line break-words">{formatAddress(liveOrder.shipping_address)}</div></div> : null}
         </div>
           <div className="mt-10 border-t border-[#e4e3df] pt-5">
           <div className="micro mb-6 text-[#77787b]">Lifecycle · Zoho Inventory</div>

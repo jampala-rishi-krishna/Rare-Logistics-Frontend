@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
+import { formatAddress } from "@/lib/address";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -21,12 +22,7 @@ function tomorrowPht() {
   return `${v.year}-${v.month}-${v.day}`;
 }
 function address(v: any) {
-  const a = Array.isArray(v) ? v[0] : v;
-  return a && typeof a === "object"
-    ? [a.address, a.street_address, a.state, a.zip, a.country]
-        .filter(Boolean)
-        .join(", ") || "-"
-    : "-";
+  return formatAddress(v) || "-";
 }
 function city(v: any) {
   const a = Array.isArray(v) ? v[0] : v;
@@ -48,6 +44,13 @@ function dateLabel(value: unknown) {
 }
 function kg(value: number) {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`;
+}
+// The line item's own Zoho "Available for Sale", shown as-is. A line with no product record
+// at all falls back to the order-level figure stored with the order.
+function lineStock(order: Order, product: Product | null, site: "mets" | "glacier") {
+  const key = site === "mets" ? "mets_qty_available_for_sale" : "glacier_qty_available_for_sale";
+  if (product && key in product) return product[key];
+  return order[key];
 }
 function lineWarehouse(order: Order, product: Product | null) {
   const lines: any[] = (order as any).raw_json?.line_items ?? [];
@@ -347,11 +350,11 @@ export default function LoadPlanningAssignmentTab() {
                   </div>
                   <div className="mt-4 grid min-w-0 max-w-full gap-2 overflow-hidden border-t pt-3 text-xs text-[#55565a]">
                     <div>
-                      <b className="block break-words text-black [overflow-wrap:anywhere]">{city(shipping)}</b>
+                      <b className="block break-words text-black [overflow-wrap:anywhere]">{orderCity(order)}</b>
                       Destination city
                     </div>
                     <div>
-                      <b className="block break-words text-black [overflow-wrap:anywhere]">{address(shipping)}</b>
+                      <b className="block whitespace-pre-line break-words text-black [overflow-wrap:anywhere]">{address(shipping)}</b>
                       Shipping address
                     </div>
                     <div className="min-w-0 border-t border-[#e4e3df] pt-2">
@@ -413,15 +416,15 @@ export default function LoadPlanningAssignmentTab() {
                       <td className="whitespace-nowrap px-3 py-4 align-top font-semibold">
                         {product?.total_weight_kg == null ? (calculating ? "…" : "—") : kg(Number(product.total_weight_kg))}
                       </td>
-                      <td className="px-3 py-4 align-top">{city(shipping)}</td>
-                      <td className="whitespace-normal break-words px-3 py-4 align-top leading-5" title={address(shipping)}>{address(shipping)}</td>
+                      <td className="px-3 py-4 align-top">{orderCity(order)}</td>
+                      <td className="whitespace-pre-line break-words px-3 py-4 align-top leading-5" title={address(shipping).replace(/\n/g, ", ")}>{address(shipping)}</td>
                       <td className="px-3 py-3 align-top">
                         <div className="thin-scroll max-h-[4.5rem] overflow-y-auto whitespace-pre-wrap break-words pr-1 leading-5">
                           {order.notes?.trim() || "—"}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={product?.mets_qty_available_for_sale ?? order.mets_qty_available_for_sale} pending={orders.data?.stock_pending} /></td>
-                      <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={product?.glacier_qty_available_for_sale ?? order.glacier_qty_available_for_sale} pending={orders.data?.stock_pending} /></td>
+                      <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "mets")} pending={orders.data?.stock_pending} /></td>
+                      <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "glacier")} pending={orders.data?.stock_pending} /></td>
                       <td className="whitespace-normal px-3 py-4 align-top">{lineWarehouse(order, product)}</td>
                     </tr>
                   );
