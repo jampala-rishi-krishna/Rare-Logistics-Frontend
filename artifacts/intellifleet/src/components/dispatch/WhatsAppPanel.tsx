@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import * as dispatchApi from "@/services/api/dispatch";
 
 const cx = (...classes: Array<string | false | undefined>) => classes.filter(Boolean).join(" ");
@@ -31,13 +31,14 @@ const statusLabel = (d?: Delivery) => !d ? "" : d.status === "read" ? "Read" : d
 export default function WhatsAppPanel() {
   const [selectedDate, setSelectedDate] = useState(() => MANILA_DAY.format(new Date()));
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [showChat, setShowChat] = useState(false);
   const conversations = useQuery({ queryKey: ["n8n-conversations", "whatsapp"], queryFn: () => dispatchApi.listN8nConversations("whatsapp"), refetchInterval: 15000, retry: false });
   // Twilio filters by UTC date; start one day early so a Manila day is fully covered, then filter client-side.
   const since = useMemo(() => { const d = new Date(`${selectedDate}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); }, [selectedDate]);
   const logs = useQuery({ queryKey: ["whatsapp-logs", since], queryFn: () => dispatchApi.getWhatsAppLogs(since), refetchInterval: 60000, retry: false });
 
   const readableDate = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", weekday: "short", month: "short", day: "2-digit", year: "numeric" }).format(new Date(`${selectedDate}T12:00:00`));
-  const moveDate = (offset: number) => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() + offset); setSelectedDate(d.toISOString().slice(0, 10)); setSelectedKey(null); };
+  const moveDate = (offset: number) => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() + offset); setSelectedDate(d.toISOString().slice(0, 10)); setSelectedKey(null); setShowChat(false); };
   const onDay = (iso?: string | null) => Boolean(iso) && MANILA_DAY.format(new Date(iso as string)) === selectedDate;
 
   const threads = useMemo(() => {
@@ -78,23 +79,23 @@ export default function WhatsAppPanel() {
   const logsError = logs.isError ? ((logs.error as { message?: string } | null)?.message || "Delivery status unavailable") : null;
 
   return <div className="comms-channel-panel min-w-0 max-w-full overflow-hidden border border-[#e4e3df] bg-white">
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e3df] p-4">
-      <div className="min-w-0"><div className="micro whitespace-nowrap text-[#77787b]">WHATSAPP · selected day</div><div className="mt-1 whitespace-nowrap text-lg font-bold">{readableDate}</div></div>
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        <button onClick={() => { void conversations.refetch(); void logs.refetch(); }} disabled={conversations.isFetching || logs.isFetching} className="inline-flex items-center gap-2 border border-[#d8d7d2] px-3 py-1.5 text-xs disabled:opacity-50"><RefreshCw size={13} className={conversations.isFetching || logs.isFetching ? "animate-spin" : ""} />{conversations.isFetching || logs.isFetching ? "Refreshing…" : "Refresh"}</button>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e4e3df] p-3 sm:gap-3 sm:p-4">
+      <div className="min-w-0"><div className="micro whitespace-nowrap text-[#77787b]">WHATSAPP · selected day</div><div className="mt-1 whitespace-nowrap text-base font-bold sm:text-lg">{readableDate}</div></div>
+      <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end">
+        <button onClick={() => { void conversations.refetch(); void logs.refetch(); }} disabled={conversations.isFetching || logs.isFetching} className="mr-auto inline-flex items-center gap-2 border border-[#d8d7d2] px-3 py-1.5 text-xs disabled:opacity-50 sm:mr-0"><RefreshCw size={13} className={conversations.isFetching || logs.isFetching ? "animate-spin" : ""} />{conversations.isFetching || logs.isFetching ? "Refreshing…" : "Refresh"}</button>
         <button aria-label="Previous day" onClick={() => moveDate(-1)} className="grid h-8 w-8 place-items-center border border-[#d8d7d2]"><ChevronLeft size={14} /></button>
-        <input aria-label="whatsapp date" type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setSelectedKey(null); }} className="h-8 border border-[#d8d7d2] px-2 text-xs font-semibold" />
+        <input aria-label="whatsapp date" type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setSelectedKey(null); setShowChat(false); }} className="h-8 border border-[#d8d7d2] px-2 text-xs font-semibold" />
         <button aria-label="Next day" onClick={() => moveDate(1)} className="grid h-8 w-8 place-items-center border border-[#d8d7d2]"><ChevronRight size={14} /></button>
       </div>
     </div>
     {logsError && <div className="border-b border-[#f1d9a8] bg-[#fff8e6] px-4 py-2 text-xs text-[#7a5b00]">Delivery status unavailable: {logsError}</div>}
-    <div className="grid min-h-[520px] gap-0 lg:grid-cols-[340px_1fr]">
-      <div className="border-r border-[#e4e3df] bg-white">
+    <div className="grid h-[calc(100dvh-250px)] min-h-[420px] gap-0 lg:h-auto lg:min-h-[520px] lg:grid-cols-[340px_1fr]">
+      <div className={cx("min-h-0 overflow-y-auto border-r border-[#e4e3df] bg-white", showChat ? "hidden lg:block" : "block")}>
         {conversations.isError ? <div className="p-5 text-xs text-[#b3261e]">Could not load whatsapp conversations.</div> : threads.length ? threads.map((t) => {
           const last = t.bubbles.at(-1);
           const delivery = lastDelivery(t);
           const active = current?.key === t.key;
-          return <button key={t.key} onClick={() => setSelectedKey(t.key)} className={cx("flex w-full items-center gap-3 border-b border-[#f0f2f5] px-4 py-3 text-left hover:bg-[#f5f6f6]", active && "bg-[#f0f2f5]")}>
+          return <button key={t.key} onClick={() => { setSelectedKey(t.key); setShowChat(true); }} className={cx("flex w-full items-center gap-3 border-b border-[#f0f2f5] px-4 py-3 text-left hover:bg-[#f5f6f6]", active && "bg-[#f0f2f5]")}>
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#dfe5e7] text-sm font-semibold text-[#54656f]">{(t.name.replace(/[^A-Za-z0-9]/g, "")[0] || "#").toUpperCase()}</span>
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline justify-between gap-2"><b className="truncate text-sm text-[#111b21]">{t.name}</b><span className="shrink-0 text-[11px] text-[#667781]">{last ? TIME.format(new Date(last.ts)) : ""}</span></span>
@@ -103,14 +104,15 @@ export default function WhatsAppPanel() {
           </button>;
         }) : <div className="p-5 text-xs text-[#77787b]">No WhatsApp activity on this day.</div>}
       </div>
-      <div className="flex min-w-0 flex-col bg-[#efeae2]">
-        <div className="flex items-center gap-3 border-b border-[#d1d7db] bg-[#f0f2f5] px-4 py-2.5">
+      <div className={cx("min-h-0 min-w-0 flex-col bg-[#efeae2]", showChat ? "flex" : "hidden lg:flex")}>
+        <div className="flex items-center gap-2 border-b border-[#d1d7db] bg-[#f0f2f5] px-2 py-2.5 sm:gap-3 sm:px-4">
+          <button aria-label="Back to conversations" onClick={() => setShowChat(false)} className="grid h-9 w-9 shrink-0 place-items-center text-[#54656f] lg:hidden"><ArrowLeft size={18} /></button>
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#dfe5e7] text-sm font-semibold text-[#54656f]">{current ? (current.name.replace(/[^A-Za-z0-9]/g, "")[0] || "#").toUpperCase() : "·"}</span>
           <div className="min-w-0"><div className="truncate text-sm font-semibold text-[#111b21]">{current?.name ?? "Select a conversation"}</div><div className="truncate text-[11px] text-[#667781]">{current ? `${current.phone}${lastDelivery(current) ? ` · Last assignment: ${statusLabel(lastDelivery(current))}` : ""}` : ""}</div></div>
         </div>
-        <div className="flex-1 space-y-1.5 overflow-y-auto px-[7%] py-5">
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-4 sm:px-[7%] sm:py-5">
           {(current?.bubbles ?? []).map((b) => <div key={b.key} className={cx("flex", b.out ? "justify-end" : "justify-start")}>
-            <div className={cx("relative max-w-[78%] whitespace-pre-wrap break-words px-2.5 pb-1 pt-1.5 text-[13px] leading-snug text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]", b.out ? "rounded-[8px] rounded-tr-none bg-[#d9fdd3]" : "rounded-[8px] rounded-tl-none bg-white")}>
+            <div className={cx("relative max-w-[88%] whitespace-pre-wrap sm:max-w-[78%] break-words px-2.5 pb-1 pt-1.5 text-[13px] leading-snug text-[#111b21] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]", b.out ? "rounded-[8px] rounded-tr-none bg-[#d9fdd3]" : "rounded-[8px] rounded-tl-none bg-white")}>
               {b.orphanReply && <div className="mb-0.5 text-[10px] font-semibold text-[#b26a00]">Received by Twilio — not in this conversation</div>}
               <span>{b.text}</span>
               <span className="float-right ml-3 mt-1.5 inline-flex items-center gap-1 text-[10.5px] leading-none text-[#667781]">{TIME.format(new Date(b.ts))}{b.out && <Ticks status={b.delivery?.status} />}</span>
