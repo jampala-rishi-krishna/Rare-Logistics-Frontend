@@ -127,7 +127,7 @@ import {
 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 
-type Role = "Dispatcher" | "Driver" | "Warehouse" | "Client" | "Admin";
+type Role = "Dispatcher" | "Planner" | "Driver" | "Warehouse" | "Client" | "Admin";
 // Widened from a fixed enum to a plain string: real order status values come
 // from whatever ops writes to the live orders table, not a closed demo set.
 type OrderStatus = string;
@@ -582,6 +582,7 @@ const navGroups = [
 ];
 const rolePaths: Record<Role, string> = {
   Dispatcher: "/app/tower",
+  Planner: "/app/tower",
   Driver: "/driver/today",
   Warehouse: "/warehouse/dashboard",
   Client: "/portal/orders",
@@ -1945,6 +1946,7 @@ function RoleSwitcher({ role }: { role: string }) {
       className="hidden border border-[#d8d7d2] bg-white px-2 py-2 text-xs font-semibold outline-none md:block"
     >
       <option>Dispatcher</option>
+      <option>Planner</option>
       <option>Driver</option>
       <option>Warehouse</option>
       <option>Client</option>
@@ -2066,10 +2068,11 @@ function Login() {
               <div className="micro mb-3 text-[#a16819]">
                 Role-based access
               </div>
-              <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-5">
+              <div className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-6">
                 {(
                   [
                     "Dispatcher",
+                    "Planner",
                     "Driver",
                     "Warehouse",
                     "Client",
@@ -2079,7 +2082,12 @@ function Login() {
                   <button
                     data-testid={`button-preview-${item.toLowerCase()}`}
                     key={item}
-                    onClick={() => setRole(item)}
+                    type="button"
+                    onClick={() => {
+                      setRole(item);
+                      // Roles that have a shared work account pre-fill its email.
+                      if (["Dispatcher", "Planner", "Admin"].includes(item)) setEmail(`${item.toLowerCase()}@rgf.com`);
+                    }}
                     className={cx(
                       "min-w-0 max-w-full truncate border px-2 py-2 text-xs font-semibold",
                       role === item
@@ -2156,6 +2164,7 @@ function AppShell({
   const [currentUser, setCurrentUser] = useState<authApi.ApiUser | null>(null);
   const currentRole = currentUser?.role?.toLowerCase() || "dispatcher";
   const isAdmin = currentRole === "admin";
+  const roleLabel = isAdmin ? "Admin" : currentRole === "planner" ? "Planner" : "Dispatcher";
   const doLogout = async () => {
     if (getStoredSessionId()) {
       try {
@@ -2379,16 +2388,16 @@ function AppShell({
               <div className="flex items-center gap-3">
                 {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 rounded-full object-cover" /> : <span className="grid h-12 w-12 place-items-center bg-black text-sm font-bold text-white">D</span>}
                 <div>
-                  <div className="text-lg font-semibold">{currentUser?.fullName || (isAdmin ? "Admin" : "Dispatcher")}</div>
+                  <div className="text-lg font-semibold">{currentUser?.fullName || roleLabel}</div>
                   <div className="text-xs text-[#77787b]">Software Architect · Rare Global Food Trading Corp.</div>
-                  <div className="mt-1 text-xs font-semibold text-[#1e7b44]">{isAdmin ? "Administrator · Full operational access" : "Dispatcher · Operations access"}</div>
+                  <div className="mt-1 text-xs font-semibold text-[#1e7b44]">{isAdmin ? "Administrator · Full operational access" : `${roleLabel} · Operations access`}</div>
                 </div>
               </div>
               <button type="button" onClick={() => setProfileOpen(false)} className="text-xl text-[#77787b]" aria-label="Close profile">×</button>
             </div>
             <div className="mt-5 grid gap-2 text-sm">
               <div><span className="text-[#77787b]">Email:</span> {currentUser?.email || "—"}</div>
-              <div><span className="text-[#77787b]">Role:</span> {isAdmin ? "Admin" : "Dispatcher"}</div>
+              <div><span className="text-[#77787b]">Role:</span> {roleLabel}</div>
             </div>
             {isAdmin && <form onSubmit={submitPasswordChange} className="mt-6 grid gap-3 border-t border-[#e4e3df] pt-5">
               <div className="micro text-[#77787b]">Change password</div>
