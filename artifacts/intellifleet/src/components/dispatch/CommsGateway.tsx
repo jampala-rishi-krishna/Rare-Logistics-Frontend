@@ -63,7 +63,8 @@ function emailName(header: string | null | undefined) {
 }
 
 function ThreadRow({ thread, active, onSelect }: { thread: GmailThread; active: boolean; onSelect: () => void }) {
-  const other = thread.participants.find((p) => !p.toLowerCase().includes("rarechain")) || thread.participants[0] || "Unknown";
+  const ours = (p: string) => /rarechain|martin\.logistics@|martin@rareglobalfood\.com/i.test(p);
+  const other = thread.participants.find((p) => !ours(p)) || thread.participants[0] || "Unknown";
   return (
     <button
       onClick={onSelect}
@@ -91,22 +92,26 @@ function GmailPanel() {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [refreshing, setRefreshing] = useState(false);
   const status = useQuery({ queryKey: ["gmail-status"], queryFn: () => gmailApi.gmailStatus(), retry: false, staleTime: 30000 });
-  const today = useQuery({
-    queryKey: ["gmail-today", selectedDate],
-    queryFn: () => gmailApi.listTodayThreads(selectedDate),
+  const logisticsQuery = (gmailFolder: gmailApi.GmailFolder) => ({
+    queryKey: ["gmail-today", gmailFolder, selectedDate],
+    queryFn: () => gmailApi.listLogisticsThreads(gmailFolder, selectedDate),
     enabled: status.data?.connected === true,
     refetchInterval: 60000,
-    refetchOnMount: "always",
+    refetchOnMount: "always" as const,
     refetchOnWindowFocus: true,
     retry: false,
   });
+  // Logistics-only: Inbox = label Logistics (inbound), Sent = label Logistics/Sent.
+  const inboxQuery = useQuery(logisticsQuery("inbox"));
+  const sentQuery = useQuery(logisticsQuery("sent"));
+  const today = folder === "inbox" ? inboxQuery : sentQuery;
 
   const handleHardRefresh = async () => {
     setRefreshing(true);
     try {
       await queryClient.invalidateQueries({ queryKey: ["gmail-status"] });
       await queryClient.invalidateQueries({ queryKey: ["gmail-today"] });
-      await Promise.all([status.refetch(), today.refetch()]);
+      await Promise.all([status.refetch(), inboxQuery.refetch(), sentQuery.refetch()]);
     } finally {
       setRefreshing(false);
     }
@@ -126,10 +131,10 @@ function GmailPanel() {
     );
   }
 
-  const allThreads = today.data?.threads ?? [];
-  const inboxThreads = allThreads.filter((t) => t.messages.some((m) => !m.is_sent));
-  const sentThreads = allThreads.filter((t) => t.messages.some((m) => m.is_sent));
+  const inboxThreads = inboxQuery.data?.threads ?? [];
+  const sentThreads = sentQuery.data?.threads ?? [];
   const threads = folder === "inbox" ? inboxThreads : sentThreads;
+  const missingLabels = today.data?.missingLabels ?? [];
   const selected = threads.find((t) => t.thread_id === selectedId) || null;
 
   return (
@@ -137,7 +142,7 @@ function GmailPanel() {
       <div className="flex min-h-0 flex-col border border-[#e4e3df] bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e3df] p-4">
           <div className="min-w-0">
-            <div className="micro whitespace-nowrap text-[#77787b]">Gmail · selected day</div>
+            <div className="micro whitespace-nowrap text-[#77787b]">Logistics email · selected day</div>
             <h2 className="display-face mt-1 whitespace-nowrap text-lg font-bold">{today.data ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Loading…"}</h2>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
@@ -163,7 +168,7 @@ function GmailPanel() {
               folder === "inbox" ? "bg-[#fafaf8] text-black" : "text-[#77787b] hover:bg-[#fafaf8]",
             )}
           >
-            Inbox ({inboxThreads.length})
+            Logistics Inbox ({inboxThreads.length})
           </button>
           <button
             data-testid="button-gmail-folder-sent"
@@ -173,15 +178,17 @@ function GmailPanel() {
               folder === "sent" ? "bg-[#fafaf8] text-black" : "text-[#77787b] hover:bg-[#fafaf8]",
             )}
           >
-            Sent ({sentThreads.length})
+            Logistics Sent ({sentThreads.length})
           </button>
         </div>
         {today.isLoading ? (
-          <div className="p-5 text-xs text-[#77787b]">Loading today's emails…</div>
+          <div className="p-5 text-xs text-[#77787b]">Loading logistics emails…</div>
         ) : today.isError ? (
           <div className="p-5 text-xs text-[#b3261e]">Could not load Gmail. The access/refresh token may have expired or been revoked.</div>
+        ) : missingLabels.length ? (
+          <div className="p-5 text-xs text-[#b3261e]">The Gmail label {missingLabels.join(", ")} was not found, so there is nothing to show.</div>
         ) : !threads.length ? (
-          <div className="p-5 text-xs text-[#77787b]">{folder === "inbox" ? "No emails received today yet." : "No emails sent today yet."}</div>
+          <div className="p-5 text-xs text-[#77787b]">{folder === "inbox" ? "No logistics emails received on this day." : "No logistics emails sent on this day."}</div>
         ) : (
           <div className="thin-scroll min-h-0 flex-1 overflow-auto">
             {threads.map((t) => (

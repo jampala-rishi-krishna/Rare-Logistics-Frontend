@@ -24,13 +24,23 @@ export interface GmailThread {
   messages: GmailMessage[];
 }
 
+export type GmailFolder = "inbox" | "sent";
+
 export interface GmailTodayResponse {
   date: string;
+  folder: GmailFolder;
+  // Always "logistics": the backend only returns the Logistics / Logistics/Sent labels.
+  scope: "logistics";
   threads: GmailThread[];
+  missingLabels?: string[];
 }
 
-export function listTodayThreads(date?: string): Promise<GmailTodayResponse> {
-  return api.get<GmailTodayResponse>(`/api/gmail/messages/today${date ? `?selected_date=${encodeURIComponent(date)}` : ""}`);
+// Logistics email only: the backend filters by the existing Gmail labels
+// (inbox = Logistics, sent = Logistics/Sent), never the whole mailbox.
+export function listLogisticsThreads(folder: GmailFolder, date?: string): Promise<GmailTodayResponse> {
+  const params = new URLSearchParams({ folder });
+  if (date) params.set("selected_date", date);
+  return api.get<GmailTodayResponse>(`/api/gmail/messages/today?${params.toString()}`);
 }
 
 export function gmailStatus(): Promise<{ connected: boolean }> {

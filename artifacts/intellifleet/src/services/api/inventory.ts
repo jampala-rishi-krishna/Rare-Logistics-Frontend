@@ -246,6 +246,9 @@ export function sendAssignmentEmail(
     teamHtmlBody?: string;
     teamSubject?: string;
     drivers?: string[];
+    emailStatus?: "queued" | "not_configured";
+    // Per-channel hand-off status, e.g. whatsapp: "skipped_missing_secret".
+    channels?: Record<string, string>;
   }>("/api/load-planning/assignments/send-assignment-email", {
     salesorder_ids: ids,
     vehicle_id: vehicleId,

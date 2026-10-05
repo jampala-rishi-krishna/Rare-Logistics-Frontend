@@ -117,8 +117,13 @@ export interface N8nConversation {
   messages?: { role: string; content: string; ts?: string }[];
 }
 
-export function listN8nConversations(channel: "email" | "whatsapp" | "sms" | "voice") {
+export function listN8nConversations(channel: "whatsapp" | "sms" | "voice") {
   return api.get<{ count: number; conversations: N8nConversation[] }>(`/api/dispatch/n8n-conversations/${channel}`);
+}
+
+// Logistics email conversations, built from Gmail threads by the backend (no n8n).
+export function listEmailConversations() {
+  return api.get<{ count: number; conversations: N8nConversation[] }>("/api/communications/email/conversations");
 }
 
 export interface VoiceCall {

@@ -1933,7 +1933,8 @@ function RequestDemo() {
 
 function RoleSwitcher({ role }: { role: string }) {
   const [, setLocation] = useLocation();
-  const [view, setView] = useState<Role>(role === "Admin" ? "Admin" : "Dispatcher");
+  const initialRole = (Object.keys(rolePaths).find((key) => key.toLowerCase() === role.toLowerCase()) || "Dispatcher") as Role;
+  const [view, setView] = useState<Role>(initialRole);
   const choose = (next: Role) => {
     setView(next);
     localStorage.setItem("if-role", next);
@@ -2166,6 +2167,7 @@ function AppShell({
   const currentRole = currentUser?.role?.toLowerCase() || "dispatcher";
   const isAdmin = currentRole === "admin";
   const roleLabel = isAdmin ? "Admin" : currentRole === "planner" ? "Planner" : "Dispatcher";
+  const roleInitial = roleLabel.charAt(0);
   const doLogout = async () => {
     if (getStoredSessionId()) {
       try {
@@ -2332,13 +2334,13 @@ function AppShell({
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setProfileOpen(true); }}
               className="sidebar-link flex w-full items-center gap-3 rounded-[4px] p-2.5 text-left"
             >
-              <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+              {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-black text-sm font-bold text-white">{roleInitial}</span>}
               <div className="sidebar-copy min-w-0">
                 <div className="truncate text-xs font-semibold">
-                  Rishi
+                  {isAdmin ? "Rishi" : roleLabel}
                 </div>
                 <div className="truncate text-[11px] text-[#77787b]">
-                  Operations admin
+                  {isAdmin ? "Operations admin" : "Operations access"}
                 </div>
               </div>
               <button
@@ -2387,7 +2389,7 @@ function AppShell({
           <section className="w-full max-w-md bg-[#fafaf8] p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4 border-b border-[#e4e3df] pb-4">
               <div className="flex items-center gap-3">
-                {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 rounded-full object-cover" /> : <span className="grid h-12 w-12 place-items-center bg-black text-sm font-bold text-white">D</span>}
+                {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 rounded-full object-cover" /> : <span className="grid h-12 w-12 place-items-center rounded-full bg-black text-sm font-bold text-white">{roleInitial}</span>}
                 <div>
                   <div className="text-lg font-semibold">{currentUser?.fullName || roleLabel}</div>
                   <div className="text-xs text-[#77787b]">Software Architect · Rare Global Food Trading Corp.</div>
@@ -2450,9 +2452,14 @@ function AppShell({
               type="button"
               onClick={() => { setProfileOpen(true); setPasswordMessage(""); }}
               title="Open profile"
-              className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#d8d7d2] bg-white"
+              className={cx(
+                "shrink-0 overflow-hidden border border-[#d8d7d2] bg-white",
+                isAdmin
+                  ? "h-12 w-12 rounded-full"
+                  : "flex h-10 items-center gap-2 rounded-[4px] px-2.5 text-xs font-semibold",
+              )}
             >
-              {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-full w-full object-cover" /> : <span className="grid h-full w-full place-items-center bg-black text-sm font-bold text-white">D</span>}
+              {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-full w-full object-cover" /> : <><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-black text-xs font-bold text-white">{roleInitial}</span><span>{roleLabel}</span></>}
             </button>
           </div>
         </header>

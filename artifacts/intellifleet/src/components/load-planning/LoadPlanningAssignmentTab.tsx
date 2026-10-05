@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
+import { HorizontalScrollTable } from "./HorizontalScrollTable";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -379,7 +380,7 @@ export default function LoadPlanningAssignmentTab() {
               );
             })}
           </div>
-          <div className="load-planning-table-wrap relative hidden max-h-[calc(100vh-330px)] overflow-auto overscroll-x-contain md:block">
+          <HorizontalScrollTable contentWidth="2000px">
             <table className="w-full min-w-[2000px] table-fixed text-left text-xs">
               <colgroup>
                 {COLUMNS.map(([name, width]) => (
@@ -431,7 +432,7 @@ export default function LoadPlanningAssignmentTab() {
                 })}
               </tbody>
             </table>
-          </div>
+          </HorizontalScrollTable>
           {weight.unknown > 0 && !calculating && (
             <div className="border-t border-[#e4e3df] bg-[#fffaf0] px-4 py-2 text-xs text-[#7a5b00]">
               * {weight.unknown} line{weight.unknown === 1 ? "" : "s"} {weight.unknown === 1 ? "has" : "have"} no package weight in Zoho, so {weight.unknown === 1 ? "it is" : "they are"} not included in the total.

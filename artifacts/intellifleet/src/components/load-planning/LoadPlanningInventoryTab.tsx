@@ -15,6 +15,7 @@ import {
 import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
+import { HorizontalScrollTable } from "./HorizontalScrollTable";
 
 // The line item's own Zoho "Available for Sale". Only saved past-dated orders (whose lines
 // carry no per-item stock at all) fall back to the order-level figure stored with them.
@@ -55,6 +56,9 @@ function money(value: unknown) {
 }
 function status(value: unknown) {
   return typeof value === "string" && value ? value.replaceAll("_", " ") : "-";
+}
+function normalizedStatus(value: unknown) {
+  return status(value).toLowerCase();
 }
 function dateLabel(value: unknown) {
   if (typeof value !== "string" || !value) return "-";
@@ -464,6 +468,10 @@ export default function LoadPlanningInventoryTab({
   const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState(1);
   const client = useQueryClient();
+  const apiOrderStatus =
+    !assignmentScope && orderStatus === "All"
+      ? "All except acknowledged"
+      : orderStatus;
   const columnWidths = [
     44,
     120,
@@ -487,13 +495,13 @@ export default function LoadPlanningInventoryTab({
     ...(assignmentScope ? [180, 220, 80] : []),
   ];
   const orders = useQuery({
-    queryKey: ["inventory-sales-orders", from, to, page, orderStatus, query],
+    queryKey: ["inventory-sales-orders", from, to, page, apiOrderStatus, query],
     queryFn: () =>
       inventoryApi.listSalesOrders(
         from,
         to,
         page,
-        orderStatus,
+        apiOrderStatus,
         query,
         assignmentScope,
       ),
@@ -509,13 +517,15 @@ export default function LoadPlanningInventoryTab({
       (orders.data?.items ?? [])
         .filter(
           (order) =>
-            orderStatus === "All" ||
+            (orderStatus === "All" &&
+              (assignmentScope ||
+                normalizedStatus(order.order_status) !== "acknowledged")) ||
             // The backend already applies Zoho's Acknowledged custom-view
             // filter and returns only matching rows. Do not re-filter those
             // rows using raw_json: Zoho list payloads often omit the
             // cs_acknowl sub-status even though the custom view matched it.
             orderStatus === "Acknowledged" ||
-            status(order.order_status).toLowerCase() === orderStatus.toLowerCase(),
+            normalizedStatus(order.order_status) === orderStatus.toLowerCase(),
         )
         .filter((order) =>
           [
@@ -542,7 +552,7 @@ export default function LoadPlanningInventoryTab({
             city: (order as any).shipping_city || city(raw.shipping_address ?? (order as any).shipping_address),
           }));
         }),
-    [orders.data, orderStatus, query],
+    [orders.data, orderStatus, query, assignmentScope],
   );
   const orderCount = orders.data?.total ?? 0;
   const watchRefresh = async () => {
@@ -560,7 +570,7 @@ export default function LoadPlanningInventoryTab({
                 from,
                 to,
                 page,
-                orderStatus,
+                apiOrderStatus,
                 query,
               ],
             });
@@ -641,7 +651,7 @@ export default function LoadPlanningInventoryTab({
       format,
       from,
       to,
-      orderStatus,
+      apiOrderStatus,
       query,
       assignmentScope,
     );
@@ -805,7 +815,7 @@ export default function LoadPlanningInventoryTab({
         </div>
       ) : (
         <>
-          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}</div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{(order.products ?? []).map((product) => product.name).filter(Boolean).join(", ") || "Details unavailable"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{(() => { const product = (order.products ?? []).find((entry) => (entry.line_item_id && entry.line_item_id === item.line_item_id) || (entry.item_id && entry.item_id === item.item_id) || entry.sku === item.sku); return product?.total_weight_kg == null ? "—" : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`; })()}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><div className="load-planning-table-wrap relative hidden overflow-x-auto overscroll-x-contain md:block">
+          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}</div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{(order.products ?? []).map((product) => product.name).filter(Boolean).join(", ") || "Details unavailable"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{(() => { const product = (order.products ?? []).find((entry) => (entry.line_item_id && entry.line_item_id === item.line_item_id) || (entry.item_id && entry.item_id === item.item_id) || entry.sku === item.sku); return product?.total_weight_kg == null ? "—" : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`; })()}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
             <table className="w-full min-w-[2200px] table-fixed text-left text-xs">
               <colgroup>
                 {columnWidths.map((width, index) => (
@@ -978,7 +988,7 @@ export default function LoadPlanningInventoryTab({
                 )}
               </tbody>
             </table>
-          </div>
+          </HorizontalScrollTable>
           <div className="flex items-center justify-end gap-2 border-t border-[#e4e3df] px-4 py-3">
             <button
               onClick={() => setPage((value) => Math.max(1, value - 1))}
@@ -1012,7 +1022,7 @@ export default function LoadPlanningInventoryTab({
           context={{
             date_from: from,
             date_to: to,
-            status: orderStatus,
+            status: apiOrderStatus,
             search: query,
             assignment: assignmentScope,
           }}
