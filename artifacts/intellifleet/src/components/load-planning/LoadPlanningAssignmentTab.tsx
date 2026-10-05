@@ -6,7 +6,7 @@ import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
-import { CONTROL_HEIGHT, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
+import { FilterField, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -154,39 +154,54 @@ export default function LoadPlanningAssignmentTab() {
     );
   return (
     <div className="load-planning-panel min-w-0 border border-[#e4e3df] bg-white">
-      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3 border-b border-[#e4e3df] p-3 sm:p-4">
-        <div className="w-full min-w-0">
-          <div className="micro text-[#77787b]">Truck assignment queue</div>
-          <h2 className="display-face mt-1 text-xl font-bold sm:text-2xl">
-            Acknowledged Sales Orders{" "}
-            <span className="ml-2 text-sm font-normal text-[#77787b]">
-              {visibleOrders.length}
-            </span>
-          </h2>
-        </div>
-        <div className="grid w-full min-w-0 grid-cols-2 items-end gap-3 md:flex md:w-auto md:flex-wrap">
-          <label className="grid min-w-0 gap-1 text-xs font-semibold text-[#77787b]">
-            <span className="leading-none">From</span>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className={`${inputClass} w-full`}
-            />
-          </label>
-          <label className="grid min-w-0 gap-1 text-xs font-semibold text-[#77787b]">
-            <span className="leading-none">To</span>
-            <input
-              type="date"
-              min={from}
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className={`${inputClass} w-full`}
-            />
-          </label>
-          <label className="col-span-2 grid min-w-0 gap-1 text-xs font-semibold text-[#77787b] md:col-span-1">
-            <span className="leading-none">Destination cities</span>
-            <div className="relative min-w-0 w-full md:min-w-48">
+      <Toolbar
+        count={visibleOrders.length}
+        meta={
+          <span
+            data-testid="load-planning-total-weight"
+            className="inline-flex items-center gap-1.5 text-[13px] text-[#77787b]"
+            title={
+              calculating
+                ? "Item weights are still loading from Zoho"
+                : weight.unknown
+                  ? `${weight.unknown} line${weight.unknown === 1 ? " has" : "s have"} no weight in Zoho and ${weight.unknown === 1 ? "is" : "are"} not included`
+                  : "Total weight of the filtered sales orders"
+            }
+          >
+            <Scale size={13} className="shrink-0" />
+            {calculating ? (
+              <>
+                <Loader2 size={12} className="shrink-0 animate-spin" />
+                Calculating…
+              </>
+            ) : (
+              <>
+                <span className="mono font-semibold text-black">{kg(weight.total)}</span>
+                {weight.unknown > 0 && <span className="font-semibold text-[#b07b12]">*</span>}
+              </>
+            )}
+          </span>
+        }
+        filters={
+          <>
+            <div className="relative min-w-0 sm:min-w-[220px] sm:flex-1 sm:basis-[220px]">
+              <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search orders"
+                aria-label="Search orders"
+                className={`${inputClass} w-full pl-9 pr-3`}
+              />
+            </div>
+            <FilterField label="From">
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+            </FilterField>
+            <FilterField label="To">
+              <input type="date" min={from} value={to} onChange={(e) => setTo(e.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+            </FilterField>
+            <FilterField label="Destination cities">
+              <div className="relative min-w-0 w-full sm:w-[190px]">
               <button
                 type="button"
                 onClick={() => setCitiesOpen((value) => !value)}
@@ -200,7 +215,7 @@ export default function LoadPlanningAssignmentTab() {
                 <span>▾</span>
               </button>
               {citiesOpen && (
-                <div className="absolute left-0 top-11 z-20 max-h-64 w-full min-w-56 overflow-y-auto border border-[#d8d7d2] bg-white p-2 shadow-lg">
+                <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-full min-w-56 overflow-y-auto border border-[#d8d7d2] bg-white p-2 shadow-lg">
                   <button
                     type="button"
                     className="mb-2 text-xs font-semibold underline"
@@ -239,57 +254,24 @@ export default function LoadPlanningAssignmentTab() {
                   ))}
                 </div>
               )}
-            </div>
-          </label>
-          <div className="relative col-span-2 min-w-0 md:col-span-1">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]"
-            />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search orders"
-              className={`${inputClass} w-full pl-9 pr-3 md:w-auto`}
-            />
-          </div>
+              </div>
+            </FilterField>
+          </>
+        }
+        actions={
           <button
             type="button"
             onClick={() => {
               void orders.refetch();
             }}
             disabled={orders.isFetching || citySource.isFetching}
-            className={`${primaryButtonClass} col-span-1 md:col-span-1`}
+            className={primaryButtonClass}
           >
             <RefreshCw size={15} className={orders.isFetching ? "animate-spin" : ""} />
             Refresh
           </button>
-          <div
-            data-testid="load-planning-total-weight"
-            className={`col-span-1 flex ${CONTROL_HEIGHT} min-w-0 items-center gap-2 rounded-[4px] border border-[#d8d7d2] bg-[#fafaf8] px-3 md:col-span-1`}
-            title={
-              calculating
-                ? "Item weights are still loading from Zoho"
-                : weight.unknown
-                  ? `${weight.unknown} line${weight.unknown === 1 ? " has" : "s have"} no weight in Zoho and ${weight.unknown === 1 ? "is" : "are"} not included`
-                  : "Total weight of the filtered sales orders"
-            }
-          >
-            <Scale size={14} className="shrink-0 text-[#77787b]" />
-            {calculating ? (
-              <>
-                <Loader2 size={13} className="shrink-0 animate-spin text-[#77787b]" />
-                <span className="truncate text-xs text-[#77787b]">Calculating…</span>
-              </>
-            ) : (
-              <>
-                <span className="mono truncate text-sm font-semibold">{kg(weight.total)}</span>
-                {weight.unknown > 0 && <span className="shrink-0 text-xs font-semibold text-[#b07b12]">*</span>}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+        }
+      />
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e3df] bg-[#fafaf8] px-3 py-3 text-sm sm:px-4">
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={all} onChange={toggleAll} />

@@ -29,13 +29,16 @@ export function FilterField({ label, className = "", children }: { label: string
  * the left, actions on the right, bottom-aligned. At <1200px the actions drop below the filters (right-aligned) when the card is narrower than 1240px;
  * at <640px every control goes full width.
  */
-export function Toolbar({ count, noun = "orders", toggle, filters, actions }: { count: number; noun?: string; toggle?: ReactNode; filters: ReactNode; actions: ReactNode }) {
+export function Toolbar({ count, noun = "orders", meta, toggle, filters, actions }: { count: number; noun?: string; meta?: ReactNode; toggle?: ReactNode; filters: ReactNode; actions: ReactNode }) {
   return (
     <div className="@container grid min-w-0 gap-3 border-b border-[#e4e3df] p-3 sm:p-4" data-testid="lp-toolbar">
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <span className="text-[13px] text-[#77787b]" data-testid="lp-order-count">
-          <span className="mono font-semibold text-black">{count}</span> {noun}
-        </span>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="text-[13px] text-[#77787b]" data-testid="lp-order-count">
+            <span className="mono font-semibold text-black">{count}</span> {noun}
+          </span>
+          {meta}
+        </div>
         {toggle}
       </div>
       <div className="flex min-w-0 flex-col gap-3 sm:gap-4 @[1240px]:flex-row @[1240px]:items-end @[1240px]:justify-between">
