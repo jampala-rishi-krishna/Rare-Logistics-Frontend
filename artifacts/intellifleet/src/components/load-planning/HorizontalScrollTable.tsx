@@ -31,7 +31,7 @@ export function HorizontalScrollTable({
     <div className={className}>
       <div
         ref={topRef}
-        className="load-planning-table-wrap sticky top-0 z-[5] hidden overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-[#e4e3df] bg-white md:block"
+        className="load-planning-top-scroll sticky top-[68px] z-[15] hidden h-5 overflow-x-auto overflow-y-hidden overscroll-x-contain border-b border-[#e4e3df] bg-white md:block"
         onScroll={() => syncScroll(topRef.current, tableRef.current)}
         aria-hidden="true"
       >

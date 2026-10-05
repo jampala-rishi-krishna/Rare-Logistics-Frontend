@@ -32,6 +32,17 @@ export interface SalesOrderSummary {
   case_count?: number;
   unit_count?: number;
   total_item_quantity?: number;
+  zoho_lock?: ZohoLockStatus;
+}
+
+export interface ZohoLockStatus {
+  is_locked: boolean;
+  config_id?: string;
+  config_name?: string | null;
+  locked_by?: string | null;
+  lock_time?: string | null;
+  reason?: string | null;
+  lock_error?: string | null;
 }
 
 export interface SalesOrdersPage {
@@ -290,6 +301,14 @@ export function acknowledgeSalesOrder(
 ): Promise<Record<string, any>> {
   return api.post<Record<string, any>>(
     `/api/load-planning/inventory/sales-orders/${id}/acknowledge`,
+  );
+}
+
+export function retrySalesOrderLock(
+  id: string,
+): Promise<Record<string, any>> {
+  return api.post<Record<string, any>>(
+    `/api/load-planning/salesorders/${encodeURIComponent(id)}/lock`,
   );
 }
 

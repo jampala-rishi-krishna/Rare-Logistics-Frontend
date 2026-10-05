@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Download,
   Loader2,
+  Lock,
   Mail,
   RefreshCw,
   Search,
@@ -59,6 +60,11 @@ function status(value: unknown) {
 }
 function normalizedStatus(value: unknown) {
   return status(value).toLowerCase();
+}
+function lockMessage(error: unknown) {
+  return String(error) === "lock_credential_lacks_scope"
+    ? "Lock permission missing in Zoho, contact admin"
+    : String(error || "Zoho could not lock this sales order.");
 }
 function dateLabel(value: unknown) {
   if (typeof value !== "string" || !value) return "-";
@@ -621,9 +627,11 @@ export default function LoadPlanningInventoryTab({
     try {
       const results = await Promise.all(selectedOrderIds.map((id) => inventoryApi.acknowledgeSalesOrder(id)));
       const acknowledgedCount = results.filter((result) => result.acknowledged).length;
+      const unlocked = results.filter((result) => result.acknowledged && result.locked === false);
+      const unlockedCount = unlocked.length;
       setSelectedOrderIds([]);
       await client.refetchQueries({ queryKey: ["inventory-sales-orders"] });
-      setSyncMessage(`Acknowledged ${acknowledgedCount} selected order${acknowledgedCount === 1 ? "" : "s"} in Zoho.`);
+      setSyncMessage(unlockedCount ? `Acknowledged ${acknowledgedCount}, NOT locked ${unlockedCount}: ${lockMessage(unlocked[0]?.lock_error)}. Open each order to retry the lock.` : `Acknowledged & locked ${acknowledgedCount} selected order${acknowledgedCount === 1 ? "" : "s"}.`);
     } catch (error: any) {
       setSyncMessage(
         error?.message || "Zoho could not acknowledge the filtered orders.",
@@ -878,7 +886,12 @@ export default function LoadPlanningInventoryTab({
                           {dateLabel(order.expected_shipment_date)}
                         </td>
                         <td className="sticky left-[120px] z-[1] bg-white px-3 py-4 align-top font-semibold">
-                          {order.salesorder_number ?? order.id}
+                          <div>{order.salesorder_number ?? order.id}</div>
+                          {order.zoho_lock?.is_locked && (
+                            <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal text-[#1e7b44]" title={[order.zoho_lock.config_name, order.zoho_lock.locked_by, order.zoho_lock.lock_time].filter(Boolean).join(" - ")}>
+                              <Lock size={11} /> {order.zoho_lock.config_name || "Locked"}
+                            </div>
+                          )}
                         </td>
                         <td className="sticky left-[260px] z-[1] bg-white px-3 py-4 align-top">
                           {order.customer_name ?? "-"}
@@ -1047,8 +1060,10 @@ function SalesOrderDetailDrawer({
   });
   const client = useQueryClient();
   const [acknowledging, setAcknowledging] = useState(false);
+  const [retryingLock, setRetryingLock] = useState(false);
   const [removingAcknowledgement, setRemovingAcknowledgement] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
+  const [lockRetryVisible, setLockRetryVisible] = useState(false);
   const raw = (detail.data?.salesorder ?? detail.data ?? {}) as Record<
     string,
     any
@@ -1067,20 +1082,49 @@ function SalesOrderDetailDrawer({
     setActionMessage("");
     setAcknowledging(true);
     try {
-      await inventoryApi.acknowledgeSalesOrder(order.id);
+      const result = await inventoryApi.acknowledgeSalesOrder(order.id);
       await Promise.all([
         client.invalidateQueries({
           queryKey: ["inventory-sales-order", order.id],
         }),
         client.invalidateQueries({ queryKey: ["inventory-sales-orders"] }),
       ]);
-      setActionMessage("Acknowledged in Zoho Inventory.");
+      if (result.locked === false) {
+        setLockRetryVisible(true);
+        setActionMessage(`Acknowledged, NOT locked: ${lockMessage(result.lock_error)}`);
+      } else {
+        setLockRetryVisible(false);
+        setActionMessage("Acknowledged & locked.");
+      }
     } catch (error: any) {
       setActionMessage(
         error?.message || "Zoho could not acknowledge this sales order.",
       );
     } finally {
       setAcknowledging(false);
+    }
+  };
+  const retryLock = async () => {
+    setRetryingLock(true);
+    setActionMessage("");
+    try {
+      const result = await inventoryApi.retrySalesOrderLock(order.id);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["inventory-sales-order", order.id] }),
+        client.invalidateQueries({ queryKey: ["inventory-sales-orders"] }),
+      ]);
+      if (result.locked === false) {
+        setLockRetryVisible(true);
+        setActionMessage(`Acknowledged, NOT locked: ${lockMessage(result.lock_error)}`);
+      } else {
+        setLockRetryVisible(false);
+        setActionMessage("Acknowledged & locked.");
+      }
+    } catch (error: any) {
+      setLockRetryVisible(true);
+      setActionMessage(error?.message || "Zoho could not lock this sales order.");
+    } finally {
+      setRetryingLock(false);
     }
   };
   const removeAcknowledge = async () => {
@@ -1111,6 +1155,7 @@ function SalesOrderDetailDrawer({
   };
   const canRemoveAcknowledge =
     !detail.isLoading && !detail.isError && rawStatus === "acknowledged";
+  const lockStatus = (detail.data?.zoho_lock ?? raw.zoho_lock ?? order.zoho_lock) as inventoryApi.ZohoLockStatus | undefined;
   const fields = [
     ["Reference #", raw.reference_number],
     ["Order date", raw.date],
@@ -1141,6 +1186,13 @@ function SalesOrderDetailDrawer({
             <div className="mt-2 capitalize text-xs">
               {status(raw.status ?? order.order_status)}
             </div>
+            {lockStatus?.is_locked && (
+              <div className="mt-3 inline-flex items-center gap-2 border border-[#b7d7bd] bg-[#f1f8f2] px-2 py-1 text-xs text-[#1e7b44]">
+                <Lock size={13} /> {lockStatus.config_name || "Locked"}
+                {lockStatus.locked_by ? ` by ${lockStatus.locked_by}` : ""}
+                {lockStatus.lock_time ? ` at ${lockStatus.lock_time}` : ""}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
@@ -1172,10 +1224,20 @@ function SalesOrderDetailDrawer({
               )}
               {actionMessage && (
                 <span
-                  className={`max-w-[220px] text-xs ${actionMessage.includes("Zoho and IntelliFleet") || actionMessage.startsWith("Acknowledged") ? "text-[#1e7b44]" : "text-[#a32720]"}`}
+                  className={`max-w-[220px] text-xs ${actionMessage === "Acknowledged & locked." || actionMessage.includes("Zoho and IntelliFleet") ? "text-[#1e7b44]" : "text-[#a32720]"}`}
                 >
                   {actionMessage}
                 </span>
+              )}
+              {(lockRetryVisible || (rawStatus === "acknowledged" && lockStatus?.is_locked === false && !lockStatus?.lock_error)) && (
+                <button
+                  onClick={retryLock}
+                  disabled={retryingLock}
+                  className="inline-flex items-center gap-2 rounded-[4px] border border-[#a32720] px-3 py-2 text-sm text-[#a32720]"
+                >
+                  {retryingLock ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+                  {retryingLock ? "Retrying..." : "Retry Lock"}
+                </button>
               )}
             </div>
             <button onClick={onClose} aria-label="Close sales order">

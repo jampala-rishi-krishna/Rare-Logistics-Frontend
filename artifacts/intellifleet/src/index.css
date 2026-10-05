@@ -338,6 +338,10 @@ a { color: inherit; text-decoration: none; }
 .thin-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
 .thin-scroll::-webkit-scrollbar-thumb { background: #c9c8c4; border-radius: 9px; }
 .thin-scroll::-webkit-scrollbar-track { background: transparent; }
+.load-planning-top-scroll { scrollbar-width: thin; scrollbar-color: #8f8f8b #f1f1ed; }
+.load-planning-top-scroll::-webkit-scrollbar { height: 14px; }
+.load-planning-top-scroll::-webkit-scrollbar-track { background: #f1f1ed; }
+.load-planning-top-scroll::-webkit-scrollbar-thumb { background: #8f8f8b; border: 3px solid #f1f1ed; border-radius: 999px; }
 .button-black { background: var(--cta-black); color: white; transition: background .18s ease, transform .18s ease; }
 .button-black:hover { background: var(--cta-black-hover); transform: translateY(-1px); }
 .button-black:active { transform: translateY(0); }
