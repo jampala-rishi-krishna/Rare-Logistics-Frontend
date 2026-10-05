@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { CalendarDays, Loader2, RefreshCw, Scale, Search } from "lucide-react";
+import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
+import { CONTROL_HEIGHT, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -165,33 +166,31 @@ export default function LoadPlanningAssignmentTab() {
         </div>
         <div className="grid w-full min-w-0 grid-cols-2 items-end gap-3 md:flex md:w-auto md:flex-wrap">
           <label className="grid min-w-0 gap-1 text-xs font-semibold text-[#77787b]">
-            <span className="flex items-center gap-1">
-              <CalendarDays size={13} /> Date from
-            </span>
+            <span className="leading-none">From</span>
             <input
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="min-w-0 w-full border px-2 py-2 text-sm text-black"
+              className={`${inputClass} w-full`}
             />
           </label>
           <label className="grid min-w-0 gap-1 text-xs font-semibold text-[#77787b]">
-            <span>Date to</span>
+            <span className="leading-none">To</span>
             <input
               type="date"
               min={from}
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="min-w-0 w-full border px-2 py-2 text-sm text-black"
+              className={`${inputClass} w-full`}
             />
           </label>
           <label className="col-span-2 grid min-w-0 gap-1 text-xs font-semibold text-[#77787b] md:col-span-1">
-            <span>Destination cities</span>
+            <span className="leading-none">Destination cities</span>
             <div className="relative min-w-0 w-full md:min-w-48">
               <button
                 type="button"
                 onClick={() => setCitiesOpen((value) => !value)}
-                className="flex h-10 w-full items-center justify-between border bg-white px-3 text-left text-sm font-medium text-black"
+                className={`${buttonClass} w-full !justify-between text-left font-medium text-black`}
               >
                 <span>
                   {selectedCities.length
@@ -245,13 +244,13 @@ export default function LoadPlanningAssignmentTab() {
           <div className="relative col-span-2 min-w-0 md:col-span-1">
             <Search
               size={15}
-              className="absolute left-3 top-2.5 text-[#77787b]"
+              className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]"
             />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search orders"
-              className="w-full border py-2 pl-9 pr-3 text-sm md:w-auto"
+              className={`${inputClass} w-full pl-9 pr-3 md:w-auto`}
             />
           </div>
           <button
@@ -260,14 +259,14 @@ export default function LoadPlanningAssignmentTab() {
               void orders.refetch();
             }}
             disabled={orders.isFetching || citySource.isFetching}
-            className="button-black col-span-1 flex h-10 items-center justify-center gap-2 rounded-[4px] px-4 text-sm disabled:opacity-60 md:col-span-1"
+            className={`${primaryButtonClass} col-span-1 md:col-span-1`}
           >
             <RefreshCw size={15} className={orders.isFetching ? "animate-spin" : ""} />
             Refresh
           </button>
           <div
             data-testid="load-planning-total-weight"
-            className="col-span-1 flex h-10 min-w-0 items-center gap-2 border border-[#d8d7d2] bg-[#fafaf8] px-3 md:col-span-1"
+            className={`col-span-1 flex ${CONTROL_HEIGHT} min-w-0 items-center gap-2 rounded-[4px] border border-[#d8d7d2] bg-[#fafaf8] px-3 md:col-span-1`}
             title={
               calculating
                 ? "Item weights are still loading from Zoho"

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
-  CalendarDays,
   CheckCircle2,
   Download,
   Loader2,
@@ -18,6 +17,7 @@ import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { SalesOrderCardGrid, ViewModeToggle } from "./SalesOrderCardGrid";
+import { FilterField, Toolbar, buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { removeOrdersFromPage, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
 import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
 import type { QueryClient } from "@tanstack/react-query";
@@ -722,131 +722,77 @@ export default function LoadPlanningInventoryTab({
   };
   return (
     <div className="load-planning-panel min-w-0 border border-[#e4e3df] bg-white">
-      <div className="load-planning-toolbar flex min-w-0 flex-wrap items-end justify-between gap-3 border-b border-[#e4e3df] p-3 sm:p-4">
-        <div className="grid w-full min-w-0 grid-cols-2 items-end gap-3 md:flex md:w-auto md:flex-wrap">
-          <div className="col-span-2 flex h-[42px] items-center gap-2 border border-[#d8d7d2] bg-[#fafaf8] px-3 md:col-span-1">
-            <span className="mono text-base font-semibold">{orderCount}</span>
-            <span className="text-xs text-[#77787b]">orders</span>
-          </div>
-          {assignmentScope && (
-            <div className="col-span-2 flex items-end md:col-span-1">
-              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+      <Toolbar
+        count={orderCount}
+        toggle={assignmentScope ? <ViewModeToggle mode={viewMode} onChange={setViewMode} /> : undefined}
+        filters={
+          <>
+            <div className="relative min-w-0 sm:min-w-[220px] sm:flex-1 sm:basis-[220px]">
+              <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search sales orders"
+                aria-label="Search sales orders"
+                className={`${inputClass} w-full pl-9 pr-3`}
+              />
             </div>
-          )}
-          <label className="grid min-w-0 gap-1 text-xs font-semibold">
-            <span className="flex items-center gap-1 text-[#77787b]">
-              <CalendarDays size={13} /> From
-            </span>
-            <input
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-              className="min-w-0 w-full border border-[#d8d7d2] px-2 py-2 text-sm"
-            />
-          </label>
-          <label className="grid min-w-0 gap-1 text-xs font-semibold">
-            <span className="text-[#77787b]">To</span>
-            <input
-              type="date"
-              value={to}
-              min={from}
-              onChange={(event) => setTo(event.target.value)}
-              className="min-w-0 w-full border border-[#d8d7d2] px-2 py-2 text-sm"
-            />
-          </label>
-          <label className="col-span-2 grid min-w-0 gap-1 text-xs font-semibold md:col-span-1">
-            <span className="text-[#77787b]">Order status</span>
-            <select
-              value={orderStatus}
-              onChange={(event) => setOrderStatus(event.target.value)}
-              className="min-w-0 w-full border border-[#d8d7d2] bg-white px-2 py-2 text-sm"
-            >
-              <option>All</option>
-              <option>Draft</option>
-              <option>Confirmed</option>
-              <option>Acknowledged</option>
-              <option>Void</option>
-            </select>
-          </label>
-        </div>
-        <div className="grid w-full min-w-0 grid-cols-2 gap-2 md:flex md:w-auto md:flex-wrap md:items-center">
-          <div className="relative col-span-2 min-w-0 md:col-span-1">
-            <Search
-              size={15}
-              className="absolute left-3 top-2.5 text-[#77787b]"
-            />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search sales orders"
-              className="w-full border border-[#d8d7d2] py-2 pl-9 pr-3 text-sm md:w-auto"
-            />
-          </div>
-          <div className="relative col-span-1">
-            <button
-              onClick={() => setExportOpen(!exportOpen)}
-              className="inline-flex w-full items-center justify-center gap-2 border border-[#d8d7d2] px-3 py-2 text-sm md:w-auto"
-            >
-              <Download size={14} /> Export
+            <FilterField label="From">
+              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+            </FilterField>
+            <FilterField label="To">
+              <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+            </FilterField>
+            <FilterField label="Order status">
+              <select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`}>
+                <option>All</option>
+                <option>Draft</option>
+                <option>Confirmed</option>
+                <option>Acknowledged</option>
+                <option>Void</option>
+              </select>
+            </FilterField>
+          </>
+        }
+        actions={
+          <>
+            <div className="relative">
+              <button onClick={() => setExportOpen(!exportOpen)} className={`${buttonClass} w-full`}>
+                <Download size={14} /> Export
+              </button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full z-10 mt-1 grid w-40 border border-[#d8d7d2] bg-white p-1 shadow-lg">
+                  <button onClick={() => download("pdf")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
+                    Export as PDF
+                  </button>
+                  <button onClick={() => download("excel")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
+                    Export as Excel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setExportOpen(false);
+                      setEmailOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]"
+                  >
+                    <Mail size={14} /> Send to Email
+                  </button>
+                </div>
+              )}
+            </div>
+            <button onClick={() => setEmailOpen(true)} className={dangerButtonClass}>
+              <Mail size={14} /> Send to Email
             </button>
-            {exportOpen && (
-              <div className="absolute right-0 top-10 z-10 grid w-40 border border-[#d8d7d2] bg-white p-1 shadow-lg">
-                <button
-                  onClick={() => download("pdf")}
-                  className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]"
-                >
-                  Export as PDF
-                </button>
-                <button
-                  onClick={() => download("excel")}
-                  className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]"
-                >
-                  Export as Excel
-                </button>
-                <button
-                  onClick={() => {
-                    setExportOpen(false);
-                    setEmailOpen(true);
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]"
-                >
-                  <Mail size={14} /> Send to Email
-                </button>
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => setEmailOpen(true)}
-            className="inline-flex w-full items-center justify-center gap-2 border border-[#86000B] px-3 py-2 text-sm text-[#86000B] md:w-auto"
-          >
-            <Mail size={14} /> Send to Email
-          </button>
-          <button
-            onClick={acknowledgeFiltered}
-            disabled={bulkAcknowledging || !selectedOrderIds.length}
-            className="button-black col-span-1 inline-flex w-full items-center justify-center gap-2 rounded-[4px] px-3 py-2 text-sm md:w-auto"
-          >
-            {bulkAcknowledging ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <CheckCircle2 size={14} />
-            )}{" "}
-            {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
-          </button>
-          <button
-            onClick={refresh}
-            disabled={syncing}
-            className="button-black col-span-1 inline-flex w-full items-center justify-center gap-2 rounded-[4px] px-3 py-2 text-sm md:w-auto"
-          >
-            {syncing ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <RefreshCw size={14} />
-            )}{" "}
-            {syncing ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-      </div>
+            <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass}>
+              {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
+              {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
+            </button>
+            <button onClick={refresh} disabled={syncing} className={primaryButtonClass}>
+              {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
+            </button>
+          </>
+        }
+      />
       {syncMessage && (
         <div className="flex items-center gap-2 border-b border-[#cddfd2] bg-[#edf6f0] px-4 py-2 text-xs text-[#1e7b44]">
           <CheckCircle2 size={14} />
@@ -874,7 +820,7 @@ export default function LoadPlanningInventoryTab({
         </div>
       ) : rows.length === 0 ? (
         <div className="p-12 text-center text-sm text-[#77787b]">
-          No orders for this filter - click Refresh to sync Zoho.
+          No orders for this filter. Click Refresh to sync Zoho.
         </div>
       ) : cardsView ? (
         <>

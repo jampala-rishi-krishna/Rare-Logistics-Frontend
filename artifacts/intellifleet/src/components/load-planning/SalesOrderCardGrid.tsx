@@ -13,13 +13,13 @@ export function ViewModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (
       type="button"
       aria-pressed={mode === value}
       onClick={() => onChange(value)}
-      className={`px-2.5 py-1 text-xs font-semibold leading-tight transition-colors ${mode === value ? "bg-[#0b0b0b] text-white" : "text-[#55565a] hover:bg-[#f2f2ef]"}`}
+      className={`h-full w-[132px] whitespace-nowrap px-2 text-xs! font-semibold leading-none! transition-colors ${mode === value ? "bg-[#0b0b0b] text-white" : "bg-white text-[#55565a] hover:bg-[#f2f2ef]"}`}
     >
       {label}
     </button>
   );
   return (
-    <div role="group" aria-label="Confirmed SO view" className="inline-flex shrink-0 items-stretch overflow-hidden rounded-[4px] border border-[#d8d7d2] bg-white">
+    <div role="group" aria-label="Confirmed SO view" className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-[4px] border border-[#d8d7d2] bg-white" data-testid="view-toggle">
       {button("kpi", KPI_LABEL)}
       {button("spreadsheet", SPREADSHEET_LABEL)}
     </div>
