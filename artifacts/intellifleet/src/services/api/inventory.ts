@@ -65,7 +65,9 @@ export interface AssignmentOptions {
     number: string | null;
     customer: string | null;
     address: unknown;
-    weight_kg: number;
+    weight_kg: number | null;
+    /** Total of every selected order (this one + the others assigned together); null if any weight is unverified. */
+    selected_weight_kg?: number | null;
     weight_verified?: boolean;
     weight_warning?: string | null;
     requires_reefer: boolean;
@@ -92,8 +94,8 @@ export interface AssignmentOptions {
   }[];
   drivers: { id: number; name: string; title: string | null }[];
 }
-export function getAssignmentOptions(id: string) {
-  return api.get<AssignmentOptions>(`/api/load-planning/assignments/${id}`);
+export function getAssignmentOptions(id: string, otherSelectedIds: string[] = []) {
+  return api.get<AssignmentOptions>(`/api/load-planning/assignments/${id}`, otherSelectedIds.length ? { extra_ids: otherSelectedIds.join(",") } : undefined);
 }
 export function assignSalesOrder(
   id: string,

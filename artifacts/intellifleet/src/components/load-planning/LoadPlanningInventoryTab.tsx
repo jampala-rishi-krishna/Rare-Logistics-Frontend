@@ -17,6 +17,35 @@ import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
+import { SalesOrderCardGrid, ViewModeToggle } from "./SalesOrderCardGrid";
+import { removeOrdersFromPage, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
+import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
+import type { QueryClient } from "@tanstack/react-query";
+
+// Query-key prefixes. The Inventory list's key carries its scope ("inventory" | "assigned"), so
+// the Inventory and Confirmed SO tabs can never share a cache entry.
+const INVENTORY_LIST_KEY = "inventory-sales-orders";
+const LOAD_PLANNING_LIST_KEY = "load-planning-unassigned";
+
+/** Acknowledged orders leave the Inventory lists the moment Zoho confirms - no waiting for a refetch. */
+function dropFromInventory(client: QueryClient, ids: string[]) {
+  client.setQueriesData<inventoryApi.SalesOrdersPage>(
+    { predicate: (query) => query.queryKey[0] === INVENTORY_LIST_KEY && query.queryKey[1] === "inventory" && query.queryKey[5] !== "Acknowledged" },
+    (page) => removeOrdersFromPage(page, ids),
+  );
+}
+/** Orders whose acknowledgement was removed leave the Load Planning (acknowledged, unassigned) list. */
+function dropFromLoadPlanning(client: QueryClient, ids: string[]) {
+  client.setQueriesData<inventoryApi.SalesOrdersPage>({ queryKey: [LOAD_PLANNING_LIST_KEY] }, (page) => removeOrdersFromPage(page, ids));
+}
+/** Re-read Inventory + counts and Load Planning, plus any open drawer for these orders. */
+function refetchOrderLists(client: QueryClient, ids: string[]) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: [INVENTORY_LIST_KEY] }),
+    client.invalidateQueries({ queryKey: [LOAD_PLANNING_LIST_KEY] }),
+    ...ids.map((id) => client.invalidateQueries({ queryKey: ["inventory-sales-order", id] })),
+  ]);
+}
 
 // The line item's own Zoho "Available for Sale". Only saved past-dated orders (whose lines
 // carry no per-item stock at all) fall back to the order-level figure stored with them.
@@ -473,6 +502,16 @@ export default function LoadPlanningInventoryTab({
   const [orderStatus, setOrderStatus] = useState("All");
   const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [ackErrors, setAckErrors] = useState<Record<string, string>>({});
+  // KPI / Spreadsheet view (Confirmed SO only). Pure local state: it is not part of any query
+  // key, so switching views never refetches.
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => readViewMode());
+  const [cardPage, setCardPage] = useState(1);
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    writeViewMode(mode);
+  };
+  const cardsView = Boolean(assignmentScope) && viewMode === "kpi";
   const client = useQueryClient();
   const apiOrderStatus =
     !assignmentScope && orderStatus === "All"
@@ -501,7 +540,7 @@ export default function LoadPlanningInventoryTab({
     ...(assignmentScope ? [180, 220, 80] : []),
   ];
   const orders = useQuery({
-    queryKey: ["inventory-sales-orders", from, to, page, apiOrderStatus, query],
+    queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query],
     queryFn: () =>
       inventoryApi.listSalesOrders(
         from,
@@ -572,7 +611,8 @@ export default function LoadPlanningInventoryTab({
           } else {
             await client.refetchQueries({
               queryKey: [
-                "inventory-sales-orders",
+                INVENTORY_LIST_KEY,
+                assignmentScope ?? "inventory",
                 from,
                 to,
                 page,
@@ -619,19 +659,28 @@ export default function LoadPlanningInventoryTab({
   const visibleOrderIds = Array.from(new Set(rows.map(({ order }) => String(order.id))));
   const allVisibleSelected = visibleOrderIds.length > 0 && visibleOrderIds.every((id) => selectedOrderIds.includes(id));
   const toggleAllVisible = () => setSelectedOrderIds((current) => allVisibleSelected ? current.filter((id) => !visibleOrderIds.includes(id)) : Array.from(new Set([...current, ...visibleOrderIds])));
+  const orderLabel = (id: string) => {
+    const match = (orders.data?.items ?? []).find((order) => String(order.id) === id);
+    return match?.salesorder_number ?? id;
+  };
   const acknowledgeFiltered = async () => {
     if (!selectedOrderIds.length || !window.confirm(`Acknowledge ${selectedOrderIds.length} selected sales order${selectedOrderIds.length === 1 ? "" : "s"}? This will update Zoho Inventory.`))
       return;
     setBulkAcknowledging(true);
     setSyncMessage("");
+    setAckErrors({});
     try {
-      const results = await Promise.all(selectedOrderIds.map((id) => inventoryApi.acknowledgeSalesOrder(id)));
-      const acknowledgedCount = results.filter((result) => result.acknowledged).length;
-      const unlocked = results.filter((result) => result.acknowledged && result.locked === false);
-      const unlockedCount = unlocked.length;
-      setSelectedOrderIds([]);
-      await client.refetchQueries({ queryKey: ["inventory-sales-orders"] });
-      setSyncMessage(unlockedCount ? `Acknowledged ${acknowledgedCount}, NOT locked ${unlockedCount}: ${lockMessage(unlocked[0]?.lock_error)}. Open each order to retry the lock.` : `Acknowledged & locked ${acknowledgedCount} selected order${acknowledgedCount === 1 ? "" : "s"}.`);
+      // Every order is attempted and reported on its own: only the ones Zoho accepted move.
+      const outcomes = await settleAcknowledgements(selectedOrderIds, (id) => inventoryApi.acknowledgeSalesOrder(id));
+      const summary = summarizeAcknowledgements(outcomes, orderLabel);
+      const unlocked = outcomes.filter((outcome) => outcome.ok && outcome.result?.locked === false);
+      dropFromInventory(client, summary.acknowledgedIds);
+      setAckErrors(summary.errors);
+      // Succeeded ones are deselected; failed ones stay selected (with their error) so they can be retried.
+      setSelectedOrderIds(summary.failedIds);
+      await refetchOrderLists(client, summary.acknowledgedIds);
+      const lockNote = unlocked.length ? ` NOT locked ${unlocked.length}: ${lockMessage(unlocked[0]?.result?.lock_error)}. Open each order to retry the lock.` : summary.acknowledgedIds.length ? " Locked." : "";
+      setSyncMessage(`${summary.message}${lockNote}`);
     } catch (error: any) {
       setSyncMessage(
         error?.message || "Zoho could not acknowledge the filtered orders.",
@@ -645,13 +694,14 @@ export default function LoadPlanningInventoryTab({
     try {
       await inventoryApi.unassignSalesOrder(order.id);
       setSyncMessage(`Unassigned ${order.salesorder_number ?? order.id}.`);
-      await client.invalidateQueries({ queryKey: ["inventory-sales-orders"] });
+      await client.invalidateQueries({ queryKey: [INVENTORY_LIST_KEY] });
     } catch (error: any) {
       setSyncMessage(error?.message || "The sales order could not be unassigned.");
     }
   };
   useEffect(() => {
     setPage(1);
+    setCardPage(1);
   }, [from, to, orderStatus, query]);
   const download = async (format: "pdf" | "excel") => {
     setExportOpen(false);
@@ -678,6 +728,11 @@ export default function LoadPlanningInventoryTab({
             <span className="mono text-base font-semibold">{orderCount}</span>
             <span className="text-xs text-[#77787b]">orders</span>
           </div>
+          {assignmentScope && (
+            <div className="col-span-2 flex items-end md:col-span-1">
+              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            </div>
+          )}
           <label className="grid min-w-0 gap-1 text-xs font-semibold">
             <span className="flex items-center gap-1 text-[#77787b]">
               <CalendarDays size={13} /> From
@@ -821,6 +876,32 @@ export default function LoadPlanningInventoryTab({
         <div className="p-12 text-center text-sm text-[#77787b]">
           No orders for this filter - click Refresh to sync Zoho.
         </div>
+      ) : cardsView ? (
+        <>
+          <SalesOrderCardGrid
+            orders={uniqueOrders(rows)}
+            page={cardPage}
+            onPageChange={setCardPage}
+            selectedIds={selectedOrderIds}
+            errors={ackErrors}
+            showAssignment
+            onToggle={toggleOrder}
+            onOpen={setSelected}
+            onEdit={(order) => navigate(`/app/routes?assign=${encodeURIComponent(order.id)}`)}
+            onUnassign={(order) => void unassign(order)}
+          />
+          {(page > 1 || orders.data?.has_more) && (
+            <div className="flex items-center justify-end gap-2 border-t border-[#e4e3df] px-4 py-3">
+              <button onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1 || orders.isFetching} className="border border-[#d8d7d2] px-3 py-2 text-sm disabled:opacity-40">
+                Previous data page
+              </button>
+              <span className="text-xs text-[#77787b]">Data page {page}</span>
+              <button onClick={() => setPage((value) => value + 1)} disabled={!orders.data?.has_more || orders.isFetching} className="button-black px-3 py-2 text-sm disabled:opacity-40">
+                Next data page
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <>
           <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}</div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{(order.products ?? []).map((product) => product.name).filter(Boolean).join(", ") || "Details unavailable"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{(() => { const product = (order.products ?? []).find((entry) => (entry.line_item_id && entry.line_item_id === item.line_item_id) || (entry.item_id && entry.item_id === item.item_id) || entry.sku === item.sku); return product?.total_weight_kg == null ? "—" : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`; })()}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
@@ -887,6 +968,7 @@ export default function LoadPlanningInventoryTab({
                         </td>
                         <td className="sticky left-[120px] z-[1] bg-white px-3 py-4 align-top font-semibold">
                           <div>{order.salesorder_number ?? order.id}</div>
+                          {ackErrors[String(order.id)] && <div className="mt-1 text-[10px] font-normal text-[#a32720]">{ackErrors[String(order.id)]}</div>}
                           {order.zoho_lock?.is_locked && (
                             <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal text-[#1e7b44]" title={[order.zoho_lock.config_name, order.zoho_lock.locked_by, order.zoho_lock.lock_time].filter(Boolean).join(" - ")}>
                               <Lock size={11} /> {order.zoho_lock.config_name || "Locked"}
@@ -1083,12 +1165,8 @@ function SalesOrderDetailDrawer({
     setAcknowledging(true);
     try {
       const result = await inventoryApi.acknowledgeSalesOrder(order.id);
-      await Promise.all([
-        client.invalidateQueries({
-          queryKey: ["inventory-sales-order", order.id],
-        }),
-        client.invalidateQueries({ queryKey: ["inventory-sales-orders"] }),
-      ]);
+      dropFromInventory(client, [order.id]);
+      await refetchOrderLists(client, [order.id]);
       if (result.locked === false) {
         setLockRetryVisible(true);
         setActionMessage(`Acknowledged, NOT locked: ${lockMessage(result.lock_error)}`);
@@ -1109,10 +1187,7 @@ function SalesOrderDetailDrawer({
     setActionMessage("");
     try {
       const result = await inventoryApi.retrySalesOrderLock(order.id);
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ["inventory-sales-order", order.id] }),
-        client.invalidateQueries({ queryKey: ["inventory-sales-orders"] }),
-      ]);
+      await refetchOrderLists(client, [order.id]);
       if (result.locked === false) {
         setLockRetryVisible(true);
         setActionMessage(`Acknowledged, NOT locked: ${lockMessage(result.lock_error)}`);
@@ -1138,12 +1213,8 @@ function SalesOrderDetailDrawer({
     setRemovingAcknowledgement(true);
     try {
       await inventoryApi.removeAcknowledgeSalesOrder(order.id);
-      await Promise.all([
-        client.invalidateQueries({
-          queryKey: ["inventory-sales-order", order.id],
-        }),
-        client.invalidateQueries({ queryKey: ["inventory-sales-orders"] }),
-      ]);
+      dropFromLoadPlanning(client, [order.id]);
+      await refetchOrderLists(client, [order.id]);
       setActionMessage("Acknowledgement removed in Zoho and IntelliFleet.");
     } catch (error: any) {
       setActionMessage(
