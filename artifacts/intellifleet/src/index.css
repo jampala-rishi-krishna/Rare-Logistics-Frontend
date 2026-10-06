@@ -369,8 +369,22 @@ a { color: inherit; text-decoration: none; }
 .route-endpoint-icon span { display:block; width:14px; height:14px; border:3px solid white; border-radius:50%; box-shadow:0 1px 4px rgba(0,0,0,.35); }
 .route-endpoint-icon b { padding:3px 5px; background:white; border:1px solid #d8d7d2; font:700 9px/1 Inter,sans-serif; letter-spacing:.08em; }
 .agent-rich-text { display: grid; gap: 3px; }
+.agent-rich-message { display: grid; gap: 10px; min-width: 0; }
 .agent-bullet { position: relative; padding-left: 14px; }
 .agent-bullet::before { content: ""; position: absolute; left: 3px; top: .55em; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.agent-table-wrap, .agent-diagram { max-width: 100%; overflow-x: auto; }
+.agent-table { min-width: 320px; border-collapse: collapse; background: white; font-size: 11px; }
+.agent-table th, .agent-table td { border: 1px solid #d8d7d2; padding: 6px 8px; text-align: left; vertical-align: top; }
+.agent-table th { background: #fafaf8; font-weight: 700; }
+.agent-diagram { border: 1px solid #d8d7d2; background: white; padding: 8px; }
+.agent-diagram-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.agent-diagram-actions button { border: 1px solid #d8d7d2; background: #fafaf8; padding: 4px 7px; font-size: 10px; font-weight: 700; }
+.agent-diagram-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.agent-diagram-canvas { min-width: 280px; }
+.agent-diagram-canvas svg { display: block; max-width: 100%; height: auto; }
+.agent-diagram-placeholder { display: grid; min-height: 220px; min-width: 280px; place-items: center; color: #77787b; font-size: 11px; font-weight: 700; }
+.agent-diagram-fallback { border: 1px solid #e2c08b; background: #fff8eb; padding: 8px; font-size: 11px; color: #704a12; }
+.agent-diagram-fallback pre { max-height: 180px; overflow: auto; white-space: pre-wrap; border: 1px solid #efd8ae; background: white; padding: 8px; color: #0b0b0b; }
 .agent-typing-dot:nth-child(2) { animation-delay: .14s; }
 .agent-typing-dot:nth-child(3) { animation-delay: .28s; }
 @keyframes agent-typing { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }

@@ -32,6 +32,7 @@ import * as commsApi from "@/services/api/comms";
 import * as authApi from "@/services/api/auth";
 import * as agentApi from "@/services/api/agent";
 import type { PendingAction } from "@/services/api/agent";
+import { RichAssistantMessage } from "@/components/agent/RichAssistantMessage";
 import heroBackgroundVideo from "../../../media/Rishi.mp4";
 import dashboardIllustration from "../../../media/dashabord.png";
 import rishiProfilePhoto from "../../../media/rishi_pic.png";
@@ -310,48 +311,6 @@ interface AgentChatMessage {
   pendingAction?: PendingAction;
 }
 
-function renderAssistantInline(text: string): ReactNode[] {
-  return text
-    .split(/(\*\*[^*]+\*\*|__[^_]+__)/g)
-    .filter(Boolean)
-    .map((part, index) => {
-      const isBold =
-        (part.startsWith("**") && part.endsWith("**")) ||
-        (part.startsWith("__") && part.endsWith("__"));
-      return isBold ? (
-        <strong key={index}>{part.slice(2, -2)}</strong>
-      ) : (
-        <span key={index}>{part}</span>
-      );
-    });
-}
-
-function AssistantMessage({ text }: { text: string }) {
-  const lines = text.split(/\r?\n/);
-  return (
-    <div className="agent-rich-text">
-      {lines.map((line, index) => {
-        const bullet = line.match(/^\s*[-*]\s+(.+)$/);
-        const heading = line.match(/^\s*#{1,3}\s+(.+)$/);
-        if (!line.trim()) return <div className="h-2" key={index} />;
-        if (bullet)
-          return (
-            <div className="agent-bullet" key={index}>
-              {renderAssistantInline(bullet[1])}
-            </div>
-          );
-        if (heading)
-          return (
-            <div className="mb-1 font-semibold" key={index}>
-              {renderAssistantInline(heading[1])}
-            </div>
-          );
-        return <div key={index}>{renderAssistantInline(line)}</div>;
-      })}
-    </div>
-  );
-}
-
 // Self-contained dock, same pattern as OrderDrawer/AlertTable. `compact` renders a
 // near-full-width sheet suited to a mobile driver screen instead of a floating card.
 function AgentChat({ compact = false }: { compact?: boolean }) {
@@ -515,7 +474,7 @@ function AgentChat({ compact = false }: { compact?: boolean }) {
               )}
             >
               {msg.role === "assistant" ? (
-                <AssistantMessage text={msg.text} />
+                <RichAssistantMessage text={msg.text} />
               ) : (
                 msg.text
               )}
