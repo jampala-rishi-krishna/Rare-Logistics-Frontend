@@ -30,12 +30,26 @@ test("partial failure: only the successful order is reported as acknowledged", a
   const summary = summarizeAcknowledgements(outcomes, (id) => `SO-${id}`);
   assert.deepEqual(summary.acknowledgedIds, ["id1"]);
   assert.deepEqual(summary.failedIds, ["id2"]);
+  assert.deepEqual(summary.skippedIds, []);
   assert.equal(summary.errors.id2, "Zoho refused");
   assert.match(summary.message, /Acknowledged 1 sales order\./);
   assert.match(summary.message, /Failed 1: SO-id2 \(Zoho refused\)/);
   // Only the ok one leaves the list; the failed one stays.
   const next = removeOrdersFromPage(page(2), summary.acknowledgedIds)!;
   assert.deepEqual(next.items.map((o) => o.id), ["id2"]);
+});
+
+test("409 acknowledge conflicts are reported as skipped with the Zoho status", async () => {
+  const [outcome] = await settleAcknowledgements(["id1"], async () => {
+    const error = new Error("SO26-18351 cannot be acknowledged because Zoho only allows the Acknowledged sub-status on Confirmed sales orders. Current Zoho status: draft.");
+    (error as any).status = 409;
+    throw error;
+  });
+  const summary = summarizeAcknowledgements([outcome], () => "SO26-18351");
+  assert.deepEqual(summary.acknowledgedIds, []);
+  assert.deepEqual(summary.failedIds, []);
+  assert.deepEqual(summary.skippedIds, ["id1"]);
+  assert.match(summary.message, /Skipped 1: SO26-18351 \(Draft in Zoho\)\./);
 });
 
 test("a response that says acknowledged:false is a failure, not a move", async () => {

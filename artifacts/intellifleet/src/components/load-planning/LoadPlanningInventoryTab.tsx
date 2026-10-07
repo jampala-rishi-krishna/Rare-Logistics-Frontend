@@ -1063,6 +1063,7 @@ export default function LoadPlanningInventoryTab({
       {selected && (
         <SalesOrderDetailDrawer
           order={selected}
+          onAcknowledgeError={(id, message) => setAckErrors((errors) => ({ ...errors, [id]: message }))}
           onClose={() => setSelected(null)}
         />
       )}
@@ -1084,9 +1085,11 @@ export default function LoadPlanningInventoryTab({
 
 function SalesOrderDetailDrawer({
   order,
+  onAcknowledgeError,
   onClose,
 }: {
   order: inventoryApi.SalesOrderSummary;
+  onAcknowledgeError?: (id: string, message: string) => void;
   onClose: () => void;
 }) {
   const detail = useQuery({
@@ -1130,9 +1133,9 @@ function SalesOrderDetailDrawer({
         setActionMessage("Acknowledged & locked.");
       }
     } catch (error: any) {
-      setActionMessage(
-        error?.message || "Zoho could not acknowledge this sales order.",
-      );
+      const message = error?.message || "Zoho could not acknowledge this sales order.";
+      setActionMessage(message);
+      onAcknowledgeError?.(String(order.id), message);
     } finally {
       setAcknowledging(false);
     }

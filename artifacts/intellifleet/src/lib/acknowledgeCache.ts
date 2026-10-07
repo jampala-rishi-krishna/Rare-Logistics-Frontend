@@ -4,6 +4,7 @@ import type { SalesOrderSummary } from "../services/api/inventory.ts";
 export interface AckOutcome {
   id: string;
   ok: boolean;
+  skipped?: boolean;
   /** The server's response for an acknowledge that succeeded. */
   result?: Record<string, any>;
   /** Why an acknowledge failed. */
@@ -77,7 +78,8 @@ export async function settleAcknowledgements(
         : { id, ok: true, result: entry.value };
     }
     const reason: any = entry.reason;
-    return { id, ok: false, error: reason?.message || "Zoho could not acknowledge this sales order." };
+    const message = reason?.message || "Zoho could not acknowledge this sales order.";
+    return { id, ok: false, skipped: reason?.status === 409, error: message };
   });
 }
 
@@ -96,11 +98,19 @@ export function removeOrdersFromPage<T extends Pick<SalesOrdersPage, "items" | "
 export function summarizeAcknowledgements(
   outcomes: AckOutcome[],
   label: (id: string) => string,
-): { acknowledgedIds: string[]; failedIds: string[]; errors: Record<string, string>; message: string } {
+): { acknowledgedIds: string[]; failedIds: string[]; skippedIds: string[]; errors: Record<string, string>; message: string } {
   const acknowledgedIds = outcomes.filter((o) => o.ok).map((o) => o.id);
-  const failed = outcomes.filter((o) => !o.ok);
-  const errors = Object.fromEntries(failed.map((o) => [o.id, o.error ?? "Failed"]));
+  const skipped = outcomes.filter((o) => !o.ok && o.skipped);
+  const failed = outcomes.filter((o) => !o.ok && !o.skipped);
+  const rejected = [...skipped, ...failed];
+  const errors = Object.fromEntries(rejected.map((o) => [o.id, o.error ?? "Failed"]));
   const parts = [`Acknowledged ${acknowledgedIds.length} sales order${acknowledgedIds.length === 1 ? "" : "s"}.`];
+  if (skipped.length) parts.push(`Skipped ${skipped.length}: ${skipped.map((o) => `${label(o.id)} (${shortSkipReason(o.error)})`).join("; ")}.`);
   if (failed.length) parts.push(`Failed ${failed.length}: ${failed.map((o) => `${label(o.id)} (${o.error ?? "failed"})`).join("; ")}.`);
-  return { acknowledgedIds, failedIds: failed.map((o) => o.id), errors, message: parts.join(" ") };
+  return { acknowledgedIds, failedIds: failed.map((o) => o.id), skippedIds: skipped.map((o) => o.id), errors, message: parts.join(" ") };
+}
+
+function shortSkipReason(message: string | undefined) {
+  const status = /Current Zoho status:\s*([^.]*)\./i.exec(message || "")?.[1]?.trim();
+  return status ? `${status.replaceAll("_", " ").replace(/\b\w/g, (ch) => ch.toUpperCase())} in Zoho` : message || "skipped";
 }
