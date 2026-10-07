@@ -163,7 +163,7 @@ Example production process:
 uvicorn main:app --host 0.0.0.0 --port 8003 --workers 1
 ```
 
-Use one worker unless the live in-memory state and APScheduler responsibilities have been redesigned. Multiple workers would create separate caches, websocket managers, scheduler jobs, and poller state.
+Use one worker and one running service instance unless the live in-memory state and APScheduler responsibilities have been redesigned. Multiple workers or instances create separate caches, websocket managers, scheduler jobs, poller state, and per-process acknowledgement overlays. Render must run `--workers 1` and `numInstances: 1`; `/health` exposes `workers` and `instance_id`, and startup logs `[CONFIG] multiple workers detected, acknowledge state is per-process` when worker configuration is greater than one.
 
 ## Frontend architecture and deployment behavior
 

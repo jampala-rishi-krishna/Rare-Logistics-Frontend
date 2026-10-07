@@ -7,6 +7,7 @@ import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { FilterField, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
+import { sessionAcknowledgedOrders } from "@/lib/acknowledgeCache";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -115,10 +116,18 @@ export default function LoadPlanningAssignmentTab() {
     return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
   }, [citySource.data]);
   const visibleOrders = useMemo(() => {
-    const items = orders.data?.items ?? [];
+    const merged = new Map<string, Order>();
+    for (const order of sessionAcknowledgedOrders()) {
+      const expected = String(order.expected_shipment_date || "").slice(0, 10);
+      const matchesDate = expected && expected >= from && expected <= to;
+      const matchesSearch = !search || [order.salesorder_number, order.customer_name, order.reference_number].some((value) => (value ?? "").toLowerCase().includes(search.toLowerCase()));
+      if (matchesDate && matchesSearch) merged.set(String(order.id), { ...order, order_status: "acknowledged" });
+    }
+    for (const order of orders.data?.items ?? []) merged.set(String(order.id), order);
+    const items = Array.from(merged.values());
     if (!selectedCities.length) return items;
     return items.filter((order) => selectedCities.includes(orderCity(order)));
-  }, [orders.data, selectedCities]);
+  }, [orders.data, selectedCities, from, to, search]);
   const ids = useMemo(() => visibleOrders.map((x) => x.id), [visibleOrders]);
   // Total weight of exactly what the filters leave on screen.
   const weight = useMemo(() => {

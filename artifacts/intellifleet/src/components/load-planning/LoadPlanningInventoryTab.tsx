@@ -18,7 +18,7 @@ import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { SalesOrderCardGrid, ViewModeToggle } from "./SalesOrderCardGrid";
 import { FilterField, Toolbar, buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
-import { removeOrdersFromPage, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
+import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFromPage, sessionAcknowledgedIds, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
 import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
 import type { QueryClient } from "@tanstack/react-query";
 
@@ -503,6 +503,7 @@ export default function LoadPlanningInventoryTab({
   const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [ackErrors, setAckErrors] = useState<Record<string, string>>({});
+  const [ackGuardVersion, setAckGuardVersion] = useState(0);
   // KPI / Spreadsheet view (Confirmed SO only). Pure local state: it is not part of any query
   // key, so switching views never refetches.
   const [viewMode, setViewModeState] = useState<ViewMode>(() => readViewMode());
@@ -557,9 +558,11 @@ export default function LoadPlanningInventoryTab({
     // poll lightly until they're all in.
     refetchInterval: (query) => (query.state.data?.stock_pending ? 4000 : false),
   });
+  const guardedAcknowledged = useMemo(() => sessionAcknowledgedIds(), [orders.data, ackGuardVersion]);
   const rows = useMemo<FlatRow[]>(
     () =>
       (orders.data?.items ?? [])
+        .filter((order) => assignmentScope || !guardedAcknowledged.has(String(order.id)))
         .filter(
           (order) =>
             (orderStatus === "All" &&
@@ -597,9 +600,12 @@ export default function LoadPlanningInventoryTab({
             city: (order as any).shipping_city || city(raw.shipping_address ?? (order as any).shipping_address),
           }));
         }),
-    [orders.data, orderStatus, query, assignmentScope],
+    [orders.data, orderStatus, query, assignmentScope, guardedAcknowledged],
   );
-  const orderCount = orders.data?.total ?? 0;
+  const guardedInventoryCount = !assignmentScope
+    ? (orders.data?.items ?? []).filter((order) => guardedAcknowledged.has(String(order.id))).length
+    : 0;
+  const orderCount = Math.max(0, (orders.data?.total ?? 0) - guardedInventoryCount);
   const watchRefresh = async () => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
@@ -675,6 +681,8 @@ export default function LoadPlanningInventoryTab({
       const summary = summarizeAcknowledgements(outcomes, orderLabel);
       const unlocked = outcomes.filter((outcome) => outcome.ok && outcome.result?.locked === false);
       dropFromInventory(client, summary.acknowledgedIds);
+      rememberSessionAcknowledged(summary.acknowledgedIds, orders.data?.items ?? []);
+      setAckGuardVersion((value) => value + 1);
       setAckErrors(summary.errors);
       // Succeeded ones are deselected; failed ones stay selected (with their error) so they can be retried.
       setSelectedOrderIds(summary.failedIds);
@@ -1112,6 +1120,7 @@ function SalesOrderDetailDrawer({
     try {
       const result = await inventoryApi.acknowledgeSalesOrder(order.id);
       dropFromInventory(client, [order.id]);
+      rememberSessionAcknowledged([order.id], [order]);
       await refetchOrderLists(client, [order.id]);
       if (result.locked === false) {
         setLockRetryVisible(true);
@@ -1159,6 +1168,7 @@ function SalesOrderDetailDrawer({
     setRemovingAcknowledgement(true);
     try {
       await inventoryApi.removeAcknowledgeSalesOrder(order.id);
+      forgetSessionAcknowledged([order.id]);
       dropFromLoadPlanning(client, [order.id]);
       await refetchOrderLists(client, [order.id]);
       setActionMessage("Acknowledgement removed in Zoho and IntelliFleet.");

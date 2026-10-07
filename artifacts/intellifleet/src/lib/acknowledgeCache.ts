@@ -1,4 +1,5 @@
 import type { SalesOrdersPage } from "../services/api/inventory.ts";
+import type { SalesOrderSummary } from "../services/api/inventory.ts";
 
 export interface AckOutcome {
   id: string;
@@ -7,6 +8,55 @@ export interface AckOutcome {
   result?: Record<string, any>;
   /** Why an acknowledge failed. */
   error?: string;
+}
+
+const SESSION_KEY = "intellifleet.acknowledgedSalesOrders.v1";
+const SESSION_TTL_MS = 15 * 60 * 1000;
+
+type SessionAckEntry = { id: string; at: number; order?: SalesOrderSummary };
+
+function readSessionEntries(): SessionAckEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(SESSION_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    const now = Date.now();
+    const fresh = parsed.filter((entry) => entry?.id && now - Number(entry.at || 0) <= SESSION_TTL_MS);
+    if (fresh.length !== parsed.length) window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh));
+    return fresh;
+  } catch {
+    return [];
+  }
+}
+
+function writeSessionEntries(entries: SessionAckEntry[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(entries));
+  } catch {
+    // Best-effort UI guard only; the server remains authoritative.
+  }
+}
+
+export function sessionAcknowledgedIds(): Set<string> {
+  return new Set(readSessionEntries().map((entry) => String(entry.id)));
+}
+
+export function sessionAcknowledgedOrders(): SalesOrderSummary[] {
+  return readSessionEntries().map((entry) => entry.order).filter(Boolean) as SalesOrderSummary[];
+}
+
+export function rememberSessionAcknowledged(ids: string[], sourceOrders: SalesOrderSummary[] = []) {
+  const existing = new Map(readSessionEntries().map((entry) => [String(entry.id), entry]));
+  const byId = new Map(sourceOrders.map((order) => [String(order.id), order]));
+  const now = Date.now();
+  for (const id of ids.map(String)) existing.set(id, { id, at: now, order: byId.get(id) ?? existing.get(id)?.order });
+  writeSessionEntries(Array.from(existing.values()));
+}
+
+export function forgetSessionAcknowledged(ids: string[]) {
+  const gone = new Set(ids.map(String));
+  writeSessionEntries(readSessionEntries().filter((entry) => !gone.has(String(entry.id))));
 }
 
 /**

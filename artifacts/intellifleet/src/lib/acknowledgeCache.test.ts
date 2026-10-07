@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { removeOrdersFromPage, settleAcknowledgements, summarizeAcknowledgements } from "./acknowledgeCache.ts";
+import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFromPage, sessionAcknowledgedIds, sessionAcknowledgedOrders, settleAcknowledgements, summarizeAcknowledgements } from "./acknowledgeCache.ts";
 
 const page = (n: number) => ({ items: Array.from({ length: n }, (_, i) => ({ id: `id${i + 1}` })) as any[], total: n, page: 1, per_page: 100, has_more: false });
 
@@ -51,4 +51,20 @@ test("a rejected acknowledge never prevents the others from running", async () =
     return { acknowledged: true };
   });
   assert.deepEqual(seen.sort(), ["a", "b", "c"]);
+});
+
+test("session acknowledgement guard remembers snapshots and can forget them", () => {
+  const store = new Map<string, string>();
+  (globalThis as any).window = {
+    sessionStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+    },
+  };
+  rememberSessionAcknowledged(["id1"], [{ id: "id1", salesorder_number: "SO-1", expected_shipment_date: "2026-10-08" } as any]);
+  assert.deepEqual(Array.from(sessionAcknowledgedIds()), ["id1"]);
+  assert.equal(sessionAcknowledgedOrders()[0].salesorder_number, "SO-1");
+  forgetSessionAcknowledged(["id1"]);
+  assert.deepEqual(Array.from(sessionAcknowledgedIds()), []);
+  delete (globalThis as any).window;
 });
