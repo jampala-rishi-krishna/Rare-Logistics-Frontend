@@ -65,8 +65,12 @@ export interface RoutePlanResult {
   /** Two entries when "Compare both" was used; the active one also fills the top-level fields. */
   tollOptions?: TollOption[];
   activeOption?: string;
-  cheapestOption?: string;
-  fastestOption?: string;
+  cheapestOption?: string | null;
+  fastestOption?: string | null;
+  /** Google returned the same road route with and without tolls. */
+  noTollFreeAlternative?: boolean;
+  /** false: Google returned no toll information for the active route. */
+  tollDataAvailable?: boolean;
   routing?: { provider: string; profile: string; trafficAware: boolean; geometryProvider?: string; geometryProfile?: string; geometryTrafficAware?: boolean; calculatedAt?: string; departureTime?: string | null; fallback?: boolean; fallbackUsed?: boolean; fallbackReason?: string | null };
 }
 

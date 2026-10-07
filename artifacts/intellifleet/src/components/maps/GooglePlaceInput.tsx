@@ -16,6 +16,7 @@ function placesApi() {
 export function GooglePlaceInput({ label, value, onChange, placeholder }: { label: string; value: RouteLocationSuggestion | null; onChange: (value: RouteLocationSuggestion | null) => void; placeholder: string }) {
   const [text, setText] = useState(value?.label ?? "");
   const [error, setError] = useState("");
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => setText(value?.label ?? ""), [value?.label]);
   useEffect(() => {
@@ -33,5 +34,23 @@ export function GooglePlaceInput({ label, value, onChange, placeholder }: { labe
     }).catch(() => setError("Google Places suggestions are unavailable."));
     return () => { active = false; };
   }, []);
-  return <div className="relative grid gap-2"><label className="text-xs font-semibold">{label}</label><input ref={inputRef} required value={text} onChange={(e) => { setText(e.target.value); onChange(null); }} placeholder={placeholder} className="border border-[#d8d7d2] px-3 py-3 text-sm font-normal outline-none focus:border-black" />{error && <div className="text-[10px] text-[#a16819]">{error}</div>}</div>;
+  return (
+    <div className="relative grid min-w-0 gap-2">
+      <label className="text-xs font-semibold">{label}</label>
+      <input
+        ref={inputRef}
+        required
+        value={text}
+        title={text}
+        onChange={(e) => { setText(e.target.value); onChange(null); }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={placeholder}
+        autoComplete="off"
+        className="h-11 w-full min-w-0 truncate rounded-[4px] border border-[#d8d7d2] px-3 text-base font-normal outline-none focus:border-black sm:text-sm"
+      />
+      {focused && text.length > 38 && <div className="break-words text-[11px] leading-snug text-[#77787b]">{text}</div>}
+      {error && <div className="text-[10px] text-[#a16819]">{error}</div>}
+    </div>
+  );
 }

@@ -70,7 +70,8 @@ import LoadPlanningInventoryTab, {
 } from "@/components/load-planning/LoadPlanningInventoryTab";
 import LoadPlanningAssignmentTab from "@/components/load-planning/LoadPlanningAssignmentTab";
 import { capacityOverage, loadOverage } from "@/lib/capacity";
-import { EXPRESSWAY_CHOICES, RETURN_WAREHOUSE_HINT, buildCostTableRows, etaLabel, formatRatesLine, resolveActivePlan, returnWarehouseMissing, tollCellText, tollOptionSummary, totalCellText, type ExpresswayChoice } from "@/lib/routeCost";
+import { EXPRESSWAY_CHOICES, RETURN_WAREHOUSE_HINT, compareBadges, effectiveOptions, etaLabel, resolveActivePlan, returnWarehouseMissing, type ExpresswayChoice } from "@/lib/routeCost";
+import { RouteCostCard, RouteKpis, RouteOptionCards, RouteTimeline } from "@/components/routes/RouteResultCards";
 import { ReturnWarehousePicker } from "@/components/maps/ReturnWarehousePicker";
 import * as inventoryApi from "@/services/api/inventory";
 import * as reportsApi from "@/services/api/reports";
@@ -2444,7 +2445,7 @@ function AppShell({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4 md:p-7">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-7">{children}</main>
         <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 z-20 h-[64px] items-center justify-around border-t border-[#e4e3df] bg-white">
           <Link
             data-testid="mobile-bottom-tower"
@@ -6468,11 +6469,47 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const [returnToWarehouse, setReturnToWarehouse] = useState(true);
   const [returnWarehouseId, setReturnWarehouseId] = useState("");
   const [expressways, setExpressways] = useState<ExpresswayChoice>("compare");
+  const [mapOpen, setMapOpen] = useState(true);
   const [rawPlan, setPlan] = useState<routesApi.RoutePlanResult | null>(null);
   // Which "Compare both" card is active; null = the server's default for the objective.
   const [pickedOption, setPickedOption] = useState<string | null>(null);
-  const plan = useMemo(() => resolveActivePlan(rawPlan, pickedOption), [rawPlan, pickedOption]);
-  useEffect(() => setPickedOption(null), [rawPlan]);
+  // Tolls the dispatcher typed in per route option (Google often has no Philippine toll prices).
+  const [manualTolls, setManualTolls] = useState<Record<string, number>>({});
+  const plan = useMemo(() => resolveActivePlan(rawPlan, pickedOption, manualTolls), [rawPlan, pickedOption, manualTolls]);
+  const options = useMemo(() => effectiveOptions(rawPlan, manualTolls), [rawPlan, manualTolls]);
+  const badges = compareBadges(options);
+  const activeData = options.find((option) => option.key === plan?.activeOption);
+  const tollDataAvailable = activeData?.tollDataAvailable ?? plan?.tollDataAvailable ?? true;
+  useEffect(() => {
+    setPickedOption(null);
+    setManualTolls({});
+  }, [rawPlan]);
+  const setManualToll = (key: string, raw: string) =>
+    setManualTolls((current) => {
+      const next = { ...current };
+      const value = Number(raw);
+      if (raw.trim() === "" || !Number.isFinite(value) || value < 0) delete next[key];
+      else next[key] = value;
+      return next;
+    });
+  const manualTollInput = (key: string) => (
+    <label className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#55565a]" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+      <span className="font-semibold text-black">Tolls (₱)</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="0.01"
+        value={manualTolls[key] ?? ""}
+        onChange={(event) => setManualToll(key, event.target.value)}
+        onClick={(event) => event.stopPropagation()}
+        placeholder="Enter known toll"
+        aria-label={`Tolls in pesos for ${key === "avoid" ? "the toll-free route" : "the expressway route"}`}
+        className="h-11 w-full min-w-0 rounded-[4px] border border-[#d8d7d2] px-3 text-base text-black sm:h-10 sm:w-40 sm:text-sm"
+      />
+      {manualTolls[key] != null && <span className="text-[#1e7b44]">entered manually</span>}
+    </label>
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fleetBusy, setFleetBusy] = useState(false);
@@ -6713,18 +6750,18 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
     }
   };
   return (
-    <div>
+    <div className="route-tab">
       <AssignmentPanel onNotice={onNotice} />
-      <div className="grid gap-4 lg:grid-cols-[370px_1fr]">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[370px_minmax(0,1fr)]">
         <form
           onSubmit={calculate}
-          className="border border-[#e4e3df] bg-white p-5"
+          className="min-w-0 rounded-lg border border-[#e4e3df] bg-white p-4 sm:p-5"
         >
           <div className="micro text-[#77787b]">Route builder</div>
           <h2 className="display-face mt-3 text-2xl font-bold">
             Plan a live route
           </h2>
-          <div className="mt-6 grid gap-4">
+          <div className="mt-6 grid min-w-0 gap-4">
             <GooglePlaceInput
               label="Origin"
               value={origin}
@@ -6732,8 +6769,8 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               placeholder="Search a starting point"
             />
             {stops.map((stop, index) => (
-              <div className="flex items-end gap-1" key={`route-stop-${index}`}>
-                <div className="min-w-0 flex-1">
+              <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" key={`route-stop-${index}`}>
+                <div className="min-w-0">
                   <GooglePlaceInput
                     label={`Stop ${index + 1}`}
                     value={stop}
@@ -6745,43 +6782,48 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                     placeholder="Search an intermediate stop"
                   />
                 </div>
-                <button
-                  type="button"
-                  title="Move stop up"
-                  aria-label={`Move stop ${index + 1} up`}
-                  disabled={index === 0}
-                  onClick={() => moveStop(index, -1)}
-                  className="grid h-11 w-9 place-items-center border border-[#d8d7d2] disabled:opacity-30"
-                >
-                  <ChevronDown size={15} className="rotate-180" />
-                </button>
-                <button
-                  type="button"
-                  title="Move stop down"
-                  aria-label={`Move stop ${index + 1} down`}
-                  disabled={index === stops.length - 1}
-                  onClick={() => moveStop(index, 1)}
-                  className="grid h-11 w-9 place-items-center border border-[#d8d7d2] disabled:opacity-30"
-                >
-                  <ChevronDown size={15} />
-                </button>
-                <button
-                  type="button"
-                  title="Remove stop"
-                  aria-label={`Remove stop ${index + 1}`}
-                  onClick={() =>
-                    setStops((current) => current.filter((_, i) => i !== index))
-                  }
-                  className="grid h-11 w-9 place-items-center border border-[#d8d7d2]"
-                >
-                  <X size={15} />
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    title="Move stop up"
+                    aria-label={`Move stop ${index + 1} up`}
+                    disabled={index === 0}
+                    onClick={() => moveStop(index, -1)}
+                    className="flex h-11 min-w-11 flex-1 items-center justify-center gap-1 rounded-[4px] border border-[#d8d7d2] text-xs disabled:opacity-30 sm:flex-none"
+                  >
+                    <ChevronDown size={16} className="rotate-180" />
+                    <span className="sm:hidden">Up</span>
+                  </button>
+                  <button
+                    type="button"
+                    title="Move stop down"
+                    aria-label={`Move stop ${index + 1} down`}
+                    disabled={index === stops.length - 1}
+                    onClick={() => moveStop(index, 1)}
+                    className="flex h-11 min-w-11 flex-1 items-center justify-center gap-1 rounded-[4px] border border-[#d8d7d2] text-xs disabled:opacity-30 sm:flex-none"
+                  >
+                    <ChevronDown size={16} />
+                    <span className="sm:hidden">Down</span>
+                  </button>
+                  <button
+                    type="button"
+                    title="Remove stop"
+                    aria-label={`Remove stop ${index + 1}`}
+                    onClick={() =>
+                      setStops((current) => current.filter((_, i) => i !== index))
+                    }
+                    className="flex h-11 min-w-11 flex-1 items-center justify-center gap-1 rounded-[4px] border border-[#d8d7d2] text-xs sm:flex-none"
+                  >
+                    <X size={16} />
+                    <span className="sm:hidden">Remove</span>
+                  </button>
+                </div>
               </div>
             ))}
             <button
               type="button"
               onClick={() => setStops((current) => [...current, null])}
-              className="w-fit text-xs font-semibold underline underline-offset-2"
+              className="flex min-h-11 w-full items-center justify-center rounded-[4px] border border-dashed border-[#d8d7d2] text-sm font-semibold lg:w-fit lg:justify-start lg:border-0 lg:text-xs lg:underline lg:underline-offset-2"
             >
               + Add stop
             </button>
@@ -6813,7 +6855,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                 key={value}
                 onClick={() => setMode(value)}
                 className={cx(
-                  "border px-2 py-2 text-xs font-semibold",
+                  "h-11 min-w-0 rounded-[4px] border px-2 text-xs font-semibold",
                   mode === value
                     ? "border-black bg-black text-white"
                     : "border-[#d8d7d2]",
@@ -6824,9 +6866,9 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
             ))}
           </div>
           <div className="mt-6 micro text-[#77787b]">Expressways</div>
-          <div className="mt-3 grid gap-1.5 text-xs" role="radiogroup" aria-label="Expressways" data-testid="expressway-choice">
+          <div className="mt-3 grid gap-2" role="radiogroup" aria-label="Expressways" data-testid="expressway-choice">
             {EXPRESSWAY_CHOICES.map(({ value, label }) => (
-              <label key={value} className="flex cursor-pointer items-center gap-2">
+              <label key={value} className="route-choice">
                 <input
                   type="radio"
                   name="route-expressways"
@@ -6837,23 +6879,25 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               </label>
             ))}
           </div>
-          <Button
-            type="submit"
-            disabled={busy || warehouseMissing}
-            className="mt-6 w-full rounded-[4px]"
-          >
-            {busy ? "Calculating..." : "Calculate route"}{" "}
-            <ArrowRight size={15} />
-          </Button>
-          {warehouseMissing && (
-            <div className="mt-2 text-xs text-[#a16819]">{RETURN_WAREHOUSE_HINT}</div>
-          )}
+          <div className="route-action-bar">
+            {warehouseMissing && (
+              <div className="mb-2 text-xs text-[#a16819]">{RETURN_WAREHOUSE_HINT}</div>
+            )}
+            <Button
+              type="submit"
+              disabled={busy || warehouseMissing}
+              className="min-h-11 w-full rounded-[4px]"
+            >
+              {busy ? "Calculating..." : "Calculate route"}{" "}
+              <ArrowRight size={15} />
+            </Button>
+          </div>
           <Button
             type="button"
             variant="outline"
             disabled={busy || warehouseMissing}
             onClick={() => optimizeStops()}
-            className="mt-3 w-full rounded-[4px]"
+            className="mt-3 min-h-11 w-full rounded-[4px]"
           >
             Optimize stop order <Zap size={15} />
           </Button>
@@ -6862,7 +6906,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
             variant="outline"
             disabled={fleetBusy || warehouseMissing}
             onClick={() => previewFleet()}
-            className="mt-3 w-full rounded-[4px]"
+            className="mt-3 min-h-11 w-full rounded-[4px]"
           >
             {fleetBusy ? "Optimizing fleet..." : "Optimize pending deliveries"}{" "}
             <Activity size={15} />
@@ -6875,7 +6919,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               type="button"
               disabled={savingRoute}
               onClick={saveRoute}
-              className="mt-3 w-full rounded-[4px]"
+              className="mt-3 min-h-11 w-full rounded-[4px]"
             >
               {savingRoute ? "Saving route..." : "Save route"}{" "}
               <Check size={15} />
@@ -6902,260 +6946,139 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
         </form>
         {assignOpen && (
           <div
-            className="fixed inset-0 z-[2000] grid place-items-center bg-black/30 p-4"
+            className="fixed inset-0 z-[2000] grid place-items-center bg-black/30 p-4 max-sm:place-items-stretch max-sm:p-0"
             onClick={() => setAssignOpen(false)}
           >
             <div
-              className="w-full max-w-md border border-[#e4e3df] bg-white p-5 shadow-xl"
+              className="flex max-h-[90dvh] w-full max-w-md flex-col border border-[#e4e3df] bg-white shadow-xl max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex shrink-0 items-center justify-between border-b border-[#e4e3df] p-4 pt-[max(1rem,env(safe-area-inset-top))]">
                 <h3 className="text-lg font-bold">Assign a vehicle</h3>
                 <button
                   type="button"
                   onClick={() => setAssignOpen(false)}
                   aria-label="Close assignment dialog"
+                  className="grid h-11 w-11 place-items-center"
                 >
                   <X size={18} />
                 </button>
               </div>
-              <p className="mt-2 text-xs text-[#77787b]">
-                Choose the live vehicle that should run this saved route.
-              </p>
-              <div className="mt-5 grid gap-2">
-                {vehicles.map((vehicle) => (
-                  <label
-                    key={vehicle.id}
-                    className="flex cursor-pointer items-center gap-3 border border-[#e4e3df] p-3 text-sm"
-                  >
-                    <input
-                      type="radio"
-                      name="route-vehicle"
-                      checked={selectedVehicleId === vehicle.id}
-                      onChange={() => setSelectedVehicleId(vehicle.id)}
-                    />
-                    <span className="font-semibold">{vehicle.plate}</span>
-                    <span className="text-xs text-[#77787b]">
-                      {vehicle.speed} kph · {vehicle.fuel}% fuel
-                    </span>
-                  </label>
-                ))}
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <p className="text-xs text-[#77787b]">
+                  Choose the live vehicle that should run this saved route.
+                </p>
+                <div className="mt-4 grid gap-2">
+                  {vehicles.map((vehicle) => (
+                    <label key={vehicle.id} className="route-choice items-center">
+                      <input
+                        type="radio"
+                        name="route-vehicle"
+                        checked={selectedVehicleId === vehicle.id}
+                        onChange={() => setSelectedVehicleId(vehicle.id)}
+                      />
+                      <span className="font-semibold">{vehicle.plate}</span>
+                      <span className="text-xs text-[#77787b]">
+                        {vehicle.speed} kph · {vehicle.fuel}% fuel
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-              <Button
-                type="button"
-                onClick={assignRoute}
-                disabled={assigning || !selectedVehicleId}
-                className="mt-5 w-full rounded-[4px]"
-              >
-                {assigning ? "Assigning..." : "Assign selected vehicle"}{" "}
-                <Check size={15} />
-              </Button>
+              <div className="shrink-0 border-t border-[#e4e3df] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <Button
+                  type="button"
+                  onClick={assignRoute}
+                  disabled={assigning || !selectedVehicleId}
+                  className="min-h-11 w-full rounded-[4px]"
+                >
+                  {assigning ? "Assigning..." : "Assign selected vehicle"}{" "}
+                  <Check size={15} />
+                </Button>
+              </div>
             </div>
           </div>
         )}
         {warehousePrompt && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Choose the return warehouse">
-            <div className="w-full max-w-md border border-[#e4e3df] bg-white p-5">
-              <h3 className="text-lg font-bold">Which warehouse is the truck returning to?</h3>
-              <p className="mt-1 text-xs text-[#77787b]">Return to warehouse is ticked, so a return warehouse must be chosen. Untick it for a one-way route.</p>
-              <div className="mt-4 grid gap-2">
-                {warehouses.map((warehouse) => (
-                  <button
-                    key={warehouse.id}
-                    type="button"
-                    className="border border-[#d8d7d2] p-3 text-left text-xs hover:border-black"
-                    onClick={() => {
-                      const action = warehousePrompt;
-                      setWarehousePrompt(null);
-                      setReturnWarehouseId(warehouse.id);
-                      // The warehouse change clears the old result; run the action the user asked for with this choice.
-                      if (action === "calculate") void calculate(undefined, warehouse.id);
-                      else if (action === "optimize") void optimizeStops(warehouse.id);
-                      else void previewFleet(warehouse.id);
-                    }}
-                  >
-                    <span className="font-semibold">{warehouse.name}</span>
-                    <span className="mt-0.5 block text-[#77787b]">{warehouse.address}</span>
-                  </button>
-                ))}
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4 max-sm:place-items-stretch max-sm:p-0" role="dialog" aria-modal="true" aria-label="Choose the return warehouse">
+            <div className="flex max-h-[90dvh] w-full max-w-md flex-col border border-[#e4e3df] bg-white max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none">
+              <div className="shrink-0 border-b border-[#e4e3df] p-4 pt-[max(1rem,env(safe-area-inset-top))]">
+                <h3 className="text-lg font-bold">Which warehouse is the truck returning to?</h3>
               </div>
-              <button type="button" className="mt-4 text-xs underline" onClick={() => setWarehousePrompt(null)}>Cancel</button>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <p className="text-xs text-[#77787b]">Return to warehouse is ticked, so a return warehouse must be chosen. Untick it for a one-way route.</p>
+                <div className="mt-4 grid gap-2">
+                  {warehouses.map((warehouse) => (
+                    <button
+                      key={warehouse.id}
+                      type="button"
+                      className="min-h-11 rounded-lg border border-[#d8d7d2] p-3 text-left text-xs hover:border-black"
+                      onClick={() => {
+                        const action = warehousePrompt;
+                        setWarehousePrompt(null);
+                        setReturnWarehouseId(warehouse.id);
+                        // The warehouse change clears the old result; run the action the user asked for with this choice.
+                        if (action === "calculate") void calculate(undefined, warehouse.id);
+                        else if (action === "optimize") void optimizeStops(warehouse.id);
+                        else void previewFleet(warehouse.id);
+                      }}
+                    >
+                      <span className="font-semibold">{warehouse.name}</span>
+                      <span className="mt-0.5 block text-[#77787b]">{warehouse.address}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="shrink-0 border-t border-[#e4e3df] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <button type="button" className="min-h-11 w-full rounded-[4px] border border-[#d8d7d2] text-sm font-semibold" onClick={() => setWarehousePrompt(null)}>Cancel</button>
+              </div>
             </div>
           </div>
         )}
-        <div className="grid gap-4">
-          <div className="min-h-[420px] border border-[#e4e3df] bg-white">
+        <div className="grid min-w-0 gap-4">
+          <button
+            type="button"
+            onClick={() => setMapOpen((open) => !open)}
+            aria-expanded={mapOpen}
+            className="flex h-11 w-full items-center justify-between rounded-lg border border-[#e4e3df] bg-white px-4 text-sm font-semibold sm:hidden"
+          >
+            {mapOpen ? "Hide map" : "Show map"}
+            <ChevronDown size={16} className={cx("transition-transform", mapOpen && "rotate-180")} />
+          </button>
+          <div className={cx("rm-card min-h-[280px] overflow-hidden sm:min-h-[420px]", !mapOpen && "max-sm:hidden")}>
             <LiveRouteMap plan={plan} vehicles={[]} />
           </div>
-          {rawPlan?.tollOptions && rawPlan.tollOptions.length > 1 && plan && (
-            <div className="grid gap-3 md:grid-cols-2" data-testid="toll-options">
-              {rawPlan.tollOptions.map((option) => {
-                const active = plan.activeOption === option.key;
-                const badges = [
-                  rawPlan.cheapestOption === option.key ? "Cheapest" : null,
-                  rawPlan.fastestOption === option.key ? "Fastest" : null,
-                ].filter(Boolean);
-                return (
-                  <button
-                    type="button"
-                    key={option.key}
-                    onClick={() => setPickedOption(option.key)}
-                    aria-pressed={active}
-                    className={cx(
-                      "border bg-white p-4 text-left text-xs",
-                      active ? "border-black ring-1 ring-black" : "border-[#e4e3df] hover:border-black",
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <strong className="text-sm text-black">{option.label}</strong>
-                      {badges.map((badge) => (
-                        <span key={badge as string} className="bg-[#e7f3ea] px-1.5 py-0.5 font-semibold text-[#1e7b44]">{badge}</span>
-                      ))}
-                      {active && <span className="ml-auto font-semibold text-black">Active</span>}
-                    </div>
-                    <div className="mt-2 text-[#55565a]">{tollOptionSummary(option)}</div>
-                  </button>
-                );
-              })}
-            </div>
+          {rawPlan?.expressways === "compare" && options.length > 0 && plan && (
+            <RouteOptionCards
+              options={options}
+              activeKey={plan.activeOption}
+              badges={badges}
+              tollsEnabled={Boolean(plan.tollsEnabled)}
+              noTollFreeAlternative={Boolean(rawPlan.noTollFreeAlternative)}
+              onPick={setPickedOption}
+              manualInput={manualTollInput}
+            />
           )}
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              ["Distance", plan ? `${plan.distanceKm.toFixed(1)} km` : "-"],
-              [
-                "Driving time",
-                plan ? `${Math.round(plan.durationMin)} min` : "-",
-              ],
-              [
-                "Estimated operating cost",
-                plan ? `₱${plan.cost.toLocaleString()}${plan.toll?.unknown ? " + tolls (unknown)" : ""}` : "-",
-              ],
-            ].map(([label, value]) => (
-              <div className="border border-[#e4e3df] bg-white p-4" key={label}>
-                <div className="micro text-[#77787b]">{label}</div>
-                <div className="display-face mt-4 text-2xl font-bold">
-                  {value}
-                </div>
-              </div>
-            ))}
-          </div>
+          <RouteKpis plan={plan} />
           {plan && (
-            <div className="border border-[#e4e3df] bg-white p-4 text-xs text-[#55565a]">
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                <strong className="text-black">
-                  {plan.stops.length + 2} locations
-                </strong>
-                <span>
-                  {plan.routing?.trafficAware
-                    ? "Traffic-aware"
-                    : "Traffic unavailable"}
-                </span>
-                <span>
-                  {plan.routing?.provider} / {plan.routing?.profile}
-                </span>
-                {plan.routing?.fallback && (
-                  <span className="font-semibold text-[#a16819]">
-                    Fallback provider used
-                  </span>
-                )}
-              </div>
-              <div className="mt-2">
-                Calculated{" "}
-                {plan.routing?.calculatedAt
-                  ? timeAgo(plan.routing.calculatedAt)
-                  : "just now"}{" "}
-                · Estimated planning cost{plan.tollsEnabled ? "." : ", tolls not included."}
-              </div>
-              {plan.returnToWarehouse && plan.returnWarehouse && (
-                <a
-                  href={plan.returnWarehouse.map_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 font-semibold text-black underline underline-offset-2"
-                >
-                  Open {plan.returnWarehouse.name} in Google Maps <ExternalLink size={12} />
-                </a>
-              )}
-              {plan.roundTrip && (
-                <div className="mt-3 overflow-x-auto border-t border-[#efeeeb] pt-3" data-testid="route-cost-table">
-                  <table className="w-full min-w-[720px] border-collapse text-right">
-                    <thead>
-                      <tr className="micro text-[#77787b]">
-                        <th className="pb-2 text-left font-normal"></th>
-                        <th className="pb-2 font-normal">Distance</th>
-                        <th className="pb-2 font-normal">Time</th>
-                        <th className="pb-2 font-normal">Distance cost</th>
-                        <th className="pb-2 font-normal">Time cost</th>
-                        <th className="pb-2 font-normal">Fuel</th>
-                        <th className="pb-2 font-normal">Refrigeration</th>
-                        {plan.tollsEnabled && <th className="pb-2 font-normal">Tolls</th>}
-                        <th className="pb-2 font-normal">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {buildCostTableRows(plan.roundTrip, plan.returnWarehouse?.name).map((row) => (
-                        <tr key={row.key} className={row.key === "total" ? "border-t border-[#d8d7d2] font-bold text-black" : ""}>
-                          <td className={cx("py-1.5 text-left", row.key !== "total" && "font-semibold text-black")}>{row.label}</td>
-                          <td>{row.distanceKm.toFixed(1)} km</td>
-                          <td>{Math.round(row.durationMin)} min</td>
-                          <td>{peso(row.distanceCost)}</td>
-                          <td>{peso(row.timeCost)}</td>
-                          <td>{peso(row.fuel)}</td>
-                          <td>{peso(row.refrigeration)}</td>
-                          {plan.tollsEnabled && <td className={row.tollUnknown ? "text-[#a16819]" : ""}>{tollCellText(row)}</td>}
-                          <td className="font-semibold text-black">{totalCellText(row)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {plan.rates && (
-                    <div className="mt-2 text-[11px] text-[#77787b]">
-                      {formatRatesLine(plan.rates)}
-                      {plan.costAssumptions?.refrigerated && plan.costAssumptions.coldChainAssumed ? " (assumed chilled)" : ""}
-                    </div>
-                  )}
-                </div>
-              )}
-              {plan.warnings.map((warning) => (
-                <div className="mt-2 text-[#a16819]" key={warning}>
-                  Warning: {warning}
-                </div>
-              ))}
-            </div>
+            <RouteCostCard
+              plan={plan}
+              tollDataAvailable={tollDataAvailable}
+              calculatedLabel={plan.routing?.calculatedAt ? timeAgo(plan.routing.calculatedAt) : "just now"}
+              manualToll={
+                plan.tollsEnabled && rawPlan && !rawPlan.tollOptions?.length && plan.activeOption !== "avoid"
+                  ? manualTollInput(plan.activeOption ?? "expressway")
+                  : undefined
+              }
+            />
           )}
-          {plan && (
-            <div className="border border-[#e4e3df] bg-white p-4">
-              <div className="micro text-[#77787b]">Route timeline</div>
-              <div className="mt-3 grid gap-3 text-xs">
-                <div>
-                  <strong>START</strong> · {plan.origin.label}
-                </div>
-                {plan.stops.map((stop, index) => (
-                  <div key={`${stop.label}-${index}`}>
-                    <strong>STOP {index + 1}</strong> · {stop.label}
-                    <span className="ml-2 text-[#77787b]">
-                      Service time assumed: {plan.costAssumptions?.serviceMinPerStop ?? 30} min
-                    </span>
-                  </div>
-                ))}
-                <div>
-                  <strong>{plan.returnToWarehouse && plan.roundTrip?.return ? "LAST DELIVERY" : "END"}</strong> · {plan.destination.label}
-                </div>
-                {plan.returnToWarehouse && plan.returnWarehouse && plan.roundTrip?.return && (
-                  <div>
-                    <strong>RETURN</strong> · Arrive back at {plan.returnWarehouse.name}
-                    {returnEta(plan) && <span className="ml-2 text-[#77787b]">ETA {returnEta(plan)}</span>}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {plan && <RouteTimeline plan={plan} returnEta={returnEta(plan)} />}
           {fleetPlan && (
             <div
-              className="border border-[#e4e3df] bg-white p-4"
+              className="min-w-0 rounded-lg border border-[#e4e3df] bg-white p-4"
               data-testid="fleet-optimization-result"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="micro text-[#77787b]">Fleet proposal</div>
                   <h3 className="mt-2 text-lg font-bold">
@@ -7180,14 +7103,14 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                   className="mt-3 border-t border-[#efeeeb] pt-3 text-xs"
                   key={route.vehicle_id}
                 >
-                  <div className="flex justify-between font-semibold">
+                  <div className="flex flex-wrap justify-between gap-x-3 font-semibold">
                     <span>Vehicle {route.vehicle_id}</span>
                     <span>
                       {route.total_distance_km.toFixed(1)} km ·{" "}
                       {Math.round(route.total_duration_min)} min
                     </span>
                   </div>
-                  <div className="mt-1 text-[#77787b]">
+                  <div className="mt-1 break-words text-[#77787b]">
                     {route.stops.length
                       ? route.stops
                           .map((stop) => stop.location_name)
@@ -7227,7 +7150,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                   type="button"
                   onClick={applyFleet}
                   disabled={fleetApplying}
-                  className="mt-4 w-full rounded-[4px]"
+                  className="mt-4 min-h-11 w-full rounded-[4px]"
                 >
                   {fleetApplying ? "Applying..." : "Apply plan"}{" "}
                   <Check size={15} />

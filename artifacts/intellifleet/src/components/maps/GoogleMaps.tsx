@@ -36,7 +36,7 @@ function useMaps() {
 }
 function ErrorMap({ error }: { error: string }) {
   return (
-    <div className="grid h-full min-h-[420px] place-items-center bg-[#f5f5f2] p-6 text-center text-xs text-[#77787b]">
+    <div className="grid h-full min-h-[280px] place-items-center sm:min-h-[420px] bg-[#f5f5f2] p-6 text-center text-xs text-[#77787b]">
       {error}
     </div>
   );
@@ -364,6 +364,7 @@ export function LiveRouteMap({
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map>();
   const overlays = useRef<google.maps.MVCObject[]>([]);
+  const fitted = useRef<google.maps.LatLngBounds | null>(null);
   const { api, error } = useMaps();
   useEffect(() => {
     if (!api || !ref.current || map.current) return;
@@ -372,12 +373,30 @@ export function LiveRouteMap({
       zoom: 6,
       streetViewControl: false,
       mapTypeControl: false,
+      fullscreenControl: true,
+      zoomControl: true,
     });
     return () => {
       overlays.current.forEach((x: any) => x.setMap(null));
       overlays.current = [];
       map.current = undefined;
     };
+  }, [api]);
+  // The map can be collapsed on phones (display: none) and the tab resized: refit once it has a size again.
+  useEffect(() => {
+    const element = ref.current;
+    if (!api || !element || typeof ResizeObserver === "undefined") return;
+    let wasHidden = element.clientHeight === 0;
+    const observer = new ResizeObserver(() => {
+      const hidden = element.clientHeight === 0;
+      if (wasHidden && !hidden && map.current) {
+        api.maps.event.trigger(map.current, "resize");
+        if (fitted.current) map.current.fitBounds(fitted.current, 24);
+      }
+      wasHidden = hidden;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, [api]);
   useEffect(() => {
     if (!api || !map.current) return;
@@ -451,14 +470,15 @@ export function LiveRouteMap({
           overlays.current.push(marker);
         }
     });
-    m.fitBounds(bounds);
+    fitted.current = bounds;
+    m.fitBounds(bounds, 24); // padding keeps markers clear of the map controls
   }, [api, plan, vehicles]);
   return error ? (
     <ErrorMap error={error} />
   ) : (
     <div
       ref={ref}
-      className="h-full min-h-[420px] w-full"
+      className="h-full min-h-[280px] w-full sm:min-h-[420px]"
       data-testid="route-planning-map"
     />
   );
