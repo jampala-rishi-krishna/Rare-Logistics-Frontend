@@ -48,29 +48,44 @@ export interface RoutePlanResult {
   returnWarehouse?: RouteWarehouse | null;
   roundTrip?: {
     outbound: RouteTripPart;
-    return: RouteTripPart;
+    /** null for a one-way route */
+    return: RouteTripPart | null;
     total: RouteTripPart;
   };
+  rates?: RouteCostRates;
+  costAssumptions?: { hasHelper: boolean; refrigerated: boolean; coldChain: "chilled" | "frozen"; coldChainAssumed: boolean; serviceMinPerStop: number };
   geometry: string | null;
   warnings: string[];
-  costBreakdown?: {
-    distance: number;
-    time: number;
-    fuel: number;
-    fuelConfigured: boolean;
-    refrigeration: number;
-    refrigerationConfigured: boolean;
-    fixed?: number;
-    fixedConfigured?: boolean;
-    total?: number;
-  };
+  costBreakdown?: RouteCostBreakdown;
   routing?: { provider: string; profile: string; trafficAware: boolean; geometryProvider?: string; geometryProfile?: string; geometryTrafficAware?: boolean; calculatedAt?: string; departureTime?: string | null; fallback?: boolean; fallbackUsed?: boolean; fallbackReason?: string | null };
+}
+
+export interface RouteCostBreakdown {
+  distance: number;
+  time: number;
+  fuel: number;
+  refrigeration: number;
+  total: number;
+}
+
+export interface RouteCostRates {
+  dieselPricePerLiter: number;
+  fuelKmPerLiter: number;
+  fuelCostPerKm: number;
+  distanceCostPerKm: number;
+  driverCostPerHour: number;
+  helperCostPerHour: number;
+  refrigerationLitersPerHourChilled: number;
+  refrigerationLitersPerHourFrozen: number;
+  refrigerationCostPerHourChilled: number;
+  refrigerationCostPerHourFrozen: number;
+  refrigerationOnReturnLeg: boolean;
 }
 
 export interface RouteTripPart {
   distanceKm: number;
   durationMin: number;
-  costBreakdown: NonNullable<RoutePlanResult["costBreakdown"]>;
+  costBreakdown: RouteCostBreakdown;
 }
 
 export interface RouteWarehouse {

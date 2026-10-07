@@ -407,20 +407,36 @@ export function LiveRouteMap({
         const isReturnWarehouse = Boolean(plan.returnToWarehouse && plan.returnWarehouse && i === fallback.length - 1);
         overlays.current.push(routePointPin(api.maps, m, p, i === 0 ? "START" : isReturnWarehouse ? plan.returnWarehouse!.name : i === fallback.length - 1 ? "END" : `STOP ${i}`, i === 0 ? "#1e7b44" : isReturnWarehouse ? "#64748b" : i === fallback.length - 1 ? "#c4291f" : "#111"));
     });
+    // Split the real road path at the last delivery: outbound solid, return leg dashed and lighter.
+    let outboundPath = path;
+    let returnPath: typeof path = [];
+    if (plan.returnToWarehouse && plan.returnWarehouse && path.length > 2) {
+      const target = { lat: plan.destination.lat, lng: plan.destination.lng };
+      let splitAt = 0;
+      let best = Infinity;
+      path.forEach((point: any, index: number) => {
+        const lat = typeof point.lat === "function" ? point.lat() : point.lat;
+        const lng = typeof point.lng === "function" ? point.lng() : point.lng;
+        const d = (lat - target.lat) ** 2 + (lng - target.lng) ** 2;
+        if (d <= best) { best = d; splitAt = index; }
+      });
+      outboundPath = path.slice(0, splitAt + 1);
+      returnPath = path.slice(splitAt);
+    }
     overlays.current.push(
       new api.maps.Polyline({
         map: m,
-        path,
+        path: outboundPath,
         strokeColor: "#111",
         strokeOpacity: 0.9,
         strokeWeight: 5,
       }),
     );
-    if (plan.returnToWarehouse && plan.returnWarehouse) {
+    if (returnPath.length > 1) {
       overlays.current.push(
         new api.maps.Polyline({
           map: m,
-          path: [pos(plan.destination.lat, plan.destination.lng), pos(plan.returnWarehouse.lat, plan.returnWarehouse.lng)],
+          path: returnPath,
           strokeColor: "#94a3b8",
           strokeOpacity: 0,
           strokeWeight: 4,
