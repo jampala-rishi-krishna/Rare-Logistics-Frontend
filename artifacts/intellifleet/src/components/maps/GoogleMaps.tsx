@@ -385,7 +385,8 @@ export function LiveRouteMap({
     overlays.current.forEach((x: any) => x.setMap(null));
     overlays.current = [];
     if (!plan) return;
-    const fallback = [plan.origin, ...plan.stops, plan.destination].map((p) =>
+    const routePoints = [plan.origin, ...plan.stops, plan.destination, ...(plan.returnToWarehouse && plan.returnWarehouse ? [plan.returnWarehouse] : [])];
+    const fallback = routePoints.map((p) =>
       pos(p.lat, p.lng),
     );
     let path = fallback;
@@ -403,7 +404,8 @@ export function LiveRouteMap({
     const bounds = new api.maps.LatLngBounds();
       fallback.forEach((p, i) => {
         bounds.extend(p);
-        overlays.current.push(routePointPin(api.maps, m, p, i === 0 ? "START" : i === fallback.length - 1 ? "END" : `STOP ${i}`, i === 0 ? "#1e7b44" : i === fallback.length - 1 ? "#c4291f" : "#111"));
+        const isReturnWarehouse = Boolean(plan.returnToWarehouse && plan.returnWarehouse && i === fallback.length - 1);
+        overlays.current.push(routePointPin(api.maps, m, p, i === 0 ? "START" : isReturnWarehouse ? plan.returnWarehouse!.name : i === fallback.length - 1 ? "END" : `STOP ${i}`, i === 0 ? "#1e7b44" : isReturnWarehouse ? "#64748b" : i === fallback.length - 1 ? "#c4291f" : "#111"));
     });
     overlays.current.push(
       new api.maps.Polyline({
@@ -414,6 +416,18 @@ export function LiveRouteMap({
         strokeWeight: 5,
       }),
     );
+    if (plan.returnToWarehouse && plan.returnWarehouse) {
+      overlays.current.push(
+        new api.maps.Polyline({
+          map: m,
+          path: [pos(plan.destination.lat, plan.destination.lng), pos(plan.returnWarehouse.lat, plan.returnWarehouse.lng)],
+          strokeColor: "#94a3b8",
+          strokeOpacity: 0,
+          strokeWeight: 4,
+          icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 3 }, offset: "0", repeat: "14px" }],
+        }),
+      );
+    }
       vehicles.forEach((v) => {
         if (Number.isFinite(v.currentLat) && Number.isFinite(v.currentLng)) {
           const marker = pin(api.maps, m, pos(v.currentLat, v.currentLng), v.plate, "#1e7b44");

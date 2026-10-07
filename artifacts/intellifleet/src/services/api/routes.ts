@@ -44,6 +44,13 @@ export interface RoutePlanResult {
   distanceKm: number;
   durationMin: number;
   cost: number;
+  returnToWarehouse?: boolean;
+  returnWarehouse?: RouteWarehouse | null;
+  roundTrip?: {
+    outbound: RouteTripPart;
+    return: RouteTripPart;
+    total: RouteTripPart;
+  };
   geometry: string | null;
   warnings: string[];
   costBreakdown?: {
@@ -58,6 +65,23 @@ export interface RoutePlanResult {
     total?: number;
   };
   routing?: { provider: string; profile: string; trafficAware: boolean; geometryProvider?: string; geometryProfile?: string; geometryTrafficAware?: boolean; calculatedAt?: string; departureTime?: string | null; fallback?: boolean; fallbackUsed?: boolean; fallbackReason?: string | null };
+}
+
+export interface RouteTripPart {
+  distanceKm: number;
+  durationMin: number;
+  costBreakdown: NonNullable<RoutePlanResult["costBreakdown"]>;
+}
+
+export interface RouteWarehouse {
+  id: string;
+  name: string;
+  address: string;
+  google_place: string;
+  lat: number;
+  lng: number;
+  place_id_hex: string;
+  map_url: string;
 }
 
 export interface RouteLocationSuggestion {
@@ -87,17 +111,28 @@ export function listRoutes(): Promise<ApiRoute[]> {
   return api.get<Array<ApiRoute & { id?: string | number }>>("/routes").then((routes) => routes.map((route) => ({ ...route, ROWID: String(route.id ?? route.ROWID) })));
 }
 
-export function planRoute(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, mode: string, stops: RouteLocationSuggestion[] = []): Promise<RoutePlanResult> {
+export function listRouteWarehouses(): Promise<RouteWarehouse[]> {
+  return api.get<{ warehouses: RouteWarehouse[] }>("/routes/warehouses").then((res) => res.warehouses);
+}
+
+export interface ReturnRouteOptions {
+  returnToWarehouse: boolean;
+  returnWarehouseId?: string;
+}
+
+export function planRoute(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, mode: string, stops: RouteLocationSuggestion[] = [], returnOptions?: ReturnRouteOptions): Promise<RoutePlanResult> {
   return api.post<RoutePlanResult>("/routes/plan", {
     origin: origin.label, destination: destination.label, mode,
     originLat: origin.lat, originLng: origin.lng,
     destinationLat: destination.lat, destinationLng: destination.lng,
     stops: stops.map((stop) => ({ label: stop.label, lat: stop.lat, lng: stop.lng })),
+    returnToWarehouse: returnOptions?.returnToWarehouse ?? false,
+    returnWarehouseId: returnOptions?.returnWarehouseId,
   });
 }
 
-export function optimizeStopOrder(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, stops: RouteLocationSuggestion[], mode: string): Promise<RoutePlanResult & { optimizedStopOrder?: string[] }> {
-  return api.post<RoutePlanResult & { optimizedStopOrder?: string[] }>("/routes/optimize-stops", { origin, destination, stops, mode });
+export function optimizeStopOrder(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, stops: RouteLocationSuggestion[], mode: string, returnOptions?: ReturnRouteOptions): Promise<RoutePlanResult & { optimizedStopOrder?: string[] }> {
+  return api.post<RoutePlanResult & { optimizedStopOrder?: string[] }>("/routes/optimize-stops", { origin, destination, stops, mode, ...returnOptions });
 }
 
 export function searchRouteLocations(text: string): Promise<RouteLocationSuggestion[]> {
@@ -118,6 +153,8 @@ export function createRoute(route: {
   durationMin?: number;
   cost?: number;
   status?: string;
+  returnToWarehouse?: boolean;
+  returnWarehouseId?: string;
 }): Promise<ApiRoute> {
   return api.post<ApiRoute>("/routes", route);
 }
@@ -210,6 +247,8 @@ export interface OptimizeFleetPreviewResult {
   warnings?: string[];
   message?: string;
   routing?: { provider: string; profile: string; traffic_aware: boolean; calculated_at?: string; departure_time?: string | null };
+  returnToWarehouse?: boolean;
+  returnWarehouse?: RouteWarehouse | null;
 }
 
 export interface ApplyFleetOptimizationResult {
@@ -221,8 +260,9 @@ export function previewFleetOptimization(
   objective?: string,
   mode: "initial" | "reoptimize" = "initial",
   orderIds?: string[],
+  returnOptions?: ReturnRouteOptions,
 ): Promise<OptimizeFleetPreviewResult> {
-  return api.post<OptimizeFleetPreviewResult>("/optimization/preview", { objective, mode, orderIds });
+  return api.post<OptimizeFleetPreviewResult>("/optimization/preview", { objective, mode, orderIds, ...returnOptions });
 }
 
 export function applyFleetOptimization(runId: string): Promise<ApplyFleetOptimizationResult> {

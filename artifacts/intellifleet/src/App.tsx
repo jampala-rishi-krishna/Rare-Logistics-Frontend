@@ -100,6 +100,7 @@ import {
   Globe2,
   Headphones,
   LayoutDashboard,
+  ExternalLink,
   ListFilter,
   LockKeyhole,
   LogIn,
@@ -2615,14 +2616,23 @@ function FleetOptimizationModal({
   applying: boolean;
   applyError: string | null;
 }) {
-  const [loading, setLoading] = useState(true);
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["route-warehouses"],
+    queryFn: routesApi.listRouteWarehouses,
+  });
+  const [returnToWarehouse, setReturnToWarehouse] = useState(true);
+  const [returnWarehouseId, setReturnWarehouseId] = useState("mets");
+  const [loading, setLoading] = useState(false);
   const [result, setResult] =
     useState<routesApi.OptimizeFleetPreviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const runPreview = () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
     routesApi
-      .previewFleetOptimization(undefined, "initial")
+      .previewFleetOptimization(undefined, "initial", undefined, { returnToWarehouse, returnWarehouseId })
       .then((res) => {
         setResult(res);
         setLoading(false);
@@ -2641,6 +2651,8 @@ function FleetOptimizationModal({
         setError(err.message || "Failed to preview optimization");
         setLoading(false);
       });
+  };
+  useEffect(() => {
     return () => onPreviewReady(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2685,6 +2697,25 @@ function FleetOptimizationModal({
           </button>
         </div>
         <div className="flex-1 overflow-auto bg-[#fafaf8] p-6">
+          <div className="mb-4 border border-[#e4e3df] bg-white p-4 text-sm">
+            <label className="flex items-center gap-2 font-semibold">
+              <input type="checkbox" checked={returnToWarehouse} onChange={(event) => setReturnToWarehouse(event.target.checked)} />
+              Return to warehouse
+            </label>
+            {returnToWarehouse && (
+              <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                {warehouses.map((warehouse) => (
+                  <label key={warehouse.id} className="flex items-center gap-2">
+                    <input type="radio" name="fleet-return-warehouse" checked={returnWarehouseId === warehouse.id} onChange={() => setReturnWarehouseId(warehouse.id)} />
+                    {warehouse.name}
+                  </label>
+                ))}
+              </div>
+            )}
+            <Button type="button" onClick={runPreview} disabled={loading || (returnToWarehouse && !returnWarehouseId)} className="mt-4 rounded-[4px]">
+              {loading ? "Optimizing..." : "Optimize with return leg"} <Activity size={15} />
+            </Button>
+          </div>
           {loading && (
             <div className="flex flex-col items-center justify-center py-12 text-[#77787b]">
               <RefreshCw className="mb-4 animate-spin" size={24} />
@@ -5540,12 +5571,18 @@ function LegacyRouteWorkspaceV2({
   onNotice: (s: string) => void;
 }) {
   const { data: vehicles } = useVehiclesData();
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["route-warehouses"],
+    queryFn: routesApi.listRouteWarehouses,
+  });
   const [origin, setOrigin] =
     useState<routesApi.RouteLocationSuggestion | null>(null);
   const [destination, setDestination] =
     useState<routesApi.RouteLocationSuggestion | null>(null);
   const [stops, setStops] = useState<routesApi.RouteLocationSuggestion[]>([]);
   const [mode, setMode] = useState("fastest");
+  const [returnToWarehouse, setReturnToWarehouse] = useState(true);
+  const [returnWarehouseId, setReturnWarehouseId] = useState("mets");
   const [plan, setPlan] = useState<routesApi.RoutePlanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -5569,7 +5606,7 @@ function LegacyRouteWorkspaceV2({
       return;
     }
     try {
-      setPlan(await routesApi.planRoute(origin, destination, mode, stops));
+      setPlan(await routesApi.planRoute(origin, destination, mode, stops, { returnToWarehouse, returnWarehouseId }));
     } catch (err: any) {
       setError(err?.message || "Unable to calculate this route.");
     } finally {
@@ -5593,6 +5630,8 @@ function LegacyRouteWorkspaceV2({
           durationMin: plan.durationMin,
           cost: plan.cost,
           status: "planned",
+          returnToWarehouse: plan.returnToWarehouse,
+          returnWarehouseId: plan.returnWarehouse?.id,
         });
         const routeId = String(
           (route as routesApi.ApiRoute & { id?: number | string }).id ??
@@ -5641,7 +5680,7 @@ function LegacyRouteWorkspaceV2({
     try {
       const objective = mode;
       setFleetPlan(
-        await routesApi.previewFleetOptimization(objective, "initial"),
+        await routesApi.previewFleetOptimization(objective, "initial", undefined, { returnToWarehouse, returnWarehouseId }),
       );
     } catch (err: any) {
       setFleetError(err?.message || "Could not optimize the live fleet.");
@@ -5684,6 +5723,8 @@ function LegacyRouteWorkspaceV2({
         durationMin: plan.durationMin,
         cost: plan.cost,
         status: "ready",
+        returnToWarehouse: plan.returnToWarehouse,
+        returnWarehouseId: plan.returnWarehouse?.id,
       });
       const routeId = String(
         (route as routesApi.ApiRoute & { id?: number | string }).id ??
@@ -5746,6 +5787,34 @@ function LegacyRouteWorkspaceV2({
               onChange={setDestination}
               placeholder="Search a destination"
             />
+            <div className="border border-[#e4e3df] bg-[#fafaf8] p-3">
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={returnToWarehouse}
+                  onChange={(event) => setReturnToWarehouse(event.target.checked)}
+                />
+                Return to warehouse
+              </label>
+              {returnToWarehouse && (
+                <div className="mt-3 grid gap-2 text-xs">
+                  {warehouses.map((warehouse) => (
+                    <label key={warehouse.id} className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="return-warehouse"
+                        checked={returnWarehouseId === warehouse.id}
+                        onChange={() => setReturnWarehouseId(warehouse.id)}
+                      />
+                      <span>
+                        <span className="font-semibold">{warehouse.name}</span>
+                        <span className="mt-0.5 block text-[#77787b]">{warehouse.address}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="mt-7 micro text-[#77787b]">Optimization mode</div>
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -6370,9 +6439,21 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
   );
 }
 
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(x));
+}
+
 function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const { data: vehicles } = useVehiclesData();
   const { data: ordersData } = useOrdersData("2026-01-01", "2027-12-31");
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["route-warehouses"],
+    queryFn: routesApi.listRouteWarehouses,
+  });
   const queryClient = useQueryClient();
   const [origin, setOrigin] =
     useState<routesApi.RouteLocationSuggestion | null>(null);
@@ -6382,6 +6463,8 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const [destination, setDestination] =
     useState<routesApi.RouteLocationSuggestion | null>(null);
   const [mode, setMode] = useState("fastest");
+  const [returnToWarehouse, setReturnToWarehouse] = useState(true);
+  const [returnWarehouseId, setReturnWarehouseId] = useState("");
   const [plan, setPlan] = useState<routesApi.RoutePlanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -6408,6 +6491,18 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const validStops = stops.filter(
     (stop): stop is routesApi.RouteLocationSuggestion => Boolean(stop),
   );
+  const routeOptions = { returnToWarehouse, returnWarehouseId };
+  useEffect(() => {
+    if (!warehouses.length || !origin || returnWarehouseId) return;
+    const nearest = warehouses.reduce((best, warehouse) => (
+      haversineKm(origin, warehouse) < haversineKm(origin, best) ? warehouse : best
+    ), warehouses[0]);
+    setReturnWarehouseId(nearest.id);
+  }, [origin, warehouses, returnWarehouseId]);
+  useEffect(() => {
+    setPlan(null);
+    setFleetPlan(null);
+  }, [returnToWarehouse, returnWarehouseId]);
   const validate = () => {
     if (!origin || !destination)
       return "Choose an origin and destination from the suggestions.";
@@ -6418,6 +6513,8 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
     );
     if (new Set(keys).size !== keys.length)
       return "Duplicate locations are not allowed in one route.";
+    if (returnToWarehouse && !returnWarehouseId)
+      return "Choose a return warehouse or turn off return to warehouse.";
     return "";
   };
   const calculate = async (event: React.FormEvent) => {
@@ -6432,7 +6529,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
     setPlan(null);
     try {
       setPlan(
-        await routesApi.planRoute(origin!, destination!, mode, validStops),
+        await routesApi.planRoute(origin!, destination!, mode, validStops, routeOptions),
       );
     } catch (err: any) {
       setError(err?.message || "Unable to calculate route.");
@@ -6459,6 +6556,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
         destination!,
         validStops,
         mode,
+        routeOptions,
       );
       setPlan(result);
       if (result.optimizedStopOrder)
@@ -6491,6 +6589,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
           mode,
           "initial",
           eligibleOrderIds,
+          routeOptions,
         ),
       );
     } catch (err: any) {
@@ -6534,6 +6633,8 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
         durationMin: plan.durationMin,
         cost: plan.cost,
         status: "ready",
+        returnToWarehouse: plan.returnToWarehouse,
+        returnWarehouseId: plan.returnWarehouse?.id,
       });
       const routeId = String(
         (route as routesApi.ApiRoute & { id?: number | string }).id ??
@@ -6857,6 +6958,34 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                   : "just now"}{" "}
                 · Estimated planning cost, tolls not included.
               </div>
+              {plan.returnToWarehouse && plan.returnWarehouse && (
+                <a
+                  href={plan.returnWarehouse.map_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 font-semibold text-black underline underline-offset-2"
+                >
+                  Open {plan.returnWarehouse.name} in Google Maps <ExternalLink size={12} />
+                </a>
+              )}
+              {plan.roundTrip && (
+                <div className="mt-3 grid gap-1 border-t border-[#efeeeb] pt-2">
+                  {[
+                    ["Outbound", plan.roundTrip.outbound],
+                    [`Return to ${plan.returnWarehouse?.name || "warehouse"}`, plan.roundTrip.return],
+                    ["Round trip total", plan.roundTrip.total],
+                  ].map(([label, part]) => (
+                    <div className="grid grid-cols-[1fr_80px_80px_90px] gap-2" key={String(label)}>
+                      <span className="font-semibold text-black">{String(label)}</span>
+                      <span>{(part as routesApi.RouteTripPart).distanceKm.toFixed(1)} km</span>
+                      <span>{Math.round((part as routesApi.RouteTripPart).durationMin)} min</span>
+                      <span className="text-right font-semibold text-black">
+                        ₱{((part as routesApi.RouteTripPart).costBreakdown.total || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {plan.costBreakdown && (
                 <div className="mt-3 grid gap-1 border-t border-[#efeeeb] pt-2">
                   <div className="flex justify-between">
@@ -6914,6 +7043,11 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                 <div>
                   <strong>END</strong> · {plan.destination.label}
                 </div>
+                {plan.returnToWarehouse && plan.returnWarehouse && (
+                  <div>
+                    <strong>RETURN</strong> · Arrive back at {plan.returnWarehouse.name}
+                  </div>
+                )}
               </div>
             </div>
           )}
