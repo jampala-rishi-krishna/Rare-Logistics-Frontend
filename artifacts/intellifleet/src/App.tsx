@@ -6449,6 +6449,8 @@ function returnEta(plan: routesApi.RoutePlanResult): string | null {
   const service = (plan.costAssumptions?.serviceMinPerStop ?? 30) * deliveries;
   return etaLabel(plan.routing?.calculatedAt, plan.roundTrip.total.durationMin + service);
 }
+// Stable reference: an inline [] would redraw and refit the map on every render.
+const NO_VEHICLES: never[] = [];
 
 function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const { data: vehicles } = useVehiclesData();
@@ -6470,6 +6472,9 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const [returnWarehouseId, setReturnWarehouseId] = useState("");
   const [expressways, setExpressways] = useState<ExpresswayChoice>("compare");
   const [mapOpen, setMapOpen] = useState(true);
+  const [hintDismissed, setHintDismissed] = useState(false);
+  // A freshly computed result may itself reorder stops/destination (Optimize stop order); that must not hide it.
+  const keepResultUntil = useRef(0);
   const [rawPlan, setPlan] = useState<routesApi.RoutePlanResult | null>(null);
   // Which "Compare both" card is active; null = the server's default for the objective.
   const [pickedOption, setPickedOption] = useState<string | null>(null);
@@ -6539,11 +6544,17 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const warehouseMissing = returnWarehouseMissing(returnToWarehouse, returnWarehouseId);
   // Which action to resume once the user answers the "which warehouse?" prompt.
   const [warehousePrompt, setWarehousePrompt] = useState<null | "calculate" | "optimize" | "fleet">(null);
-  // Changing the checkbox, the warehouse or the expressway choice makes the shown result stale.
+  // Any change to the inputs makes the shown result stale. Stale results are HIDDEN (the empty, full-height map
+  // comes back) rather than shown with an "outdated" label.
   useEffect(() => {
+    if (Date.now() < keepResultUntil.current) return;
     setPlan(null);
     setFleetPlan(null);
-  }, [returnToWarehouse, returnWarehouseId, expressways]);
+  }, [origin, destination, stops, mode, returnToWarehouse, returnWarehouseId, expressways]);
+  const idlePoints = useMemo(
+    () => warehouses.filter((warehouse) => Number.isFinite(warehouse.lat) && Number.isFinite(warehouse.lng)).map((warehouse) => ({ lat: warehouse.lat, lng: warehouse.lng, label: warehouse.name })),
+    [warehouses],
+  );
   const validate = () => {
     if (!origin || !destination)
       return "Choose an origin and destination from the suggestions.";
@@ -6606,6 +6617,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
         { returnToWarehouse, returnWarehouseId: warehouseOverride || returnWarehouseId },
         expressways,
       );
+      keepResultUntil.current = Date.now() + 600;
       setPlan(result);
       if (result.optimizedStopOrder) {
         // With a return leg Google may also move the last delivery, so rebuild both from the result.
@@ -6879,6 +6891,24 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               </label>
             ))}
           </div>
+          {error && (
+            <div role="alert" className="mt-5 rounded-lg border border-[#c4291f] bg-[#fbeceb] p-3 text-xs text-[#c4291f]">
+              <div>{error}</div>
+              {/missing (shipment weight|service time)/i.test(error) && (
+                <Link
+                  href="/app/orders"
+                  className="mt-2 inline-flex font-semibold underline underline-offset-2"
+                >
+                  Review orders <ArrowRight size={13} />
+                </Link>
+              )}
+            </div>
+          )}
+          {fleetError && (
+            <div role="alert" className="mt-5 rounded-lg border border-[#c4291f] bg-[#fbeceb] p-3 text-xs text-[#c4291f]">
+              {fleetError}
+            </div>
+          )}
           <div className="route-action-bar">
             {warehouseMissing && (
               <div className="mb-2 text-xs text-[#a16819]">{RETURN_WAREHOUSE_HINT}</div>
@@ -6924,24 +6954,6 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               {savingRoute ? "Saving route..." : "Save route"}{" "}
               <Check size={15} />
             </Button>
-          )}
-          {error && (
-            <div className="mt-4 border border-[#c4291f] bg-[#fbeceb] p-3 text-xs text-[#c4291f]">
-              <div>{error}</div>
-              {/missing (shipment weight|service time)/i.test(error) && (
-                <Link
-                  href="/app/orders"
-                  className="mt-2 inline-flex font-semibold underline underline-offset-2"
-                >
-                  Review orders <ArrowRight size={13} />
-                </Link>
-              )}
-            </div>
-          )}
-          {fleetError && (
-            <div className="mt-4 border border-[#c4291f] bg-[#fbeceb] p-3 text-xs text-[#c4291f]">
-              {fleetError}
-            </div>
           )}
         </form>
         {assignOpen && (
@@ -7045,10 +7057,23 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
             {mapOpen ? "Hide map" : "Show map"}
             <ChevronDown size={16} className={cx("transition-transform", mapOpen && "rotate-180")} />
           </button>
-          <div className={cx("rm-card min-h-[280px] overflow-hidden sm:min-h-[420px]", !mapOpen && "max-sm:hidden")}>
-            <LiveRouteMap plan={plan} vehicles={[]} />
+          <div className={cx("rm-card rm-wrap relative overflow-hidden", !(plan || fleetPlan) && "is-full", !mapOpen && "max-sm:hidden")} data-testid="route-map-wrap" data-state={busy || fleetBusy ? "calculating" : plan || fleetPlan ? "result" : "empty"}>
+            <LiveRouteMap plan={plan} vehicles={NO_VEHICLES} idlePoints={idlePoints} />
+            {(busy || fleetBusy) && (
+              <div className="rm-overlay" role="status" aria-live="polite">
+                <span className="rm-pill"><i className="rm-spin" aria-hidden />{fleetBusy ? "Optimizing fleet…" : "Calculating route…"}</span>
+              </div>
+            )}
+            {!(plan || fleetPlan) && !busy && !fleetBusy && !hintDismissed && (
+              <div className="rm-hint">
+                <span>Enter an origin and destination, then Calculate route</span>
+                <button type="button" onClick={() => setHintDismissed(true)} aria-label="Dismiss hint"><X size={14} /></button>
+              </div>
+            )}
           </div>
-          {rawPlan?.expressways === "compare" && options.length > 0 && plan && (
+          {plan && (
+          <div className="rr-in grid min-w-0 gap-4">
+          {rawPlan?.expressways === "compare" && options.length > 0 && (
             <RouteOptionCards
               options={options}
               activeKey={plan.activeOption}
@@ -7060,7 +7085,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
             />
           )}
           <RouteKpis plan={plan} />
-          {plan && (
+          {(
             <RouteCostCard
               plan={plan}
               tollDataAvailable={tollDataAvailable}
@@ -7072,10 +7097,12 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               }
             />
           )}
-          {plan && <RouteTimeline plan={plan} returnEta={returnEta(plan)} />}
+          <RouteTimeline plan={plan} returnEta={returnEta(plan)} />
+          </div>
+          )}
           {fleetPlan && (
             <div
-              className="min-w-0 rounded-lg border border-[#e4e3df] bg-white p-4"
+              className="rr-in min-w-0 rounded-lg border border-[#e4e3df] bg-white p-4"
               data-testid="fleet-optimization-result"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">

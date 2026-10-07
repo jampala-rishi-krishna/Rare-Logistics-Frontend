@@ -354,17 +354,21 @@ export function LiveOpsMap({
     />
   );
 }
+const NO_POINTS: { lat: number; lng: number; label: string }[] = [];
 export function LiveRouteMap({
   plan,
   vehicles,
+  idlePoints = NO_POINTS,
 }: {
   plan: routesApi.RoutePlanResult | null;
   vehicles: UiVehicle[];
+  /** Pins shown (and fitted to) while there is no route yet, e.g. the two warehouses. */
+  idlePoints?: { lat: number; lng: number; label: string }[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map>();
   const overlays = useRef<google.maps.MVCObject[]>([]);
-  const fitted = useRef<google.maps.LatLngBounds | null>(null);
+  const fitted = useRef<{ bounds: google.maps.LatLngBounds; padding: number } | null>(null);
   const { api, error } = useMaps();
   useEffect(() => {
     if (!api || !ref.current || map.current) return;
@@ -382,28 +386,47 @@ export function LiveRouteMap({
       map.current = undefined;
     };
   }, [api]);
-  // The map can be collapsed on phones (display: none) and the tab resized: refit once it has a size again.
+  // The container grows/shrinks (empty state <-> results) or is collapsed on phones: resize and refit once it settles.
   useEffect(() => {
     const element = ref.current;
     if (!api || !element || typeof ResizeObserver === "undefined") return;
-    let wasHidden = element.clientHeight === 0;
+    let last = element.clientHeight;
+    let timer: number | undefined;
     const observer = new ResizeObserver(() => {
-      const hidden = element.clientHeight === 0;
-      if (wasHidden && !hidden && map.current) {
+      const height = element.clientHeight;
+      if (height === last) return;
+      last = height;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (!map.current || element.clientHeight === 0) return;
         api.maps.event.trigger(map.current, "resize");
-        if (fitted.current) map.current.fitBounds(fitted.current, 24);
-      }
-      wasHidden = hidden;
+        if (fitted.current) map.current.fitBounds(fitted.current.bounds, fitted.current.padding);
+      }, 220);
     });
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => {
+      window.clearTimeout(timer);
+      observer.disconnect();
+    };
   }, [api]);
   useEffect(() => {
     if (!api || !map.current) return;
     const m = map.current;
     overlays.current.forEach((x: any) => x.setMap(null));
     overlays.current = [];
-    if (!plan) return;
+    if (!plan) {
+      // No route yet: show the warehouses and frame them (Metro Manila area) instead of the whole country.
+      if (idlePoints.length) {
+        const idle = new api.maps.LatLngBounds();
+        idlePoints.forEach((point) => {
+          idle.extend(pos(point.lat, point.lng));
+          overlays.current.push(routePointPin(api.maps, m, pos(point.lat, point.lng), point.label, "#64748b"));
+        });
+        fitted.current = { bounds: idle, padding: 56 };
+        m.fitBounds(idle, 56);
+      } else fitted.current = null;
+      return;
+    }
     const routePoints = [plan.origin, ...plan.stops, plan.destination, ...(plan.returnToWarehouse && plan.returnWarehouse ? [plan.returnWarehouse] : [])];
     const fallback = routePoints.map((p) =>
       pos(p.lat, p.lng),
@@ -470,15 +493,15 @@ export function LiveRouteMap({
           overlays.current.push(marker);
         }
     });
-    fitted.current = bounds;
+    fitted.current = { bounds, padding: 24 };
     m.fitBounds(bounds, 24); // padding keeps markers clear of the map controls
-  }, [api, plan, vehicles]);
+  }, [api, plan, vehicles, idlePoints]);
   return error ? (
     <ErrorMap error={error} />
   ) : (
     <div
       ref={ref}
-      className="h-full min-h-[280px] w-full sm:min-h-[420px]"
+      className="h-full min-h-[240px] w-full"
       data-testid="route-planning-map"
     />
   );
