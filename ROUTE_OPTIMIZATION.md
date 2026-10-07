@@ -373,3 +373,14 @@ curl -Method Post "http://127.0.0.1:8003/optimization/preview" -ContentType "app
 ```
 
 The last command requires eligible vehicle profiles and at least one pending, geocodable order. A clear prerequisite error is expected when those operational records are absent.
+
+## 11. Toll fees and the expressway choice
+
+Point-to-point costing now includes tolls (Google Routes API, `extraComputations: ["TOLLS"]`; requested only by Calculate / Optimize stop order, never on map interactions because it bills at a higher SKU).
+
+- **Expressways control** (next to Objective): *Compare both* (default; two `computeRoutes` calls, normal and `routeModifiers.avoidTolls`, shown as two cards - click one to make it the active route), *Use expressways*, *Avoid tolls*. Changing it marks the result stale. The API field is `expressways: compare | expressway | avoid` on `/routes/plan` and `/routes/optimize-stops`.
+- **Fee** per leg = Google's Class 1 `estimatedPrice` (PHP) x the multiplier for `ROUTE_TOLL_VEHICLE_CLASS` (Class 1 x1, Class 2 `ROUTE_TOLL_CLASS2_MULTIPLIER` = 2.0, Class 3 `ROUTE_TOLL_CLASS3_MULTIPLIER` = 3.0). Included in each row Total, the TOTAL and the top card.
+- A leg with a toll but no Google price shows "Toll applies, fee unknown", is excluded from the total, and the TOTAL carries "+ tolls (unknown)". It is never shown as 0.
+- `ROUTE_TOLLS_ENABLED=false` stops requesting TOLLS (Compare falls back to one normal call; "tolls not included" is shown again).
+- **Fleet optimization** (Route Optimization API) does not compute tolls. The shared *Avoid tolls* choice sets each vehicle's `routeModifiers.avoidTolls`; otherwise the proposal is labelled "tolls not included".
+- No database changes: nothing here is persisted beyond the existing in-memory run snapshot (which now also remembers `avoid_tolls` so the applied polyline matches).

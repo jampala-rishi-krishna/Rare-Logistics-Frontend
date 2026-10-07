@@ -70,7 +70,7 @@ import LoadPlanningInventoryTab, {
 } from "@/components/load-planning/LoadPlanningInventoryTab";
 import LoadPlanningAssignmentTab from "@/components/load-planning/LoadPlanningAssignmentTab";
 import { capacityOverage, loadOverage } from "@/lib/capacity";
-import { RETURN_WAREHOUSE_HINT, buildCostTableRows, etaLabel, formatRatesLine, returnWarehouseMissing } from "@/lib/routeCost";
+import { EXPRESSWAY_CHOICES, RETURN_WAREHOUSE_HINT, buildCostTableRows, etaLabel, formatRatesLine, resolveActivePlan, returnWarehouseMissing, tollCellText, tollOptionSummary, totalCellText, type ExpresswayChoice } from "@/lib/routeCost";
 import { ReturnWarehousePicker } from "@/components/maps/ReturnWarehousePicker";
 import * as inventoryApi from "@/services/api/inventory";
 import * as reportsApi from "@/services/api/reports";
@@ -6467,7 +6467,12 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const [mode, setMode] = useState("fastest");
   const [returnToWarehouse, setReturnToWarehouse] = useState(true);
   const [returnWarehouseId, setReturnWarehouseId] = useState("");
-  const [plan, setPlan] = useState<routesApi.RoutePlanResult | null>(null);
+  const [expressways, setExpressways] = useState<ExpresswayChoice>("compare");
+  const [rawPlan, setPlan] = useState<routesApi.RoutePlanResult | null>(null);
+  // Which "Compare both" card is active; null = the server's default for the objective.
+  const [pickedOption, setPickedOption] = useState<string | null>(null);
+  const plan = useMemo(() => resolveActivePlan(rawPlan, pickedOption), [rawPlan, pickedOption]);
+  useEffect(() => setPickedOption(null), [rawPlan]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fleetBusy, setFleetBusy] = useState(false);
@@ -6497,11 +6502,11 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   const warehouseMissing = returnWarehouseMissing(returnToWarehouse, returnWarehouseId);
   // Which action to resume once the user answers the "which warehouse?" prompt.
   const [warehousePrompt, setWarehousePrompt] = useState<null | "calculate" | "optimize" | "fleet">(null);
-  // Changing the checkbox or the warehouse makes the shown result stale.
+  // Changing the checkbox, the warehouse or the expressway choice makes the shown result stale.
   useEffect(() => {
     setPlan(null);
     setFleetPlan(null);
-  }, [returnToWarehouse, returnWarehouseId]);
+  }, [returnToWarehouse, returnWarehouseId, expressways]);
   const validate = () => {
     if (!origin || !destination)
       return "Choose an origin and destination from the suggestions.";
@@ -6530,7 +6535,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
     setPlan(null);
     try {
       setPlan(
-        await routesApi.planRoute(origin!, destination!, mode, validStops, { returnToWarehouse, returnWarehouseId: warehouseOverride || returnWarehouseId }),
+        await routesApi.planRoute(origin!, destination!, mode, validStops, { returnToWarehouse, returnWarehouseId: warehouseOverride || returnWarehouseId }, expressways),
       );
     } catch (err: any) {
       setError(err?.message || "Unable to calculate route.");
@@ -6562,6 +6567,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
         validStops,
         mode,
         { returnToWarehouse, returnWarehouseId: warehouseOverride || returnWarehouseId },
+        expressways,
       );
       setPlan(result);
       if (result.optimizedStopOrder) {
@@ -6601,6 +6607,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
           "initial",
           eligibleOrderIds,
           { returnToWarehouse, returnWarehouseId: warehouseOverride || returnWarehouseId },
+          expressways === "avoid", // the Route Optimization API cannot price tolls, only avoid them
         ),
       );
     } catch (err: any) {
@@ -6816,6 +6823,20 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               </button>
             ))}
           </div>
+          <div className="mt-6 micro text-[#77787b]">Expressways</div>
+          <div className="mt-3 grid gap-1.5 text-xs" role="radiogroup" aria-label="Expressways" data-testid="expressway-choice">
+            {EXPRESSWAY_CHOICES.map(({ value, label }) => (
+              <label key={value} className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="route-expressways"
+                  checked={expressways === value}
+                  onChange={() => setExpressways(value)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
           <Button
             type="submit"
             disabled={busy || warehouseMissing}
@@ -6846,6 +6867,9 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
             {fleetBusy ? "Optimizing fleet..." : "Optimize pending deliveries"}{" "}
             <Activity size={15} />
           </Button>
+          <div className="mt-1 text-[11px] text-[#77787b]">
+            {expressways === "avoid" ? "Fleet routes avoid tolls." : "Fleet costs: tolls not included."}
+          </div>
           {plan && (
             <Button
               type="button"
@@ -6963,6 +6987,38 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
           <div className="min-h-[420px] border border-[#e4e3df] bg-white">
             <LiveRouteMap plan={plan} vehicles={[]} />
           </div>
+          {rawPlan?.tollOptions && rawPlan.tollOptions.length > 1 && plan && (
+            <div className="grid gap-3 md:grid-cols-2" data-testid="toll-options">
+              {rawPlan.tollOptions.map((option) => {
+                const active = plan.activeOption === option.key;
+                const badges = [
+                  rawPlan.cheapestOption === option.key ? "Cheapest" : null,
+                  rawPlan.fastestOption === option.key ? "Fastest" : null,
+                ].filter(Boolean);
+                return (
+                  <button
+                    type="button"
+                    key={option.key}
+                    onClick={() => setPickedOption(option.key)}
+                    aria-pressed={active}
+                    className={cx(
+                      "border bg-white p-4 text-left text-xs",
+                      active ? "border-black ring-1 ring-black" : "border-[#e4e3df] hover:border-black",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="text-sm text-black">{option.label}</strong>
+                      {badges.map((badge) => (
+                        <span key={badge as string} className="bg-[#e7f3ea] px-1.5 py-0.5 font-semibold text-[#1e7b44]">{badge}</span>
+                      ))}
+                      {active && <span className="ml-auto font-semibold text-black">Active</span>}
+                    </div>
+                    <div className="mt-2 text-[#55565a]">{tollOptionSummary(option)}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="grid gap-3 md:grid-cols-3">
             {[
               ["Distance", plan ? `${plan.distanceKm.toFixed(1)} km` : "-"],
@@ -6972,7 +7028,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               ],
               [
                 "Estimated operating cost",
-                plan ? `₱${plan.cost.toLocaleString()}` : "-",
+                plan ? `₱${plan.cost.toLocaleString()}${plan.toll?.unknown ? " + tolls (unknown)" : ""}` : "-",
               ],
             ].map(([label, value]) => (
               <div className="border border-[#e4e3df] bg-white p-4" key={label}>
@@ -7008,7 +7064,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                 {plan.routing?.calculatedAt
                   ? timeAgo(plan.routing.calculatedAt)
                   : "just now"}{" "}
-                · Estimated planning cost, tolls not included.
+                · Estimated planning cost{plan.tollsEnabled ? "." : ", tolls not included."}
               </div>
               {plan.returnToWarehouse && plan.returnWarehouse && (
                 <a
@@ -7022,7 +7078,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
               )}
               {plan.roundTrip && (
                 <div className="mt-3 overflow-x-auto border-t border-[#efeeeb] pt-3" data-testid="route-cost-table">
-                  <table className="w-full min-w-[640px] border-collapse text-right">
+                  <table className="w-full min-w-[720px] border-collapse text-right">
                     <thead>
                       <tr className="micro text-[#77787b]">
                         <th className="pb-2 text-left font-normal"></th>
@@ -7032,6 +7088,7 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                         <th className="pb-2 font-normal">Time cost</th>
                         <th className="pb-2 font-normal">Fuel</th>
                         <th className="pb-2 font-normal">Refrigeration</th>
+                        {plan.tollsEnabled && <th className="pb-2 font-normal">Tolls</th>}
                         <th className="pb-2 font-normal">Total</th>
                       </tr>
                     </thead>
@@ -7045,7 +7102,8 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                           <td>{peso(row.timeCost)}</td>
                           <td>{peso(row.fuel)}</td>
                           <td>{peso(row.refrigeration)}</td>
-                          <td className="font-semibold text-black">{peso(row.total)}</td>
+                          {plan.tollsEnabled && <td className={row.tollUnknown ? "text-[#a16819]" : ""}>{tollCellText(row)}</td>}
+                          <td className="font-semibold text-black">{totalCellText(row)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -7113,6 +7171,9 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
                 <p className="mt-3 text-xs text-[#55565a]">
                   {fleetPlan.message}
                 </p>
+              )}
+              {fleetPlan.costNote && (
+                <p className="mt-2 text-[11px] text-[#77787b]">{fleetPlan.costNote}</p>
               )}
               {fleetPlan.routes?.map((route) => (
                 <div

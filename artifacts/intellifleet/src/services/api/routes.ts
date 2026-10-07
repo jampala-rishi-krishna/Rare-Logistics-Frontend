@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { ExpresswayChoice, TollOption, TollSummary } from "../../lib/routeCost";
 
 export interface ApiRoute {
   ROWID: string;
@@ -57,6 +58,15 @@ export interface RoutePlanResult {
   geometry: string | null;
   warnings: string[];
   costBreakdown?: RouteCostBreakdown;
+  /** Toll summary of the active route. */
+  toll?: TollSummary;
+  tollsEnabled?: boolean;
+  expressways?: ExpresswayChoice;
+  /** Two entries when "Compare both" was used; the active one also fills the top-level fields. */
+  tollOptions?: TollOption[];
+  activeOption?: string;
+  cheapestOption?: string;
+  fastestOption?: string;
   routing?: { provider: string; profile: string; trafficAware: boolean; geometryProvider?: string; geometryProfile?: string; geometryTrafficAware?: boolean; calculatedAt?: string; departureTime?: string | null; fallback?: boolean; fallbackUsed?: boolean; fallbackReason?: string | null };
 }
 
@@ -65,6 +75,7 @@ export interface RouteCostBreakdown {
   time: number;
   fuel: number;
   refrigeration: number;
+  tolls?: number;
   total: number;
 }
 
@@ -80,12 +91,16 @@ export interface RouteCostRates {
   refrigerationCostPerHourChilled: number;
   refrigerationCostPerHourFrozen: number;
   refrigerationOnReturnLeg: boolean;
+  tollsEnabled?: boolean;
+  tollVehicleClass?: number;
+  tollMultiplier?: number;
 }
 
 export interface RouteTripPart {
   distanceKm: number;
   durationMin: number;
   costBreakdown: RouteCostBreakdown;
+  toll?: TollSummary;
 }
 
 export interface RouteWarehouse {
@@ -135,7 +150,7 @@ export interface ReturnRouteOptions {
   returnWarehouseId?: string;
 }
 
-export function planRoute(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, mode: string, stops: RouteLocationSuggestion[] = [], returnOptions?: ReturnRouteOptions): Promise<RoutePlanResult> {
+export function planRoute(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, mode: string, stops: RouteLocationSuggestion[] = [], returnOptions?: ReturnRouteOptions, expressways: ExpresswayChoice = "expressway"): Promise<RoutePlanResult> {
   return api.post<RoutePlanResult>("/routes/plan", {
     origin: origin.label, destination: destination.label, mode,
     originLat: origin.lat, originLng: origin.lng,
@@ -143,11 +158,12 @@ export function planRoute(origin: RouteLocationSuggestion, destination: RouteLoc
     stops: stops.map((stop) => ({ label: stop.label, lat: stop.lat, lng: stop.lng })),
     returnToWarehouse: returnOptions?.returnToWarehouse ?? false,
     returnWarehouseId: returnOptions?.returnWarehouseId,
+    expressways,
   });
 }
 
-export function optimizeStopOrder(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, stops: RouteLocationSuggestion[], mode: string, returnOptions?: ReturnRouteOptions): Promise<RoutePlanResult & { optimizedStopOrder?: string[] }> {
-  return api.post<RoutePlanResult & { optimizedStopOrder?: string[] }>("/routes/optimize-stops", { origin, destination, stops, mode, ...returnOptions });
+export function optimizeStopOrder(origin: RouteLocationSuggestion, destination: RouteLocationSuggestion, stops: RouteLocationSuggestion[], mode: string, returnOptions?: ReturnRouteOptions, expressways: ExpresswayChoice = "expressway"): Promise<RoutePlanResult & { optimizedStopOrder?: string[] }> {
+  return api.post<RoutePlanResult & { optimizedStopOrder?: string[] }>("/routes/optimize-stops", { origin, destination, stops, mode, ...returnOptions, expressways });
 }
 
 export function searchRouteLocations(text: string): Promise<RouteLocationSuggestion[]> {
@@ -264,6 +280,9 @@ export interface OptimizeFleetPreviewResult {
   routing?: { provider: string; profile: string; traffic_aware: boolean; calculated_at?: string; departure_time?: string | null };
   returnToWarehouse?: boolean;
   returnWarehouse?: RouteWarehouse | null;
+  avoidTolls?: boolean;
+  /** "tolls not included" (tolls allowed - the Route Optimization API does not price them) or "Tolls avoided". */
+  costNote?: string;
 }
 
 export interface ApplyFleetOptimizationResult {
@@ -276,8 +295,9 @@ export function previewFleetOptimization(
   mode: "initial" | "reoptimize" = "initial",
   orderIds?: string[],
   returnOptions?: ReturnRouteOptions,
+  avoidTolls = false,
 ): Promise<OptimizeFleetPreviewResult> {
-  return api.post<OptimizeFleetPreviewResult>("/optimization/preview", { objective, mode, orderIds, ...returnOptions });
+  return api.post<OptimizeFleetPreviewResult>("/optimization/preview", { objective, mode, orderIds, ...returnOptions, avoidTolls });
 }
 
 export function applyFleetOptimization(runId: string): Promise<ApplyFleetOptimizationResult> {
