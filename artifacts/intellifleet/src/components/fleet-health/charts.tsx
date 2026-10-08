@@ -71,17 +71,20 @@ export function BatteryChart({ series, system, days }: { series: BatteryPoint[];
   const data = useMemo(() => batteryChartData(series, days), [series, days]);
   const limits = BATTERY_LIMITS[system];
   const [lo, hi] = batteryDomain(data, system);
+  const step = system === 24 ? 1 : 0.5;
+  const ticks: number[] = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 10) / 10);
   return (
     <div>
       <div className="h-[260px] w-full" role="img" aria-label={`Battery voltage for the last ${days} days on a ${system} volt system`}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: mobile ? 4 : 12, bottom: 0, left: mobile ? -14 : -4 }}>
+          <LineChart data={data} margin={{ top: 8, right: mobile ? 4 : 12, bottom: 0, left: mobile ? 0 : -4 }}>
             <CartesianGrid stroke={GRID} vertical={false} />
             <ReferenceArea y1={limits.runningLow} y2={limits.runningHigh} fill="#33673B" fillOpacity={0.06} ifOverflow="extendDomain" />
             <ReferenceLine y={limits.parkedWarn} stroke="#d89b00" strokeDasharray="5 4" strokeWidth={1.25} ifOverflow="extendDomain" />
             <ReferenceLine y={limits.parkedCritical} stroke="#c4291f" strokeDasharray="5 4" strokeWidth={1.25} ifOverflow="extendDomain" />
             <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={{ stroke: "#d8d7d2" }} minTickGap={mobile ? 28 : 18} tickMargin={8} />
-            <YAxis domain={[lo, hi]} tick={AXIS} tickLine={false} axisLine={false} width={mobile ? 40 : 46} tickFormatter={(v: number) => `${v}V`} />
+            <YAxis domain={[lo, hi]} ticks={ticks} interval={0} tick={AXIS} tickLine={false} axisLine={false} width={mobile ? 46 : 50} tickFormatter={(v: number) => `${v.toFixed(1)}V`} />
             <Tooltip
               cursor={{ stroke: "#0b0b0b", strokeOpacity: 0.2 }}
               content={({ active, payload }) => {
@@ -126,7 +129,7 @@ export function DistanceChart({ daily, days }: { daily: DailyPoint[]; days: numb
     <div>
       <div className="h-[240px] w-full" role="img" aria-label={`Kilometres driven per day for the last ${days} days`}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: mobile ? 4 : 12, bottom: 0, left: mobile ? -14 : -4 }} barCategoryGap={mobile ? 2 : 3}>
+          <BarChart data={data} margin={{ top: 8, right: mobile ? 4 : 12, bottom: 0, left: mobile ? 0 : -4 }} barCategoryGap={mobile ? 2 : 3}>
             <CartesianGrid stroke={GRID} vertical={false} />
             <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={{ stroke: "#d8d7d2" }} minTickGap={mobile ? 28 : 18} tickMargin={8} />
             <YAxis tick={AXIS} tickLine={false} axisLine={false} width={mobile ? 40 : 46} tickFormatter={(v: number) => formatNumber(v)} />

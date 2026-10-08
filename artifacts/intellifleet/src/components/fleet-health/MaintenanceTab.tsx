@@ -222,7 +222,7 @@ export function TruckList({
 
   return (
     <Card className="entrance entrance-1" data-testid="fh-truck-list">
-      <div className="grid gap-4 border-b border-[#e4e3df] p-4 md:px-5">
+      <div className="grid gap-4 border-b border-[#e4e3df] p-4 md:px-5 [&>*]:min-w-0">
         <SectionHead
           eyebrow="Fleet"
           title="Vehicles"

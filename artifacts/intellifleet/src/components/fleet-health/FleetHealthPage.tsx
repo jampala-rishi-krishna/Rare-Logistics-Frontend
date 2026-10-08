@@ -62,7 +62,7 @@ export default function FleetHealthPage() {
           </div>
         </div>
 
-        <div className="grid gap-5">
+        <div className="grid gap-5 [&>*]:min-w-0">
           {unconfirmed && <IntervalsBanner canEdit={perms.canEdit} onReview={() => setIntervalOpen(true)} />}
 
           <section aria-label="Key numbers" className="grid gap-2">
@@ -90,7 +90,7 @@ export default function FleetHealthPage() {
           </section>
 
           {tab === "maintenance" ? (
-            <div className="grid gap-5">
+            <div className="grid gap-5 [&>*]:min-w-0">
               <NeedsAttention summary={summary.data} loading={summary.isLoading} error={summary.isError ? summary.error : null} onRetry={() => summary.refetch()} onOpen={setDrawerId} />
               <TruckList
                 data={trucks.data}

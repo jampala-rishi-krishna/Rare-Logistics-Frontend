@@ -275,11 +275,11 @@ function Overview({ ctx }: { ctx: DrawerCtx }) {
             <span key={s.key} title={`${s.label}: ${s.value} points`} style={{ width: `${s.width}%`, background: FACTOR_COLORS[s.key] ?? "#0b0b0b" }} className="border-r border-white/70 last:border-0" />
           ))}
         </div>
-        <div className="mt-1.5 flex justify-between text-[10px] text-[#9a9994]">
-          <span>0</span>
-          <span style={{ marginLeft: "30%" }}>30 medium</span>
-          <span style={{ marginRight: "10%" }}>60 high</span>
-          <span>100</span>
+        <div className="relative mt-1.5 h-4 text-[10px] text-[#9a9994]">
+          <span className="absolute left-0">0</span>
+          <span className="absolute -translate-x-1/2" style={{ left: "30%" }}>30 medium</span>
+          <span className="absolute -translate-x-1/2" style={{ left: "60%" }}>60 high</span>
+          <span className="absolute right-0">100</span>
         </div>
         <ul className="mt-4 divide-y divide-[#efeeeb] border border-[#e4e3df] bg-white">
           {risk.breakdown.map((b) => (

@@ -37,7 +37,7 @@ export function EcoTab({ perms, minKm }: { perms: FleetPermissions; minKm: numbe
   };
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-5 [&>*]:min-w-0">
       <div className="entrance flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <ViewToggle value={view} onChange={setView} />
         {view === "drivers" ? (
