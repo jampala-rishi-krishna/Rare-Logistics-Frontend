@@ -1,7 +1,19 @@
 import { api } from "./client";
 
+export interface Branch {
+  id: string;
+  name: string;
+  /** Short badge text, e.g. RGF / MSSI / SSI. */
+  code: string;
+  label: string;
+}
+
 export interface SalesOrderSummary {
   id: string;
+  /** Zoho branch of the order (null for past-dated rows read from history, which keep no branch). */
+  branch_id?: string | null;
+  branch_name?: string | null;
+  branch_code?: string | null;
   salesorder_number: string | null;
   reference_number: string | null;
   customer_name: string | null;
@@ -24,10 +36,13 @@ export interface SalesOrderSummary {
   notes?: string | null;
   mets_qty_available_for_sale?: number | null;
   glacier_qty_available_for_sale?: number | null;
+  /** Branch's own warehouse (e.g. SariSuki Store Inc. Warehouse) when it has no Mets/Glacier mapping. */
+  other_qty_available_for_sale?: number | null;
+  other_warehouse_name?: string | null;
   assigned_at?: string | null;
   assigned_by?: number | null;
   product_count?: number;
-  products?: { mets_qty_available_for_sale?: number | null; glacier_qty_available_for_sale?: number | null; line_item_id?: string | null; item_id?: string | null; name: string | null; sku: string | null; quantity: number; unit: string | null; total_weight_kg?: number | null; packaging_type?: "pack" | "case" | null; pack_quantity?: number; case_quantity?: number; quantity_packed: number; quantity_shipped: number }[];
+  products?: { mets_qty_available_for_sale?: number | null; glacier_qty_available_for_sale?: number | null; other_qty_available_for_sale?: number | null; other_warehouse_name?: string | null; line_item_id?: string | null; item_id?: string | null; name: string | null; sku: string | null; quantity: number; unit: string | null; total_weight_kg?: number | null; packaging_type?: "pack" | "case" | null; pack_quantity?: number; case_quantity?: number; quantity_packed: number; quantity_shipped: number }[];
   pack_count?: number;
   case_count?: number;
   unit_count?: number;
@@ -53,6 +68,10 @@ export interface SalesOrdersPage {
   has_more: boolean;
   /** True while Mets/Glacier stock and item weights are still being fetched in the background. */
   stock_pending?: boolean;
+  /** Orders per branch id under every other filter (ignores the Branch filter itself). */
+  branch_counts?: Record<string, number>;
+  /** Configured branches plus any unknown branch seen in the data. */
+  branches?: Branch[];
   /** Total kg across every filtered order (all pages), from the weights known so far. */
   total_weight_kg?: number;
   /** False when some line has no known weight yet (or Zoho has no package weight for it). */
@@ -173,7 +192,7 @@ export function listSalesOrders(
   search = "",
   assignment?: "assigned" | "unassigned",
   cities: string[] = [],
-  filters: { vehicle?: string; customer?: string; deliveryStatus?: string } = {},
+  filters: { vehicle?: string; customer?: string; deliveryStatus?: string; branches?: string[] } = {},
 ): Promise<SalesOrdersPage> {
   return api.get<SalesOrdersPage>("/api/load-planning/inventory/sales-orders", {
     date_from: dateFrom,
@@ -187,7 +206,12 @@ export function listSalesOrders(
     vehicle: filters.vehicle,
     customer: filters.customer,
     delivery_status: filters.deliveryStatus,
+    branches: filters.branches?.length ? filters.branches.join(",") : undefined,
   });
+}
+
+export function listBranches() {
+  return api.get<{ branches: Branch[] }>("/api/load-planning/inventory/branches");
 }
 
 export function getSalesOrderDetail(id: string) {
@@ -327,6 +351,7 @@ export function acknowledgeFilteredSalesOrders(
   dateTo: string,
   status: string,
   search: string,
+  branches: string[] = [],
 ): Promise<{
   filtered_count: number;
   eligible_count: number;
@@ -336,7 +361,7 @@ export function acknowledgeFilteredSalesOrders(
   return api.post(
     `/api/load-planning/inventory/sales-orders/acknowledge-filtered`,
     undefined,
-    { date_from: dateFrom, date_to: dateTo, status, search },
+    { date_from: dateFrom, date_to: dateTo, status, search, branches: branches.length ? branches.join(",") : undefined },
   );
 }
 
@@ -347,6 +372,7 @@ export function downloadSalesOrders(
   status: string,
   search: string,
   assignment?: "assigned" | "unassigned",
+  branches: string[] = [],
 ) {
   return api.download(`/api/load-planning/inventory/export/${format}`, {
     date_from: dateFrom,
@@ -354,6 +380,7 @@ export function downloadSalesOrders(
     status,
     search,
     assignment,
+    branches: branches.length ? branches.join(",") : undefined,
   });
 }
 
@@ -364,6 +391,8 @@ export interface EmailFilterContext {
   search: string;
   order_ids?: string[];
   assignment?: "assigned" | "unassigned";
+  /** Comma-separated Zoho branch ids; empty/undefined = all branches. */
+  branches?: string;
 }
 
 export interface EmailDraft {

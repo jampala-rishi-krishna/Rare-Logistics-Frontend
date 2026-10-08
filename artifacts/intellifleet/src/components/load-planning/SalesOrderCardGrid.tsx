@@ -1,3 +1,4 @@
+import { BranchBadge } from "./BranchControls";
 import { Lock } from "lucide-react";
 import type { SalesOrderSummary } from "@/services/api/inventory";
 import { formatAddress } from "@/lib/address";
@@ -85,7 +86,7 @@ export function SalesOrderCard({
       <div className="flex items-start gap-3">
         <input type="checkbox" checked={selected} onChange={() => onToggle(String(order.id))} aria-label={`Select ${order.salesorder_number ?? order.id}`} className="mt-1" />
         <button type="button" onClick={() => onOpen(order)} className="min-w-0 max-w-full flex-1 text-left">
-          <div className="mono text-xs text-[#77787b]">{order.salesorder_number ?? order.id}</div>
+          <div className="mono text-xs text-[#77787b]">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
           <h3 className="mt-1 break-words text-sm font-semibold text-black">{order.customer_name ?? "Unnamed customer"}</h3>
         </button>
         <div className="flex max-w-[45%] shrink-0 flex-col items-end gap-1">

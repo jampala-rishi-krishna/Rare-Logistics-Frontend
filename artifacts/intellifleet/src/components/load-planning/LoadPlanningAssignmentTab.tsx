@@ -3,7 +3,8 @@ import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import * as inventoryApi from "@/services/api/inventory";
-import { StockQty } from "./StockQty";
+import { BranchWarehouseStock, StockQty } from "./StockQty";
+import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { FilterField, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
@@ -77,6 +78,7 @@ const COLUMNS: [string, number][] = [
   ["Notes", 260],
   ["Mets Avail.", 90],
   ["Glacier Avail.", 100],
+  ["Branch Wh. Avail.", 130],
   ["Warehouse", 150],
 ];
 const STICKY_LEFT = ["left-0", "left-[44px]", "left-[164px]", "left-[294px]"];
@@ -88,25 +90,27 @@ export default function LoadPlanningAssignmentTab() {
   const [search, setSearch] = useState("");
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [citiesOpen, setCitiesOpen] = useState(false);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const orders = useQuery({
-    queryKey: ["load-planning-unassigned", from, to, search],
+    queryKey: ["load-planning-unassigned", from, to, search, selectedBranches.join(",")],
     // Load every page so the city filter and the total weight cover all filtered orders.
     queryFn: async () => {
-      const first = await inventoryApi.listSalesOrders(from, to, 1, "Acknowledged", search, "unassigned");
+      const first = await inventoryApi.listSalesOrders(from, to, 1, "Acknowledged", search, "unassigned", [], { branches: selectedBranches });
       let items = first.items;
       let last = first;
       for (let page = 2; last.has_more && page <= 20; page += 1) {
-        last = await inventoryApi.listSalesOrders(from, to, page, "Acknowledged", search, "unassigned");
+        last = await inventoryApi.listSalesOrders(from, to, page, "Acknowledged", search, "unassigned", [], { branches: selectedBranches });
         items = [...items, ...last.items];
       }
-      return { ...first, items, has_more: false, stock_pending: last.stock_pending };
+      return { ...first, items, has_more: false, stock_pending: last.stock_pending, branch_counts: first.branch_counts, branches: first.branches };
     },
     retry: false,
     // Stock and item weights are filled in by the backend after the list returns - poll
     // lightly until they're all in so the total weight settles by itself.
     refetchInterval: (query) => (query.state.data?.stock_pending ? 4000 : false),
   });
+  const branchOptions = useBranchOptions(orders.data?.branches);
   // Both city choices and table rows use the same acknowledged, unassigned list.
   const citySource = orders;
   const cityOptions = useMemo(() => {
@@ -121,13 +125,14 @@ export default function LoadPlanningAssignmentTab() {
       const expected = String(order.expected_shipment_date || "").slice(0, 10);
       const matchesDate = expected && expected >= from && expected <= to;
       const matchesSearch = !search || [order.salesorder_number, order.customer_name, order.reference_number].some((value) => (value ?? "").toLowerCase().includes(search.toLowerCase()));
-      if (matchesDate && matchesSearch) merged.set(String(order.id), { ...order, order_status: "acknowledged" });
+      const matchesBranch = !selectedBranches.length || selectedBranches.includes(String(order.branch_id ?? ""));
+      if (matchesDate && matchesSearch && matchesBranch) merged.set(String(order.id), { ...order, order_status: "acknowledged" });
     }
     for (const order of orders.data?.items ?? []) merged.set(String(order.id), order);
     const items = Array.from(merged.values());
     if (!selectedCities.length) return items;
     return items.filter((order) => selectedCities.includes(orderCity(order)));
-  }, [orders.data, selectedCities, from, to, search]);
+  }, [orders.data, selectedCities, from, to, search, selectedBranches]);
   const ids = useMemo(() => visibleOrders.map((x) => x.id), [visibleOrders]);
   // Total weight of exactly what the filters leave on screen.
   const weight = useMemo(() => {
@@ -209,6 +214,7 @@ export default function LoadPlanningAssignmentTab() {
             <FilterField label="To">
               <input type="date" min={from} value={to} onChange={(e) => setTo(e.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
             </FilterField>
+            <BranchFilter options={branchOptions} selected={selectedBranches} counts={orders.data?.branch_counts} onChange={setSelectedBranches} />
             <FilterField label="Destination cities">
               <div className="relative min-w-0 w-full sm:w-[190px]">
               <button
@@ -329,7 +335,7 @@ export default function LoadPlanningAssignmentTab() {
                     />
                     <div className="min-w-0 max-w-full flex-1 [overflow-wrap:anywhere] [word-break:break-word]">
                       <div className="mono text-xs text-[#77787b]">
-                        {order.salesorder_number ?? order.id}
+                        {order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} />
                       </div>
                       <h3 className="mt-1 break-words font-semibold">
                         {order.customer_name ?? "Unnamed customer"}
@@ -370,8 +376,8 @@ export default function LoadPlanningAssignmentTab() {
               );
             })}
           </div>
-          <HorizontalScrollTable contentWidth="2000px">
-            <table className="w-full min-w-[2000px] table-fixed text-left text-xs">
+          <HorizontalScrollTable contentWidth="2130px">
+            <table className="w-full min-w-[2130px] table-fixed text-left text-xs">
               <colgroup>
                 {COLUMNS.map(([name, width]) => (
                   <col key={name || "select"} style={{ width: `${width}px` }} />
@@ -398,7 +404,7 @@ export default function LoadPlanningAssignmentTab() {
                     <tr key={key} className={`border-b border-[#efeeeb] hover:bg-[#fafaf8] ${picked ? "bg-[#f4f4f0]" : ""}`}>
                       <td className="sticky left-0 z-[2] bg-white px-3 py-4 align-top"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={picked} onChange={() => toggle(order.id)} /></td>
                       <td className="sticky left-[44px] z-[1] bg-white px-3 py-4 align-top">{dateLabel(order.expected_shipment_date)}</td>
-                      <td className="sticky left-[164px] z-[1] bg-white px-3 py-4 align-top font-semibold">{order.salesorder_number ?? order.id}</td>
+                      <td className="sticky left-[164px] z-[1] bg-white px-3 py-4 align-top font-semibold">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></td>
                       <td className="sticky left-[294px] z-[1] bg-white px-3 py-4 align-top">{order.customer_name ?? "-"}</td>
                       <td className="whitespace-normal break-words px-3 py-4 align-top font-semibold">{product?.name || "Details unavailable"}</td>
                       <td className="px-3 py-4 align-top">{product?.sku ?? "-"}</td>
@@ -416,6 +422,7 @@ export default function LoadPlanningAssignmentTab() {
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "mets")} pending={orders.data?.stock_pending} /></td>
                       <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "glacier")} pending={orders.data?.stock_pending} /></td>
+                      <td className="whitespace-nowrap px-3 py-4 text-right align-top"><BranchWarehouseStock value={product?.other_qty_available_for_sale ?? order.other_qty_available_for_sale} name={product?.other_warehouse_name ?? order.other_warehouse_name} pending={orders.data?.stock_pending} /></td>
                       <td className="whitespace-normal px-3 py-4 align-top">{lineWarehouse(order, product)}</td>
                     </tr>
                   );

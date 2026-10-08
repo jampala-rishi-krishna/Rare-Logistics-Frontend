@@ -13,10 +13,11 @@ import {
   X,
 } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
-import { StockQty } from "./StockQty";
+import { BranchWarehouseStock, StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { SalesOrderCardGrid, ViewModeToggle } from "./SalesOrderCardGrid";
+import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
 import { FilterField, Toolbar, buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFromPage, sessionAcknowledgedIds, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
 import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
@@ -500,6 +501,7 @@ export default function LoadPlanningInventoryTab({
   const [syncing, setSyncing] = useState(false);
   const [bulkAcknowledging, setBulkAcknowledging] = useState(false);
   const [orderStatus, setOrderStatus] = useState("All");
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [ackErrors, setAckErrors] = useState<Record<string, string>>({});
@@ -534,6 +536,7 @@ export default function LoadPlanningInventoryTab({
     220,
     150,
     150,
+    150,
     120,
     130,
     90,
@@ -541,7 +544,7 @@ export default function LoadPlanningInventoryTab({
     ...(assignmentScope ? [180, 220, 80] : []),
   ];
   const orders = useQuery({
-    queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query],
+    queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query, selectedBranches.join(",")],
     queryFn: () =>
       inventoryApi.listSalesOrders(
         from,
@@ -550,6 +553,8 @@ export default function LoadPlanningInventoryTab({
         apiOrderStatus,
         query,
         assignmentScope,
+        [],
+        { branches: selectedBranches },
       ),
     retry: false,
     staleTime: 0,
@@ -558,6 +563,7 @@ export default function LoadPlanningInventoryTab({
     // poll lightly until they're all in.
     refetchInterval: (query) => (query.state.data?.stock_pending ? 4000 : false),
   });
+  const branchOptions = useBranchOptions(orders.data?.branches);
   const guardedAcknowledged = useMemo(() => sessionAcknowledgedIds(), [orders.data, ackGuardVersion]);
   const rows = useMemo<FlatRow[]>(
     () =>
@@ -624,6 +630,7 @@ export default function LoadPlanningInventoryTab({
                 page,
                 apiOrderStatus,
                 query,
+                selectedBranches.join(","),
               ],
             });
             setSyncMessage(`Synced ${result.synced_count} orders - just now`);
@@ -710,7 +717,7 @@ export default function LoadPlanningInventoryTab({
   useEffect(() => {
     setPage(1);
     setCardPage(1);
-  }, [from, to, orderStatus, query]);
+  }, [from, to, orderStatus, query, selectedBranches]);
   const download = async (format: "pdf" | "excel") => {
     setExportOpen(false);
     const result = await inventoryApi.downloadSalesOrders(
@@ -720,6 +727,7 @@ export default function LoadPlanningInventoryTab({
       apiOrderStatus,
       query,
       assignmentScope,
+      selectedBranches,
     );
     const url = URL.createObjectURL(result.blob);
     const link = document.createElement("a");
@@ -760,6 +768,7 @@ export default function LoadPlanningInventoryTab({
                 <option>Void</option>
               </select>
             </FilterField>
+            <BranchFilter options={branchOptions} selected={selectedBranches} counts={orders.data?.branch_counts} onChange={setSelectedBranches} />
           </>
         }
         actions={
@@ -858,8 +867,8 @@ export default function LoadPlanningInventoryTab({
         </>
       ) : (
         <>
-          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}</div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{(order.products ?? []).map((product) => product.name).filter(Boolean).join(", ") || "Details unavailable"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{(() => { const product = (order.products ?? []).find((entry) => (entry.line_item_id && entry.line_item_id === item.line_item_id) || (entry.item_id && entry.item_id === item.item_id) || entry.sku === item.sku); return product?.total_weight_kg == null ? "—" : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`; })()}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
-            <table className="w-full min-w-[2200px] table-fixed text-left text-xs">
+          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{(order.products ?? []).map((product) => product.name).filter(Boolean).join(", ") || "Details unavailable"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{(() => { const product = (order.products ?? []).find((entry) => (entry.line_item_id && entry.line_item_id === item.line_item_id) || (entry.item_id && entry.item_id === item.item_id) || entry.sku === item.sku); return product?.total_weight_kg == null ? "—" : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`; })()}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2350px">
+            <table className="w-full min-w-[2350px] table-fixed text-left text-xs">
               <colgroup>
                 {columnWidths.map((width, index) => (
                   <col
@@ -886,6 +895,7 @@ export default function LoadPlanningInventoryTab({
                     "Notes",
                     "Mets Avail.",
                     "Glacier Avail.",
+                    "Branch Wh. Avail.",
                     "Order Status",
                     "Warehouse",
                     "Shipped",
@@ -921,7 +931,7 @@ export default function LoadPlanningInventoryTab({
                           {dateLabel(order.expected_shipment_date)}
                         </td>
                         <td className="sticky left-[120px] z-[1] bg-white px-3 py-4 align-top font-semibold">
-                          <div>{order.salesorder_number ?? order.id}</div>
+                          <div>{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
                           {ackErrors[String(order.id)] && <div className="mt-1 text-[10px] font-normal text-[#a32720]">{ackErrors[String(order.id)]}</div>}
                           {order.zoho_lock?.is_locked && (
                             <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal text-[#1e7b44]" title={[order.zoho_lock.config_name, order.zoho_lock.locked_by, order.zoho_lock.lock_time].filter(Boolean).join(" - ")}>
@@ -972,6 +982,9 @@ export default function LoadPlanningInventoryTab({
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
                           <StockQty value={lineStock(order, lineProduct(order, item), "glacier")} pending={orders.data?.stock_pending} />
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-right align-top">
+                          <BranchWarehouseStock value={lineProduct(order, item)?.other_qty_available_for_sale ?? order.other_qty_available_for_sale} name={lineProduct(order, item)?.other_warehouse_name ?? order.other_warehouse_name} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="px-3 py-4 align-top capitalize">
                           {status(order.order_status)}
@@ -1075,6 +1088,7 @@ export default function LoadPlanningInventoryTab({
             status: apiOrderStatus,
             search: query,
             assignment: assignmentScope,
+            branches: selectedBranches.join(",") || undefined,
           }}
           onClose={() => setEmailOpen(false)}
         />
