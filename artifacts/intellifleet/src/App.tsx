@@ -77,6 +77,7 @@ import * as inventoryApi from "@/services/api/inventory";
 import * as reportsApi from "@/services/api/reports";
 import { RgfLogisticsReportView } from "@/components/reports/RgfLogisticsReport";
 import { CommsGateway } from "@/components/dispatch/CommsGateway";
+import { VoicePausedBanner } from "@/components/dispatch/VoiceCallsControl";
 import DispatchDashboardPage from "@/pages/DispatchDashboardRefreshing";
 import {
   Activity,
@@ -6212,6 +6213,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
   };
   return (
     <>
+      <VoicePausedBanner className="mb-5" />
       <section className="mb-5 border border-[#0b0b0b] bg-[#fafaf8] p-5">
         <div className="flex items-start justify-between">
           <div>

@@ -36,13 +36,10 @@ export interface SalesOrderSummary {
   notes?: string | null;
   mets_qty_available_for_sale?: number | null;
   glacier_qty_available_for_sale?: number | null;
-  /** Branch's own warehouse (e.g. SariSuki Store Inc. Warehouse) when it has no Mets/Glacier mapping. */
-  other_qty_available_for_sale?: number | null;
-  other_warehouse_name?: string | null;
   assigned_at?: string | null;
   assigned_by?: number | null;
   product_count?: number;
-  products?: { mets_qty_available_for_sale?: number | null; glacier_qty_available_for_sale?: number | null; other_qty_available_for_sale?: number | null; other_warehouse_name?: string | null; line_item_id?: string | null; item_id?: string | null; name: string | null; sku: string | null; quantity: number; unit: string | null; total_weight_kg?: number | null; packaging_type?: "pack" | "case" | null; pack_quantity?: number; case_quantity?: number; quantity_packed: number; quantity_shipped: number }[];
+  products?: { mets_qty_available_for_sale?: number | null; glacier_qty_available_for_sale?: number | null; line_item_id?: string | null; item_id?: string | null; name: string | null; sku: string | null; quantity: number; unit: string | null; total_weight_kg?: number | null; packaging_type?: "pack" | "case" | null; pack_quantity?: number; case_quantity?: number; quantity_packed: number; quantity_shipped: number }[];
   pack_count?: number;
   case_count?: number;
   unit_count?: number;
@@ -68,9 +65,9 @@ export interface SalesOrdersPage {
   has_more: boolean;
   /** True while Mets/Glacier stock and item weights are still being fetched in the background. */
   stock_pending?: boolean;
-  /** Orders per branch id under every other filter (ignores the Branch filter itself). */
+  /** Orders per handled branch id (RGF, MSSI) under every other filter (ignores the Branch filter itself). */
   branch_counts?: Record<string, number>;
-  /** Configured branches plus any unknown branch seen in the data. */
+  /** The handled branches only (RGF and MSSI). */
   branches?: Branch[];
   /** Total kg across every filtered order (all pages), from the weights known so far. */
   total_weight_kg?: number;

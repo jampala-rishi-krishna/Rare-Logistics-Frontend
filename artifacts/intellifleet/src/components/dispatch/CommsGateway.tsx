@@ -1,3 +1,4 @@
+import { VoiceCallsControl, VoicePausedBanner } from "./VoiceCallsControl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Mail, MessageCircle, Phone, Radio, RefreshCw, Send, Signal, Wifi } from "lucide-react";
@@ -573,7 +574,13 @@ export function CommsGateway({ onNotice }: { onNotice: (s: string) => void }) {
       {tab === "gmail" && <GmailPanel />}
       {tab === "whatsapp" && <WhatsAppPanel />}
       {tab === "sms" && <ChannelPanel channel="sms" />}
-      {tab === "voice" && <VoicePanel />}
+      {tab === "voice" && (
+        <>
+          <VoicePausedBanner />
+          <VoiceCallsControl />
+          <VoicePanel />
+        </>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import * as inventoryApi from "@/services/api/inventory";
-import { BranchWarehouseStock, StockQty } from "./StockQty";
+import { StockQty } from "./StockQty";
 import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
@@ -78,7 +78,6 @@ const COLUMNS: [string, number][] = [
   ["Notes", 260],
   ["Mets Avail.", 90],
   ["Glacier Avail.", 100],
-  ["Branch Wh. Avail.", 130],
   ["Warehouse", 150],
 ];
 const STICKY_LEFT = ["left-0", "left-[44px]", "left-[164px]", "left-[294px]"];
@@ -376,8 +375,8 @@ export default function LoadPlanningAssignmentTab() {
               );
             })}
           </div>
-          <HorizontalScrollTable contentWidth="2130px">
-            <table className="w-full min-w-[2130px] table-fixed text-left text-xs">
+          <HorizontalScrollTable contentWidth="2000px">
+            <table className="w-full min-w-[2000px] table-fixed text-left text-xs">
               <colgroup>
                 {COLUMNS.map(([name, width]) => (
                   <col key={name || "select"} style={{ width: `${width}px` }} />
@@ -422,7 +421,6 @@ export default function LoadPlanningAssignmentTab() {
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "mets")} pending={orders.data?.stock_pending} /></td>
                       <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "glacier")} pending={orders.data?.stock_pending} /></td>
-                      <td className="whitespace-nowrap px-3 py-4 text-right align-top"><BranchWarehouseStock value={product?.other_qty_available_for_sale ?? order.other_qty_available_for_sale} name={product?.other_warehouse_name ?? order.other_warehouse_name} pending={orders.data?.stock_pending} /></td>
                       <td className="whitespace-normal px-3 py-4 align-top">{lineWarehouse(order, product)}</td>
                     </tr>
                   );

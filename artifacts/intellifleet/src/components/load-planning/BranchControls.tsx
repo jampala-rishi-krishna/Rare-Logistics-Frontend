@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as inventoryApi from "@/services/api/inventory";
 import { FilterField, buttonClass } from "./ToolbarControls";
 
-/** Configured branches (always all of them) merged with any unknown branch the list response saw. */
+/** The handled branches (RGF, MSSI): the configured list, merged with what the list response carries. */
 export function useBranchOptions(seen?: inventoryApi.Branch[]) {
   const configured = useQuery({
     queryKey: ["load-planning-branches"],
@@ -21,7 +21,6 @@ export function useBranchOptions(seen?: inventoryApi.Branch[]) {
 const BADGE_TONES: Record<string, string> = {
   RGF: "bg-[#e9efe9] text-[#33673B]",
   MSSI: "bg-[#fbe9ea] text-[#86000B]",
-  SSI: "bg-[#fff1d6] text-[#8a5a00]",
 };
 
 /** Small branch tag next to an SO number. Renders nothing when the order has no branch info. */
