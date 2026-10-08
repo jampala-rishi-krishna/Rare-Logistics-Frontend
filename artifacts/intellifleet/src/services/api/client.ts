@@ -140,6 +140,7 @@ export const api = {
   postForm: <T>(path: string, form: FormData) => request<T>("POST", path, { body: form, isFormData: true }),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, { body }),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, { body }),
+  delete: <T>(path: string) => request<T>("DELETE", path),
   download: async (path: string, query?: Record<string, string | number | undefined>) => {
     const url = buildUrl(path, query);
     const res = await fetch(url, { headers: getStoredSessionId() ? { Authorization: `Bearer ${getStoredSessionId()}` } : {} });

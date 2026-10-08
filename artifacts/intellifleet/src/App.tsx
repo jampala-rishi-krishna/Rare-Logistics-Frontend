@@ -79,6 +79,7 @@ import { RgfLogisticsReportView } from "@/components/reports/RgfLogisticsReport"
 import { CommsGateway } from "@/components/dispatch/CommsGateway";
 import { AdminContactControls, VoicePausedBanner, WhatsappPausedBanner } from "@/components/dispatch/VoiceCallsControl";
 import DispatchDashboardPage from "@/pages/DispatchDashboardRefreshing";
+import FleetHealthPage from "@/components/fleet-health/FleetHealthPage";
 import {
   Activity,
   AlertTriangle,
@@ -103,6 +104,7 @@ import {
   Gauge,
   Globe2,
   Headphones,
+  HeartPulse,
   LayoutDashboard,
   ExternalLink,
   ListFilter,
@@ -533,6 +535,7 @@ const navGroups = [
     items: [
       ["/app/tower", "Control Tower", LayoutDashboard],
       ["/app/fleet", "Fleet", Truck],
+      ["/app/fleet-health", "Fleet Health", HeartPulse],
       ["/app/routes", "Routes", RouteIcon],
       ["/app/loads", "Load planning", Boxes],
     ],
@@ -7384,6 +7387,11 @@ function App() {
                 <Route path="/app/tower" component={Tower} />
                 <Route path="/app/fleet">
                   <DataTablePage kind="fleet" />
+                </Route>
+                <Route path="/app/fleet-health">
+                  <AppShell title="Fleet Health">
+                    <FleetHealthPage />
+                  </AppShell>
                 </Route>
                 <Route path="/app/routes">
                   <DataTablePage kind="routes" />

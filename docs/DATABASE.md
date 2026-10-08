@@ -1,6 +1,6 @@
 # IntelliFleet Neon database
 
-Updated 2026-09-24. Alembic head: `h9e0f1a2b3c4`.
+Updated 2026-10-08. Alembic head: `j1b2c3d4e5f6` (the earlier `i1a2b3c4d5e6` added `sales_orders.helper_ids` and seeded the six third-party trucks; this file had not recorded it).
 
 Neon stores durable business history and configuration only. Current/future Sales
 Orders, Fleet telemetry, staff directory data, alerts, routes, optimization runs,
@@ -20,6 +20,12 @@ the only date-filtered Neon reads.
 | `load_manifests` | Confirmed dispatch manifests | Manifest confirmation/update only |
 | `manifest_items` | Items belonging to confirmed manifests | Manifest confirmation/update only |
 | `warehouse_loading_checklists` | Confirmed-manifest loading checklist | Checklist operations only |
+| `vehicle_daily_stats` | One row per tracked vehicle per Manila day (km, engine seconds, idle split, speeding, harsh events, battery volts, fuel estimates, primary driver) | Nightly job 01:00 Asia/Manila (previous day) and the admin backfill; idempotent upsert on `(vehicle_id, stat_date)` |
+| `service_intervals` | Service intervals: fleet defaults (`vehicle_id` NULL) and per-truck overrides; seeded defaults are placeholders (`confirmed = false`) | Admin/dispatcher edits only |
+| `maintenance_records` | Services, repairs, inspections, downtime | Explicit user entry only |
+| `vehicle_flags` | Open/resolved issues per truck. Written only through `services/vehicle_flags.py report_issue()` | Issue reports, automatic battery/fuel/overload/checklist checks, manual entry; resolve action |
+| `pretrip_checklists` | Pre-trip checklist per truck per working day | Explicit user entry only |
+| `fuel_logs` | Fuel fill-ups (litres, amount, odometer, full tank) | Explicit user entry only |
 | `alembic_version` | Migration marker | Alembic only; never truncate manually |
 
 ## Sales Order history
@@ -34,6 +40,19 @@ not refreshed by browsing a current view.
 `sales_order_lines.sales_order_id` joins to `sales_orders.id`. The line table
 contains item id/name/SKU, quantity, shipped quantity, weight, unit, and warehouse
 location captured at the event.
+
+## Fleet Health (migration `j1b2c3d4e5f6`)
+
+Six tables, all tiny (about 10,000 rows a year in total). No raw Cartrack trips or events are stored: the nightly job
+reads the previous day's trips from `/rest/trips`, combines them with that day's in-memory status samples
+(`services/fleet_health/sampler.py`, one `/rest/vehicles/status` call per 10 minutes) and writes ONE row per tracked
+vehicle. Staff live in n8n, so `staff_id` / `primary_staff_id` are plain integers (no FK). Enumerations are `VARCHAR` plus
+`CHECK` constraints. `vehicle_flags.dedup_key` is unique only among OPEN flags (partial index
+`ux_vehicle_flags_open_dedup`), so a resolved flag can be raised again with the same text. Reads are cached; page loads
+make no Cartrack calls.
+
+Cartrack budget: one shared limit of 20 calls/min (`services/cartrack_limiter.py`), retries after 1/2/4/8 s on 429/5xx/timeouts.
+Third-party trucks (`vehicles.is_third_party`) and trucks without a tracker never get daily rows or scores.
 
 ## Vehicle configuration
 
