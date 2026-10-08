@@ -47,7 +47,7 @@ export function VoiceCallsControl() {
   const change = useMutation({
     mutationFn: (next: "active" | "paused") => voiceApi.setVoiceCalls(next),
     onSuccess: (data) => {
-      client.setQueryData(SETTINGS_KEY, data);
+      client.setQueryData(SETTINGS_KEY, (old: voiceApi.VoiceSettings | undefined) => ({ ...old, ...data }));
       setError("");
       setConfirming(false);
     },
@@ -87,5 +87,77 @@ export function VoiceCallsControl() {
         </div>
       )}
     </section>
+  );
+}
+
+/** Amber banner while WhatsApp messages are paused. */
+export function WhatsappPausedBanner({ className = "" }: { className?: string }) {
+  const settings = useVoiceSettings();
+  if (settings.data?.whatsapp?.whatsapp !== "paused") return null;
+  return (
+    <div role="status" data-testid="whatsapp-paused-banner" className={`flex items-center gap-2 border border-[#e6c36a] bg-[#fff6dd] px-4 py-2.5 text-sm font-medium text-[#6b4a00] ${className}`}>
+      <PauseCircle size={16} className="shrink-0" />
+      WhatsApp messages paused — drivers and staff will not receive WhatsApp. Email, SMS and voice are unaffected.
+    </div>
+  );
+}
+
+/** "WhatsApp messages: Paused / Active" - admin button; everyone else just sees the status. */
+export function WhatsappControl() {
+  const client = useQueryClient();
+  const settings = useVoiceSettings();
+  const session = useQuery({ queryKey: ["session-role"], queryFn: authApi.getSession, staleTime: 5 * 60 * 1000, retry: false });
+  const isAdmin = session.data?.user?.role?.toLowerCase() === "admin";
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
+  const current = settings.data?.whatsapp;
+  const active = current?.whatsapp === "active";
+  const change = useMutation({
+    mutationFn: (next: "active" | "paused") => voiceApi.setWhatsapp(next),
+    onSuccess: (data) => {
+      client.setQueryData(SETTINGS_KEY, (old: voiceApi.VoiceSettings | undefined) => (old ? { ...old, whatsapp: data } : old));
+      setError("");
+      setConfirming(false);
+    },
+    onError: (err: any) => setError(err?.message || "Could not change the setting."),
+  });
+  return (
+    <section data-testid="whatsapp-control" className="flex flex-wrap items-center justify-between gap-4 border border-[#e4e3df] bg-white p-4">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold">WhatsApp messages: <span data-testid="whatsapp-state" className={active ? "text-[#1e7b44]" : "text-[#8a5a00]"}>{current ? (active ? "Active" : "Paused") : "…"}</span></div>
+        {current?.changed_by && (
+          <div className="mt-1 text-xs text-[#77787b]">{active ? "Resumed" : "Paused"} by {current.changed_by} at {when(current.changed_at)}</div>
+        )}
+        {!isAdmin && <div className="mt-1 text-xs text-[#77787b]">Only an admin can change this.</div>}
+        {error && <div className="mt-1 text-xs text-[#a32720]">{error}</div>}
+      </div>
+      {isAdmin && (
+        <button type="button" onClick={() => (active ? change.mutate("paused") : setConfirming(true))} disabled={change.isPending || !current} className="inline-flex h-9 items-center gap-2 rounded-[4px] border border-[#0b0b0b] bg-[#0b0b0b] px-3 text-sm text-white disabled:opacity-60">
+          {active ? <PauseCircle size={15} /> : <PlayCircle size={15} />} {active ? "Pause WhatsApp" : "Resume WhatsApp"}
+        </button>
+      )}
+      {confirming && (
+        <div role="dialog" aria-modal="true" aria-label="Resume WhatsApp messages" className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+          <div className="w-full max-w-sm border border-[#0b0b0b] bg-white p-5">
+            <div className="text-base font-semibold">Resume WhatsApp messages?</div>
+            <p className="mt-2 text-sm text-[#55565a]">Drivers and staff will start receiving WhatsApp messages on new assignments. Continue?</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirming(false)} className="h-9 rounded-[4px] border border-[#d8d7d2] bg-white px-3 text-sm">Cancel</button>
+              <button type="button" onClick={() => change.mutate("active")} disabled={change.isPending} className="h-9 rounded-[4px] border border-[#0b0b0b] bg-[#0b0b0b] px-3 text-sm text-white disabled:opacity-60">Continue</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Admin panel card: both contact switches in one place. */
+export function AdminContactControls() {
+  return (
+    <div className="mb-5 grid gap-3 md:grid-cols-2" data-testid="admin-contact-controls">
+      <VoiceCallsControl />
+      <WhatsappControl />
+    </div>
   );
 }

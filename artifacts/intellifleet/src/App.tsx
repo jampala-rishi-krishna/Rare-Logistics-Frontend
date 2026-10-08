@@ -77,7 +77,7 @@ import * as inventoryApi from "@/services/api/inventory";
 import * as reportsApi from "@/services/api/reports";
 import { RgfLogisticsReportView } from "@/components/reports/RgfLogisticsReport";
 import { CommsGateway } from "@/components/dispatch/CommsGateway";
-import { VoicePausedBanner } from "@/components/dispatch/VoiceCallsControl";
+import { AdminContactControls, VoicePausedBanner, WhatsappPausedBanner } from "@/components/dispatch/VoiceCallsControl";
 import DispatchDashboardPage from "@/pages/DispatchDashboardRefreshing";
 import {
   Activity,
@@ -6066,6 +6066,15 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
   const [vehicle, setVehicle] = useState("");
   const [driverIds, setDriverIds] = useState<number[]>([]);
   const [newDriverOpen, setNewDriverOpen] = useState(false);
+  const [manualVehicleOpen, setManualVehicleOpen] = useState(false);
+  const [manualVehicle, setManualVehicle] = useState({
+    vehicle_id: "",
+    vehicle_type: "Manual truck",
+    capacity_kg: "",
+    capacity_note: "",
+    reefer: "",
+    third_party: true,
+  });
   const [newDriver, setNewDriver] = useState({
     name: "",
     email: "",
@@ -6085,6 +6094,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     driverIds: number[];
     subject: string;
     htmlBody: string;
+    manualVehicle?: inventoryApi.ManualVehicleInput;
   } | null>(null);
   const toggleDriver = (driverId: number) => {
     setDriverIds((current) =>
@@ -6108,7 +6118,42 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     );
   const data = options.data;
   const alreadyAssigned = data.order.assignment_status === "assigned";
-  const selected = data.vehicles.find((v) => v.vehicle_id === vehicle);
+  const manualVehicleId = manualVehicle.vehicle_id.trim().toUpperCase();
+  const manualVehicleCapacity = manualVehicle.capacity_kg.trim()
+    ? Number(manualVehicle.capacity_kg)
+    : null;
+  const manualVehicleOption =
+    manualVehicleOpen && manualVehicleId
+      ? {
+          vehicle_id: manualVehicleId,
+          vehicle_type: manualVehicle.vehicle_type.trim() || "Manual truck",
+          capacity_note: manualVehicle.capacity_note.trim() || "Manual entry",
+          capacity_kg:
+            Number.isFinite(manualVehicleCapacity) && manualVehicleCapacity !== null
+              ? manualVehicleCapacity
+              : null,
+          reefer:
+            manualVehicle.reefer === ""
+              ? null
+              : manualVehicle.reefer === "true",
+          gps_tracked: false,
+          third_party: manualVehicle.third_party,
+          assigned_weight_kg: 0,
+          remaining_capacity_kg:
+            Number.isFinite(manualVehicleCapacity) && manualVehicleCapacity !== null
+              ? manualVehicleCapacity
+              : null,
+        }
+      : null;
+  const vehicleOptions = manualVehicleOption
+    ? [
+        ...data.vehicles.filter(
+          (v) => v.vehicle_id.toUpperCase() !== manualVehicleOption.vehicle_id,
+        ),
+        manualVehicleOption,
+      ]
+    : data.vehicles;
+  const selected = vehicleOptions.find((v) => v.vehicle_id === vehicle);
   const newDriverWarehouseDefault = /glacier/i.test(selected?.capacity_note || "")
     ? "GLACIER"
     : /mets/i.test(selected?.capacity_note || "")
@@ -6141,6 +6186,21 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
       return;
     }
     if (!vehicle || blocked) return;
+    if (manualVehicleOpen) {
+      if (!manualVehicleId) {
+        setError("Manual truck: plate/name is required.");
+        return;
+      }
+      if (
+        manualVehicle.capacity_kg.trim() &&
+        (!Number.isFinite(manualVehicleCapacity) ||
+          manualVehicleCapacity === null ||
+          manualVehicleCapacity < 0)
+      ) {
+        setError("Manual truck: capacity must be a valid kg amount.");
+        return;
+      }
+    }
     if (newDriverOpen && !createdDriver) {
       const missing = [
         !newDriver.name.trim() && "Name",
@@ -6175,7 +6235,18 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         }
         assignedDriverIds = [...driverIds.filter((d) => d !== driver!.id), driver.id];
       }
-      const assigned: any = await inventoryApi.assignSalesOrders(ids, vehicle, assignedDriverIds);
+      const manualVehiclePayload =
+        manualVehicleOpen && manualVehicleOption
+          ? {
+              vehicle_id: manualVehicleOption.vehicle_id,
+              vehicle_type: manualVehicleOption.vehicle_type,
+              capacity_kg: manualVehicleOption.capacity_kg,
+              capacity_note: manualVehicleOption.capacity_note,
+              reefer: manualVehicleOption.reefer,
+              third_party: manualVehicleOption.third_party,
+            }
+          : undefined;
+      const assigned: any = await inventoryApi.assignSalesOrders(ids, vehicle, assignedDriverIds, manualVehiclePayload);
       const overCapacityNote = assigned?.over_capacity
         ? ` Warning: over capacity by ${Number(assigned.over_capacity_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg (${Number(assigned.over_capacity_percent).toLocaleString("en-US", { maximumFractionDigits: 1 })}%).`
         : "";
@@ -6189,7 +6260,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         ids,
         vehicle,
         assignedDriverIds,
-        { preview: true },
+        { preview: true, manualVehicle: manualVehiclePayload },
       );
       if (!preview.driverHtmlBody || !preview.driverSubject)
         throw new Error(
@@ -6201,6 +6272,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         driverIds: assignedDriverIds,
         subject: preview.driverSubject,
         htmlBody: preview.driverHtmlBody,
+        manualVehicle: manualVehiclePayload,
       });
       onNotice(
         `${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}.${overCapacityNote}`,
@@ -6214,6 +6286,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
   return (
     <>
       <VoicePausedBanner className="mb-5" />
+      <WhatsappPausedBanner className="mb-5" />
       <section className="mb-5 border border-[#0b0b0b] bg-[#fafaf8] p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -6268,8 +6341,91 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         <div className="mt-4 text-xs text-[#77787b]">
           {data.constraint_status}
         </div>
+        <div className="mt-3 border border-[#d8d7d2] bg-white p-3 text-sm">
+          <label className="flex cursor-pointer items-center gap-2 font-semibold">
+            <input
+              type="checkbox"
+              checked={manualVehicleOpen}
+              onChange={() => {
+                setManualVehicleOpen((open) => {
+                  const next = !open;
+                  if (!next && vehicle === manualVehicleId) setVehicle("");
+                  return next;
+                });
+              }}
+            />
+            <span>+ Add manual truck</span>
+          </label>
+          {manualVehicleOpen && (
+            <div className="mt-3 grid gap-2 md:grid-cols-4">
+              <label className="flex flex-col gap-1 md:col-span-2">
+                <span className="text-xs text-[#55565a]">Plate / name*</span>
+                <input
+                  value={manualVehicle.vehicle_id}
+                  onChange={(e) => {
+                    const next = e.target.value.toUpperCase();
+                    setManualVehicle((current) => ({ ...current, vehicle_id: next }));
+                    setVehicle(next.trim());
+                  }}
+                  placeholder="TEMP TRUCK 1"
+                  className="border border-[#d8d7d2] px-2 py-1"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-[#55565a]">Type</span>
+                <input
+                  value={manualVehicle.vehicle_type}
+                  onChange={(e) =>
+                    setManualVehicle((current) => ({ ...current, vehicle_type: e.target.value }))
+                  }
+                  placeholder="Truck"
+                  className="border border-[#d8d7d2] px-2 py-1"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-[#55565a]">Capacity kg</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={manualVehicle.capacity_kg}
+                  onChange={(e) =>
+                    setManualVehicle((current) => ({ ...current, capacity_kg: e.target.value }))
+                  }
+                  placeholder="1800"
+                  className="border border-[#d8d7d2] px-2 py-1"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-[#55565a]">Cold-chain</span>
+                <select
+                  value={manualVehicle.reefer}
+                  onChange={(e) =>
+                    setManualVehicle((current) => ({ ...current, reefer: e.target.value }))
+                  }
+                  className="border border-[#d8d7d2] px-2 py-1"
+                >
+                  <option value="">Unknown</option>
+                  <option value="true">Reefer capable</option>
+                  <option value="false">Not reefer</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 md:col-span-2">
+                <span className="text-xs text-[#55565a]">Note</span>
+                <input
+                  value={manualVehicle.capacity_note}
+                  onChange={(e) =>
+                    setManualVehicle((current) => ({ ...current, capacity_note: e.target.value }))
+                  }
+                  placeholder="3PL, rented truck, backup unit..."
+                  className="border border-[#d8d7d2] px-2 py-1"
+                />
+              </label>
+            </div>
+          )}
+        </div>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
-          {data.vehicles.map((v) => {
+          {vehicleOptions.map((v) => {
             const overage = overageFor(v);
             const over = Boolean(overage);
             const reeferMismatch =
@@ -6422,6 +6578,12 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
             !vehicle ||
             blocked ||
             busy ||
+            (manualVehicleOpen &&
+              (!manualVehicleId ||
+                (manualVehicle.capacity_kg.trim() &&
+                  (!Number.isFinite(manualVehicleCapacity) ||
+                    manualVehicleCapacity === null ||
+                    manualVehicleCapacity < 0)))) ||
             (newDriverOpen &&
               !createdDriver &&
               !(newDriver.name.trim() && newDriver.email.trim() && newDriver.phone.trim()))
@@ -7264,6 +7426,7 @@ function App() {
                   <Portal page="support" />
                 </Route>
                 <Route path="/admin/users">
+                  <AdminContactControls />
                   <DataTablePage kind="users" />
                 </Route>
                 <Route path="/admin/roles">

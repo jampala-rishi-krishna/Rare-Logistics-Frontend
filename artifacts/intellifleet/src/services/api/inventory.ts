@@ -110,6 +110,14 @@ export interface AssignmentOptions {
   }[];
   drivers: { id: number; name: string; title: string | null }[];
 }
+export interface ManualVehicleInput {
+  vehicle_id: string;
+  vehicle_type?: string;
+  capacity_kg?: number | null;
+  capacity_note?: string | null;
+  reefer?: boolean | null;
+  third_party?: boolean;
+}
 export function getAssignmentOptions(id: string, otherSelectedIds: string[] = []) {
   return api.get<AssignmentOptions>(`/api/load-planning/assignments/${id}`, otherSelectedIds.length ? { extra_ids: otherSelectedIds.join(",") } : undefined);
 }
@@ -231,6 +239,7 @@ export function assignSalesOrders(
   ids: string[],
   vehicleId: string,
   driverIds: number[],
+  manualVehicle?: ManualVehicleInput,
 ) {
   return api.post(
     `/api/load-planning/assignments/${encodeURIComponent(ids[0])}`,
@@ -239,6 +248,7 @@ export function assignSalesOrders(
       vehicle_id: vehicleId,
       driver_id: driverIds[0] ?? null,
       driver_ids: driverIds,
+      manual_vehicle: manualVehicle,
     },
   );
 }
@@ -269,7 +279,7 @@ export function sendAssignmentEmail(
   ids: string[],
   vehicleId: string,
   driverIds: number[],
-  options: { preview?: boolean; htmlBody?: string; subject?: string } = {},
+  options: { preview?: boolean; htmlBody?: string; subject?: string; manualVehicle?: ManualVehicleInput } = {},
 ) {
   return api.post<{
     success?: boolean;
@@ -291,6 +301,7 @@ export function sendAssignmentEmail(
     preview: options.preview ?? false,
     html_body: options.htmlBody,
     subject: options.subject,
+    manual_vehicle: options.manualVehicle,
   });
 }
 

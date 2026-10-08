@@ -125,6 +125,7 @@ export function AssignmentEmailPreviewModal({
     driverIds: number[];
     subject: string;
     htmlBody: string;
+    manualVehicle?: inventoryApi.ManualVehicleInput;
   };
   onClose: () => void;
   onSent: () => void;
@@ -141,7 +142,7 @@ export function AssignmentEmailPreviewModal({
         preview.salesOrderIds,
         preview.vehicleId,
         preview.driverIds,
-        { htmlBody, subject: preview.subject },
+        { htmlBody, subject: preview.subject, manualVehicle: preview.manualVehicle },
       );
       if (!result.success)
         throw new Error(
