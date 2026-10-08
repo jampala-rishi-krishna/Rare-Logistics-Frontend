@@ -57,3 +57,19 @@ export function listUsers(): Promise<ApiUser[]> {
 export function listRoles(): Promise<ApiRole[]> {
   return api.get<ApiRole[]>("/roles");
 }
+
+export interface ZohoUsageHealth {
+  zoho_calls_today: number;
+  zoho_usage: {
+    date: string;
+    budget: number;
+    by_feature: Record<string, number>;
+    by_hour: Record<string, number>;
+    percent_used: number;
+    guard: string;
+  };
+}
+
+export function getZohoUsage(): Promise<ZohoUsageHealth> {
+  return api.get<ZohoUsageHealth>("/health");
+}

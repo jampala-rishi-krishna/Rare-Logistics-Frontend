@@ -767,6 +767,36 @@ The local Windows environment previously produced a Vite access-denied/path-reso
 14. Verify backend restart preserves only the approved historical state.
 15. Verify no duplicate scheduler/poller instances.
 
+### Rollback safety for Fleet Health migration `j1b2c3d4e5f6`
+
+Do not roll Render back to a commit whose Alembic head is older than the database revision while the database is still at `j1b2c3d4e5f6`.
+
+Current startup calls `check_schema()` before cache reads. If an older Render commit expects `i1a2b3c4d5e6` but Neon is already at `j1b2c3d4e5f6`, startup stops with `schema_mismatch` because the database revision is newer than the code revision. Render's pre-deploy `alembic upgrade head` on the old code is expected to fail because the old migration tree does not know revision `j1b2c3d4e5f6`; it will not downgrade the database automatically.
+
+Rollback order:
+
+```powershell
+Set-Location backend
+python -m alembic current
+python -m alembic downgrade i1a2b3c4d5e6
+python -m alembic current
+```
+
+After `alembic current` confirms `i1a2b3c4d5e6`, roll Render back to the previous app commit. Then check `/health`.
+
+The `j1b2c3d4e5f6` downgrade only drops these six Fleet Health tables:
+
+```text
+fuel_logs
+pretrip_checklists
+vehicle_flags
+maintenance_records
+service_intervals
+vehicle_daily_stats
+```
+
+It does not drop or alter `vehicles`, `sales_orders`, `sales_order_lines`, users, or dispatch/load-planning tables.
+
 ### Delivery-specific acceptance test
 
 Do not call delivery lifecycle validation complete without a real Zoho package transition:

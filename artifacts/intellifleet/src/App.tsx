@@ -3376,6 +3376,12 @@ function DataTablePage({
   const [orderColumns, setOrderColumns] = useState({ customer: true, route: true, vehicle: true, status: true, eta: true });
   const orderOptions = { search: query, status: orderStatus, assignment: orderAssignment, vehicle: orderVehicle, customer: orderCustomer, deliveryStatus: orderDelivery };
   const { data: ordersData, total: ordersTotal, refetch: refetchOrders, isFetching: ordersFetching } = useOrdersData(orderFrom, orderTo, orderOptions);
+  const zohoUsage = useQuery({
+    queryKey: ["zoho-usage"],
+    queryFn: adminApi.getZohoUsage,
+    enabled: kind === "users",
+    refetchInterval: 60000,
+  });
   const refreshOrders = async () => {
     await inventoryApi.refreshSalesOrders(orderFrom, orderTo);
     await refetchOrders();
@@ -3471,6 +3477,32 @@ function DataTablePage({
           >
             <X size={15} />
           </button>
+        </div>
+      )}
+      {kind === "users" && zohoUsage.data?.zoho_usage && (
+        <div className="mb-4 border border-[#d8d7d2] bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="micro text-[#77787b]">Zoho usage</div>
+              <div className="mt-1 text-2xl font-bold">
+                {zohoUsage.data.zoho_calls_today.toLocaleString()} / {zohoUsage.data.zoho_usage.budget.toLocaleString()}
+              </div>
+              <div className="mt-1 text-xs text-[#77787b]">
+                {zohoUsage.data.zoho_usage.percent_used}% used · {zohoUsage.data.zoho_usage.guard}
+              </div>
+            </div>
+            <div className="grid min-w-[260px] flex-1 grid-cols-2 gap-2 text-xs md:grid-cols-4">
+              {Object.entries(zohoUsage.data.zoho_usage.by_feature)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)
+                .map(([feature, count]) => (
+                  <div key={feature} className="border border-[#e4e3df] px-3 py-2">
+                    <div className="font-semibold">{count.toLocaleString()}</div>
+                    <div className="text-[#77787b]">{feature.replaceAll("_", " ")}</div>
+                  </div>
+                ))}
+            </div>
+          </div>
         </div>
       )}
       {kind === "loads" ? (
