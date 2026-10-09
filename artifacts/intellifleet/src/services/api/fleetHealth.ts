@@ -340,6 +340,7 @@ export interface EcoTotals {
   unclassified_idle_min: number;
   max_speed_kmh: number;
   days: number;
+  days_missing_km?: number;
 }
 
 export interface EcoBreakdownItem {

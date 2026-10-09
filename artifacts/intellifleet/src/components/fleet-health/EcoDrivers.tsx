@@ -56,7 +56,7 @@ export function EcoExplainer({ minKm }: { minKm: number }) {
     <div className="flex items-start gap-2.5 border border-[#e4e3df] bg-white px-4 py-3 text-[13px] leading-5 text-[#55565a]" data-testid="fh-eco-explainer">
       <Info size={15} className="mt-0.5 shrink-0 text-[#77787b]" aria-hidden />
       <p>
-        Scores run Monday to Sunday and need <strong className="text-black">at least {minKm} km</strong> that week. Idling at stops (warehouses, customer sites) is not penalised. Days with no assignment are excluded from every driver's score.
+        Scores run Monday to Sunday and need <strong className="text-black">at least {minKm} km</strong> that week. Driver attribution is inferred from assignments; ambiguous multi-driver days and days with unknown distance are excluded. Idling at stops is an estimate and is not penalised.
       </p>
     </div>
   );
@@ -156,7 +156,7 @@ export function SummaryStrip({ data }: { data: EcoDriversResponse }) {
     { label: "Average score", value: data.summary.avg_score == null ? EM_DASH : String(data.summary.avg_score), sub: data.summary.avg_score == null ? "no scored drivers this week" : "of scored drivers", info: ["Mean of the scored drivers' eco scores for this week."] },
     { label: "Scored drivers", value: String(data.summary.scored), sub: `at least ${data.min_km} km this week` },
     { label: "Not enough data", value: String(data.summary.not_enough_data), sub: `under ${data.min_km} km, not ranked` },
-    { label: "Unassigned km", value: formatNumber(data.unassigned.km, 0), sub: `${data.unassigned.days} days with no assignment data, idle not classified`, info: [data.unassigned.note] },
+    { label: "Unassigned km", value: formatNumber(data.unassigned.km, 0), sub: `${data.unassigned.days} days with no assignment data, idle not classified`, info: [data.unassigned.note, "Days with unknown distance are not counted as zero km for driver eligibility."] },
   ];
   return (
     <div className="grid grid-cols-2 gap-px border border-[#e4e3df] bg-[#e4e3df] lg:grid-cols-4" data-testid="fh-eco-summary">
@@ -376,7 +376,7 @@ export function TruckView({ data, loading, error, onRetry, range, onRange }: { d
         <SectionHead
           eyebrow="Eco driving"
           title="Truck view"
-          info={["Per tracked truck for the date range. km/L uses full-to-full fills only.", "Idle at stops is not penalised; unclassified idle happened on days with no assignment data."]}
+          info={["Per tracked truck for the date range. km/L uses full-to-full fills only.", "Idle at stops is an estimate from trip endpoints; unclassified idle happened on days with no assignment data.", "CO2 and litres are based on fuel purchases logged in the range, not exact fuel consumed in the range."]}
           aside={<RangePresets value={range} onChange={onRange} />}
         />
         {data && <div className="text-xs text-[#77787b]">{data.from} to {data.to}</div>}

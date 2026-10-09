@@ -245,8 +245,8 @@ export function Co2Panel({ data, loading, error, onRetry, perms, onAdd }: { data
       <div className="border-b border-[#e4e3df] p-4 md:px-5">
         <SectionHead
           eyebrow="Emissions"
-          title="CO2 from diesel"
-          info={[data?.formula ?? co2Formula(), "Based on litres in the fuel log, by month (Manila time)."]}
+          title="CO2 from fuel purchases"
+          info={[data?.formula ?? co2Formula(), "Based on fuel-log litres purchased in each month (Manila time), not exact fuel consumed during that month."]}
           aside={months.length > 0 ? <SegmentedControl<"fleet" | "trucks"> label="CO2 view" size="sm" value={mode} onChange={setMode} options={[{ value: "fleet", label: "Fleet" }, { value: "trucks", label: "By truck" }]} /> : undefined}
         />
       </div>
@@ -261,12 +261,12 @@ export function Co2Panel({ data, loading, error, onRetry, perms, onAdd }: { data
           {last && (
             <div className="grid grid-cols-3 gap-px border border-[#e4e3df] bg-[#e4e3df]">
               <div className="bg-white p-3.5"><Stat label={formatMonth(last.month)} value={formatKg(last.co2_kg, 0)} sub="CO2" /></div>
-              <div className="bg-white p-3.5"><Stat label="Diesel" value={formatLitres(last.litres, 0)} sub="that month" /></div>
+              <div className="bg-white p-3.5"><Stat label="Diesel" value={formatLitres(last.litres, 0)} sub="purchased that month" /></div>
               <div className="bg-white p-3.5"><Stat label="Factor" value={`${data?.kg_per_litre ?? 2.68}`} sub="kg CO2 per litre" /></div>
             </div>
           )}
           <Co2Chart months={months} mode={mode} kgPerLitre={data?.kg_per_litre ?? 2.68} />
-          <p className="text-xs text-[#77787b]">{data?.formula ?? co2Formula()}</p>
+          <p className="text-xs text-[#77787b]">{data?.formula ?? co2Formula()}. This is an estimate from fuel purchases logged in the selected month.</p>
         </div>
       )}
     </Card>

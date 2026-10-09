@@ -68,9 +68,11 @@ creates a new flag. This is enforced by a partial unique index on `vehicle_flags
 
 ## What happens next
 
-An open flag adds to the truck's risk score (critical 15, warning 5, info 0; capped at 25) and shows on the Fleet Health tab
-with its source label (Manual, Checklist, Battery, Fuel, Overload, Voice, Email, WhatsApp, Driver app). A dispatcher resolves
-it with `POST /api/fleet-health/flags/{id}/resolve` and an optional note. Resolving never changes the original conversation.
+An open flag shows on the Fleet Health tab with its source label (Manual, Checklist, Battery, Fuel, Overload, Voice, Email,
+WhatsApp, Driver app). Most open flags add to the truck's risk score (critical 15, warning 5, info 0; capped at 25).
+Checklist-sourced flags are the exception: they are visible as issues, but their risk is counted through the failed-checklist
+factor so the same failed pre-trip check is not double-counted. A dispatcher resolves a flag with
+`POST /api/fleet-health/flags/{id}/resolve` and an optional note. Resolving never changes the original conversation.
 
 ## Sources wired today, and what is "later"
 
