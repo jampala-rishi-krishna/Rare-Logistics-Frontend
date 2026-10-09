@@ -3487,10 +3487,15 @@ function DataTablePage({
               <div className="mt-1 text-2xl font-bold">
                 {zohoUsage.data.zoho_calls_today.toLocaleString()} / {zohoUsage.data.zoho_usage.budget.toLocaleString()}
               </div>
-              <div className="mt-1 text-xs text-[#77787b]">
-                {zohoUsage.data.zoho_usage.percent_used}% used · {zohoUsage.data.zoho_usage.guard}
+                <div className="mt-1 text-xs text-[#77787b]">
+                  {zohoUsage.data.zoho_usage.percent_used}% used · {zohoUsage.data.zoho_usage.guard}
+                </div>
+                {zohoUsage.data.zoho_usage.scope && (
+                  <div className="mt-1 text-[10px] text-[#9a9994]">
+                    {zohoUsage.data.zoho_usage.scope === "persisted_local_day" ? "Persisted for Manila day" : zohoUsage.data.zoho_usage.scope}
+                  </div>
+                )}
               </div>
-            </div>
             <div className="grid min-w-[260px] flex-1 grid-cols-2 gap-2 text-xs md:grid-cols-4">
               {Object.entries(zohoUsage.data.zoho_usage.by_feature)
                 .sort((a, b) => b[1] - a[1])

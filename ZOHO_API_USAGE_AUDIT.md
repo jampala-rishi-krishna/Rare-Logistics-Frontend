@@ -630,3 +630,19 @@ The offline probes above passed. No browser regression, full report parity, expo
 - Production source, frontend behavior, configuration, schema, dependencies and authentication remain unchanged.
 
 Review the design before proceeding to the later implementation phases, as the pasted guidance requests. Prioritize the measured duplicate drawer/remove-acknowledge reads, report bucket reuse and Assignment duplicate queries; then implement central in-flight sharing with freshness/generation protection. Batch detail replacement and incremental synchronization are **not yet justified**. There is no optimized build to certify for production and no actual production reduction to report yet.
+## Admin usage counter persistence
+
+The `/health` response includes `zoho_usage`, which drives the Admin > Users "Zoho usage" widget.
+The counter is persisted per Manila day in a JSON state file so normal backend restarts do not make
+the admin number jump back to a lower value.
+
+Configuration:
+
+- `ZOHO_USAGE_STATE_FILE`: exact JSON file path.
+- `ZOHO_USAGE_STATE_DIR`: directory where `zoho_usage_state.json` will be written.
+- `RENDER_DISK_MOUNT_PATH`: used automatically when set.
+- Fallback: `backend/.runtime/zoho_usage_state.json`.
+
+For deploys where the container filesystem is replaced, set `ZOHO_USAGE_STATE_DIR` or
+`ZOHO_USAGE_STATE_FILE` to a persistent disk path. Without persistent storage, any in-process or
+local-file counter can only be correct for the lifetime of that deployed container.

@@ -67,6 +67,8 @@ export interface ZohoUsageHealth {
     by_hour: Record<string, number>;
     percent_used: number;
     guard: string;
+    scope?: string;
+    state_file?: string;
   };
 }
 
