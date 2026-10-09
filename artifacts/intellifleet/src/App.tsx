@@ -3380,7 +3380,7 @@ function DataTablePage({
     queryKey: ["zoho-usage"],
     queryFn: adminApi.getZohoUsage,
     enabled: kind === "users",
-    refetchInterval: 60000,
+    refetchInterval: 30000,
   });
   const refreshOrders = async () => {
     await inventoryApi.refreshSalesOrders(orderFrom, orderTo);
@@ -3485,25 +3485,42 @@ function DataTablePage({
             <div>
               <div className="micro text-[#77787b]">Zoho usage</div>
               <div className="mt-1 text-2xl font-bold">
-                {zohoUsage.data.zoho_calls_today.toLocaleString()} / {zohoUsage.data.zoho_usage.budget.toLocaleString()}
+                Platform: {zohoUsage.data.zoho_calls_today.toLocaleString()} / {zohoUsage.data.zoho_usage.budget.toLocaleString()} budget
               </div>
-                <div className="mt-1 text-xs text-[#77787b]">
-                  {zohoUsage.data.zoho_usage.percent_used}% used · {zohoUsage.data.zoho_usage.guard}
-                </div>
-                {zohoUsage.data.zoho_usage.scope && (
-                  <div className="mt-1 text-[10px] text-[#9a9994]">
-                    {zohoUsage.data.zoho_usage.scope === "persisted_local_day" ? "Persisted for Manila day" : zohoUsage.data.zoho_usage.scope}
-                  </div>
+              <div className="mt-1 text-xs text-[#77787b]">
+                {zohoUsage.data.zoho_usage.percent_used}% used · {zohoUsage.data.zoho_usage.guard.replaceAll("_", " ")}
+              </div>
+              <div className="mt-1 text-[11px] text-[#77787b]">
+                Org limit {zohoUsage.data.zoho_usage.org_limit.toLocaleString()}/day, shared with all Zoho apps and users
+              </div>
+              <div className="mt-1 text-[10px] text-[#9a9994]">
+                Day boundary: {zohoUsage.data.zoho_usage.timezone} · {zohoUsage.data.zoho_usage.date}
+                {zohoUsage.data.process_started_at && (
+                  <>
+                    {" "}· since restart at{" "}
+                    {new Date(zohoUsage.data.process_started_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {zohoUsage.data.usage_restored_from_db?.restored
+                      ? `, restored ${zohoUsage.data.usage_restored_from_db.total.toLocaleString()} from DB`
+                      : ", NOT restored from DB (non-essential calls paused)"}
+                  </>
                 )}
               </div>
+              <div className="mt-1 text-[10px] text-[#9a9994]">
+                Request {zohoUsage.data.zoho_usage.by_source.request.toLocaleString()} · Background{" "}
+                {zohoUsage.data.zoho_usage.by_source.background.toLocaleString()} · Token refresh (not counted){" "}
+                {zohoUsage.data.zoho_usage.token_refresh.toLocaleString()}
+              </div>
+              <div className="mt-1 max-w-[420px] text-[10px] text-[#9a9994]">
+                Counts calls made by the IntelliFleet backend only. Zoho&apos;s dashboard includes all apps/scripts using the same Zoho user.
+              </div>
+            </div>
             <div className="grid min-w-[260px] flex-1 grid-cols-2 gap-2 text-xs md:grid-cols-4">
               {Object.entries(zohoUsage.data.zoho_usage.by_feature)
                 .sort((a, b) => b[1] - a[1])
-                .slice(0, 8)
                 .map(([feature, count]) => (
                   <div key={feature} className="border border-[#e4e3df] px-3 py-2">
                     <div className="font-semibold">{count.toLocaleString()}</div>
-                    <div className="text-[#77787b]">{feature.replaceAll("_", " ")}</div>
+                    <div className="text-[#77787b]">{feature === "lock_status" ? "lock calls" : feature.replaceAll("_", " ")}</div>
                   </div>
                 ))}
             </div>

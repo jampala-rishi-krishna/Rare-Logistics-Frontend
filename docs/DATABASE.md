@@ -26,7 +26,19 @@ the only date-filtered Neon reads.
 | `vehicle_flags` | Open/resolved issues per truck. Written only through `services/vehicle_flags.py report_issue()` | Issue reports, automatic battery/fuel/overload/checklist checks, manual entry; resolve action |
 | `pretrip_checklists` | Pre-trip checklist per truck per working day | Explicit user entry only |
 | `fuel_logs` | Fuel fill-ups (litres, amount, odometer, full tank) | Explicit user entry only |
+| `zoho_api_usage` | Per-day Zoho API call counters, PK (usage_day, category, source), ~20 rows/day | Additive UPSERT every 60s from `services/zoho_usage.py`, only when there is an unflushed delta; also on shutdown/SIGTERM. Read once at startup to restore today's total. Admin > Users usage tile |
 | `alembic_version` | Migration marker | Alembic only; never truncate manually |
+
+## Zoho API usage (migration `k1c2d3e4f5a6`, approved 2026-10-09)
+
+`zoho_api_usage(usage_day date, category text, source text, count bigint, updated_at timestamptz)`, PK
+(usage_day, category, source). Every Zoho HTTP attempt (retries included) increments an in-memory delta in
+`services/zoho_usage.py`; a flusher thread writes `count = count + EXCLUDED.count` every 60s only if the delta is
+non-zero (idle = zero writes), and on shutdown/SIGTERM. A failed flush keeps the delta for the next cycle. At startup the
+day's rows are loaded into memory before the first Zoho call; if that load fails the budget guard allows essential calls
+only until it succeeds. `token_refresh` rows are stored but excluded from the total/budget. Day boundary: `ZOHO_USAGE_TZ`
+(default Asia/Manila). Env: `ZOHO_DAILY_BUDGET` (platform soft budget, default 4000, 80% blocks non-essential calls),
+`ZOHO_ORG_DAILY_LIMIT` (display only, default 10000), `ZOHO_FAILSAFE_SO_DETAIL_CAP` (default 50; applies only while the startup restore has failed - caps SO detail calls until it succeeds). The old `zoho_usage_state.json` file is no longer used.
 
 ## Sales Order history
 

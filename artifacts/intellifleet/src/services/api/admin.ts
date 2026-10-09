@@ -60,18 +60,24 @@ export function listRoles(): Promise<ApiRole[]> {
 
 export interface ZohoUsageHealth {
   zoho_calls_today: number;
+  instance_id?: string;
+  process_started_at?: string;
+  usage_restored_from_db?: { restored: boolean; total: number; error?: string | null };
   zoho_usage: {
     date: string;
+    timezone: string;
     budget: number;
+    org_limit: number;
     by_feature: Record<string, number>;
-    by_hour: Record<string, number>;
+    by_source: { request: number; background: number };
+    token_refresh: number;
+    unflushed: number;
     percent_used: number;
     guard: string;
     scope?: string;
-    state_file?: string;
   };
 }
 
 export function getZohoUsage(): Promise<ZohoUsageHealth> {
-  return api.get<ZohoUsageHealth>("/health");
+  return api.get<ZohoUsageHealth>("/api/admin/zoho-usage");
 }
