@@ -57,10 +57,11 @@ function lineStock(order: inventoryApi.SalesOrderSummary, product: ReturnType<ty
 }
 
 function lineProduct(order: inventoryApi.SalesOrderSummary, item: any) {
+  const itemId = item?.item_id ?? item?.itemid ?? item?.item?.item_id ?? item?.item?.id;
   return (order.products ?? []).find(
     (entry) =>
       (entry.line_item_id && entry.line_item_id === item.line_item_id) ||
-      (entry.item_id && entry.item_id === item.item_id) ||
+      (entry.item_id && entry.item_id === itemId) ||
       entry.sku === item.sku,
   );
 }
