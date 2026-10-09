@@ -52,18 +52,29 @@ function refetchOrderLists(client: QueryClient, ids: string[]) {
 // carry no per-item stock at all) fall back to the order-level figure stored with them.
 function lineStock(order: inventoryApi.SalesOrderSummary, product: ReturnType<typeof lineProduct>, site: "mets" | "glacier") {
   const key = site === "mets" ? "mets_qty_available_for_sale" : "glacier_qty_available_for_sale";
-  if (product && key in product) return product[key];
-  return order[key];
+  const productValue = product?.[key];
+  return productValue != null ? productValue : order[key];
 }
 
-function lineProduct(order: inventoryApi.SalesOrderSummary, item: any) {
+function lineProduct(order: inventoryApi.SalesOrderSummary, item: any, index?: number) {
   const itemId = item?.item_id ?? item?.itemid ?? item?.item?.item_id ?? item?.item?.id;
-  return (order.products ?? []).find(
-    (entry) =>
-      (entry.line_item_id && entry.line_item_id === item.line_item_id) ||
-      (entry.item_id && entry.item_id === itemId) ||
-      entry.sku === item.sku,
-  );
+  const lineItemId = item?.line_item_id == null ? null : String(item.line_item_id);
+  const itemIdText = itemId == null ? null : String(itemId);
+  const sku = item?.sku == null ? null : String(item.sku);
+  const products = order.products ?? [];
+  const matched = products.find((entry) => {
+    const entryLineItemId = entry.line_item_id == null ? null : String(entry.line_item_id);
+    const entryItemId = entry.item_id == null ? null : String(entry.item_id);
+    const entrySku = entry.sku == null ? null : String(entry.sku);
+    return (
+      (entryLineItemId && lineItemId && entryLineItemId === lineItemId) ||
+      (entryItemId && itemIdText && entryItemId === itemIdText) ||
+      (entrySku && sku && entrySku === sku)
+    );
+  });
+  // Zoho sometimes omits all line identifiers in the list payload. The backend
+  // preserves line order when building products, so use that stable relationship.
+  return matched ?? (index != null ? products[index] : undefined);
 }
 
 function tomorrowPht() {
@@ -300,6 +311,7 @@ function fulfillment(order: inventoryApi.SalesOrderSummary) {
 type FlatRow = {
   order: inventoryApi.SalesOrderSummary;
   item: any;
+  lineIndex: number;
   address: string;
   city: string;
 };
@@ -597,9 +609,10 @@ export default function LoadPlanningInventoryTab({
             Array.isArray(raw.line_items) && raw.line_items.length
               ? raw.line_items
               : [{}];
-          return items.map((item: any) => ({
+          return items.map((item: any, index: number) => ({
             order,
             item,
+            lineIndex: index,
             address: address(
               raw.shipping_address ?? (order as any).shipping_address,
             ),
@@ -916,7 +929,7 @@ export default function LoadPlanningInventoryTab({
               <tbody>
                 {rows.map(
                   (
-                    { order, item, address: shipping, city: locationCity },
+                    { order, item, lineIndex, address: shipping, city: locationCity },
                     index,
                   ) => {
                     const flags = fulfillment(order);
@@ -978,10 +991,10 @@ export default function LoadPlanningInventoryTab({
                           {order.notes?.trim() || "—"}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
-                          <StockQty value={lineStock(order, lineProduct(order, item), "mets")} pending={orders.data?.stock_pending} />
+                          <StockQty value={lineStock(order, lineProduct(order, item, lineIndex), "mets")} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
-                          <StockQty value={lineStock(order, lineProduct(order, item), "glacier")} pending={orders.data?.stock_pending} />
+                          <StockQty value={lineStock(order, lineProduct(order, item, lineIndex), "glacier")} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="px-3 py-4 align-top capitalize">
                           {status(order.order_status)}
