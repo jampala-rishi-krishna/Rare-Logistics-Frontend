@@ -56,6 +56,14 @@ function lineStock(order: inventoryApi.SalesOrderSummary, product: ReturnType<ty
   return productValue != null ? productValue : order[key];
 }
 
+function lineWeightLabel(product: ReturnType<typeof lineProduct>, pending?: boolean) {
+  return product?.total_weight_kg == null
+    ? pending
+      ? "..."
+      : "-"
+    : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`;
+}
+
 function lineProduct(order: inventoryApi.SalesOrderSummary, item: any, index?: number) {
   const itemId = item?.item_id ?? item?.itemid ?? item?.item?.item_id ?? item?.item?.id;
   const lineItemId = item?.line_item_id == null ? null : String(item.line_item_id);
@@ -609,16 +617,27 @@ export default function LoadPlanningInventoryTab({
             Array.isArray(raw.line_items) && raw.line_items.length
               ? raw.line_items
               : [{}];
-          return items.map((item: any, index: number) => ({
-            order,
-            item,
-            lineIndex: index,
-            address: address(
-              raw.shipping_address ?? (order as any).shipping_address,
-            ),
-            // The backend also infers the city from the street text when Zoho's city field is blank.
-            city: (order as any).shipping_city || city(raw.shipping_address ?? (order as any).shipping_address),
-          }));
+          return items.map((item: any, index: number) => {
+            const product = lineProduct(order, item, index);
+            return {
+              order,
+              item: Object.keys(item ?? {}).length
+                ? item
+                : {
+                    line_item_id: product?.line_item_id,
+                    item_id: product?.item_id,
+                    sku: product?.sku,
+                    quantity: product?.quantity,
+                    unit: product?.unit,
+                  },
+              lineIndex: index,
+              address: address(
+                raw.shipping_address ?? (order as any).shipping_address,
+              ),
+              // The backend also infers the city from the street text when Zoho's city field is blank.
+              city: (order as any).shipping_city || city(raw.shipping_address ?? (order as any).shipping_address),
+            };
+          });
         }),
     [orders.data, orderStatus, query, assignmentScope, guardedAcknowledged],
   );
@@ -972,10 +991,7 @@ export default function LoadPlanningInventoryTab({
                           {item.unit ?? "-"}
                         </td>
                         <td className="px-3 py-4 align-top whitespace-nowrap font-semibold">
-                          {(() => {
-                            const product = (order.products ?? []).find((entry) => (entry.line_item_id && entry.line_item_id === item.line_item_id) || (entry.item_id && entry.item_id === item.item_id) || entry.sku === item.sku);
-                            return product?.total_weight_kg == null ? "—" : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`;
-                          })()}
+                          {lineWeightLabel(lineProduct(order, item, lineIndex), orders.data?.stock_pending)}
                         </td>
                         <td className="px-3 py-4 align-top">{locationCity}</td>
                         <td

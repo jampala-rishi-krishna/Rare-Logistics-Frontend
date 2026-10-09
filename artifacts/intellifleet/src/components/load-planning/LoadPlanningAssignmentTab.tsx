@@ -53,7 +53,7 @@ function kg(value: number) {
 // at all falls back to the order-level figure stored with the order.
 function lineStock(order: Order, product: Product | null, site: "mets" | "glacier") {
   const key = site === "mets" ? "mets_qty_available_for_sale" : "glacier_qty_available_for_sale";
-  if (product && key in product) return product[key];
+  if (product?.[key] != null) return product[key];
   return order[key];
 }
 function lineWarehouse(order: Order, product: Product | null) {
