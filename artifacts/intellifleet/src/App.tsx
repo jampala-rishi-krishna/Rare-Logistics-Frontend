@@ -78,6 +78,8 @@ import * as reportsApi from "@/services/api/reports";
 import { RgfLogisticsReportView } from "@/components/reports/RgfLogisticsReport";
 import { CommsGateway } from "@/components/dispatch/CommsGateway";
 import { AdminContactControls, VoicePausedBanner, WhatsappPausedBanner } from "@/components/dispatch/VoiceCallsControl";
+import { GmailDisconnectedBanner } from "@/components/dispatch/GmailDisconnectedBanner";
+import { AssignmentEmailStatusPanel, EmailStatusChip } from "@/components/load-planning/AssignmentEmailStatus";
 import DispatchDashboardPage from "@/pages/DispatchDashboardRefreshing";
 import FleetHealthPage from "@/components/fleet-health/FleetHealthPage";
 import {
@@ -182,6 +184,12 @@ interface Order {
   serviceTimeMin?: number | null;
   salesOrderStatus?: string | null;
   products?: inventoryApi.SalesOrderSummary["products"];
+  sourceId?: string;
+  driverIds?: number[];
+  assignedAt?: string | null;
+  batchId?: string | null;
+  emailStatus?: inventoryApi.SalesOrderSummary["email_status"];
+  emailError?: string | null;
 }
 
 const orders: Order[] = [];
@@ -252,6 +260,12 @@ function useOrdersData(dateFrom: string, dateTo: string, options: { search?: str
         salesOrderStatus: item.order_status,
         products: item.products,
         serviceTimeMin: null,
+        sourceId: item.id,
+        driverIds: item.driver_ids,
+        assignedAt: item.assigned_at ?? null,
+        batchId: item.assignment_batch_id ?? null,
+        emailStatus: item.email_status ?? null,
+        emailError: item.email_error ?? null,
       } satisfies Order)) };
     },
     staleTime: 5000,
@@ -2449,7 +2463,10 @@ function AppShell({
             </div>
           </div>
         )}
-        <main className="min-w-0 flex-1 p-4 md:p-7">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-7">
+          <GmailDisconnectedBanner className="mb-4" />
+          {children}
+        </main>
         <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 z-20 h-[64px] items-center justify-around border-t border-[#e4e3df] bg-white">
           <Link
             data-testid="mobile-bottom-tower"
@@ -3645,6 +3662,25 @@ function OrderTable({
   onSelect: (o: Order) => void;
   columns: { customer: boolean; route: boolean; vehicle: boolean; status: boolean; eta: boolean };
 }) {
+  const queryClient = useQueryClient();
+  const [retrying, setRetrying] = useState<string | null>(null);
+  // Retry a failed assignment email. The assignment is identified by its batch id (the server resolves ALL of its
+  // orders), so two separate assignments to the same truck are never merged. An older row without a batch id
+  // retries just itself.
+  const retryEmail = async (order: Order) => {
+    const ids = [order.sourceId as string];
+    if (!order.sourceId || !order.driverIds?.length) return;
+    setRetrying(order.sourceId);
+    try {
+      await inventoryApi.sendAssignmentEmail(ids, order.vehicle, order.driverIds, { emailOnly: true, assignmentBatchId: order.batchId });
+      await inventoryApi.waitForEmailStatus(ids);
+    } catch {
+      /* the refreshed list below shows the real status and reason */
+    } finally {
+      setRetrying(null);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    }
+  };
   return (
     <TableFrame
       head={
@@ -3674,7 +3710,14 @@ function OrderTable({
           </td>
           {columns.customer && <td>{o.customer}</td>}
           {columns.route && <td className="text-[#55565a]">{o.route}</td>}
-          {columns.vehicle && <td className="mono text-xs">{o.vehicle}</td>}
+          {columns.vehicle && (
+            <td className="mono text-xs">
+              {o.vehicle}
+              <div>
+                <EmailStatusChip status={o.emailStatus} error={o.emailError} retrying={retrying === o.sourceId} onRetry={() => retryEmail(o)} />
+              </div>
+            </td>
+          )}
           {columns.status && <td><StatusChip status={o.status} /></td>}
           {columns.eta && <td className="text-xs">{o.eta}</td>}
           <td>
@@ -6152,6 +6195,15 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     subject: string;
     htmlBody: string;
     manualVehicle?: inventoryApi.ManualVehicleInput;
+    assignmentBatchId?: string | null;
+  } | null>(null);
+  // The email is sent automatically when the assignment is saved; this only feeds its status panel.
+  const [lastAssignment, setLastAssignment] = useState<{
+    salesOrderIds: string[];
+    vehicleId: string;
+    driverIds: number[];
+    manualVehicle?: inventoryApi.ManualVehicleInput;
+    assignmentBatchId?: string | null;
   } | null>(null);
   const toggleDriver = (driverId: number) => {
     setDriverIds((current) =>
@@ -6313,31 +6365,38 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         onNotice(`${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Third-party truck has no staff notification recipient.${overCapacityNote}`);
         return;
       }
-      const preview = await inventoryApi.sendAssignmentEmail(
-        ids,
-        vehicle,
-        assignedDriverIds,
-        { preview: true, manualVehicle: manualVehiclePayload },
-      );
-      if (!preview.driverHtmlBody || !preview.driverSubject)
-        throw new Error(
-          preview.error || "Assignment email preview could not be generated.",
-        );
-      setAssignmentPreview({
-        salesOrderIds: ids,
-        vehicleId: vehicle,
-        driverIds: assignedDriverIds,
-        subject: preview.driverSubject,
-        htmlBody: preview.driverHtmlBody,
-        manualVehicle: manualVehiclePayload,
-      });
+      setLastAssignment({ salesOrderIds: ids, vehicleId: vehicle, driverIds: assignedDriverIds, manualVehicle: manualVehiclePayload, assignmentBatchId: assigned?.assignment_batch_id ?? null });
       onNotice(
-        `${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}.${overCapacityNote}`,
+        `${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. The assignment email is being sent automatically.${overCapacityNote}`,
       );
     } catch (e: any) {
       setError(e?.message || "Assignment failed.");
     } finally {
       setBusy(false);
+    }
+  };
+  // Optional "Resend / edit email": loads the draft on demand. Sending from it is an explicit resend, never a gate.
+  const openEmailEditor = async () => {
+    if (!lastAssignment) return;
+    setError("");
+    try {
+      const preview = await inventoryApi.sendAssignmentEmail(lastAssignment.salesOrderIds, lastAssignment.vehicleId, lastAssignment.driverIds, {
+        preview: true,
+        manualVehicle: lastAssignment.manualVehicle,
+      });
+      if (!preview.driverHtmlBody || !preview.driverSubject)
+        throw new Error(preview.error || "Assignment email preview could not be generated.");
+      setAssignmentPreview({
+        salesOrderIds: lastAssignment.salesOrderIds,
+        vehicleId: lastAssignment.vehicleId,
+        driverIds: lastAssignment.driverIds,
+        subject: preview.driverSubject,
+        htmlBody: preview.driverHtmlBody,
+        manualVehicle: lastAssignment.manualVehicle,
+        assignmentBatchId: lastAssignment.assignmentBatchId,
+      });
+    } catch (e: any) {
+      setError(e?.message || "Could not open the email draft.");
     }
   };
   return (
@@ -6650,11 +6709,24 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
           {busy ? "Assigning…" : "Confirm assignment"}
         </button>
       </section>
+      {lastAssignment && (
+        <AssignmentEmailStatusPanel
+          salesOrderIds={lastAssignment.salesOrderIds}
+          vehicleId={lastAssignment.vehicleId}
+          driverIds={lastAssignment.driverIds}
+          manualVehicle={lastAssignment.manualVehicle}
+          assignmentBatchId={lastAssignment.assignmentBatchId}
+          onEdit={openEmailEditor}
+        />
+      )}
       {assignmentPreview && (
         <AssignmentEmailPreviewModal
           preview={assignmentPreview}
           onClose={() => setAssignmentPreview(null)}
-          onSent={() => onNotice("Assignment email sent successfully.")}
+          onSent={() => {
+            onNotice("Assignment email resent and confirmed by Gmail.");
+            queryClient.invalidateQueries({ queryKey: ["assignment-email-status"] });
+          }}
         />
       )}
     </>

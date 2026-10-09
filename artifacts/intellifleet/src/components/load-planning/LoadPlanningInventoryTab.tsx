@@ -146,6 +146,7 @@ export function AssignmentEmailPreviewModal({
     subject: string;
     htmlBody: string;
     manualVehicle?: inventoryApi.ManualVehicleInput;
+    assignmentBatchId?: string | null;
   };
   onClose: () => void;
   onSent: () => void;
@@ -162,12 +163,18 @@ export function AssignmentEmailPreviewModal({
         preview.salesOrderIds,
         preview.vehicleId,
         preview.driverIds,
-        { htmlBody, subject: preview.subject, manualVehicle: preview.manualVehicle },
+        { htmlBody, subject: preview.subject, manualVehicle: preview.manualVehicle, resend: true, assignmentBatchId: preview.assignmentBatchId },
       );
       if (!result.success)
         throw new Error(
           result.error || "The assignment email could not be sent.",
         );
+      // "success" only means queued: report what Gmail actually did.
+      const final = await inventoryApi.waitForEmailStatus(preview.salesOrderIds);
+      if (final.status === "failed")
+        throw new Error(`Email failed: ${final.error || "Gmail rejected the message."}`);
+      if (final.status !== "sent")
+        throw new Error(final.status === "skipped" ? `Email skipped: ${final.error || "no recipient"}` : "Gmail has not confirmed the email yet - check the assignment status.");
       setSent(true);
       onSent();
     } catch (e: any) {
@@ -496,7 +503,7 @@ function SendToEmailModal({
               ) : (
                 <Send size={15} />
               )}{" "}
-              {sending ? "Sending..." : "Send"}
+              {sending ? "Sending..." : "Resend"}
             </button>
           </div>
         </div>

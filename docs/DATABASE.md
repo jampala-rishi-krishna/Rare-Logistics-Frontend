@@ -29,6 +29,39 @@ the only date-filtered Neon reads.
 | `zoho_api_usage` | Per-day Zoho API call counters, PK (usage_day, category, source), ~20 rows/day | Additive UPSERT every 60s from `services/zoho_usage.py`, only when there is an unflushed delta; also on shutdown/SIGTERM. Read once at startup to restore today's total. Admin > Users usage tile |
 | `alembic_version` | Migration marker | Alembic only; never truncate manually |
 
+## Assignment email status (migrations `l2d3e4f5a6b7`, `m3e4f5a6b7c8`, approved 2026-10-09)
+
+`sales_orders` gained `email_status` (queued/sent/failed/skipped), `email_error`, `email_sent_at`, `email_message_id`.
+One email covers several SOs, so every row of an assignment batch is updated together. Written only on a state change:
+`queued` when the assignment email is handed to the sender, then once `sent`/`failed`/`skipped` when Gmail has answered
+(`services/assignment_email_status.py`). Nothing polls or rewrites them. The same values are kept in the live assignment
+state, loaded back from `sales_orders` at startup, and returned on the SO list rows. `GET /api/gmail/send-log` also reads
+them (`assignments`), so the log survives restarts. `assignment_batch_id` (migration `m3e4f5a6b7c8`) identifies one assignment click. It is written in the same UPDATE as the first (`queued`) status, so it costs no extra write. Retry/Resend resolve the SOs to email from it (server side, memory), so two separate assignments to the same truck are never merged; rows from before it existed have no batch id and retry only themselves.
+A driver without an email on file is recorded as
+`skipped: no email on file` inside `email_error` (the team email still goes out, status `sent`).
+
+## Credential rotation (Gmail)
+
+The backend reads the Gmail OAuth credentials from environment variables only (Render -> `intellifleet-api` -> Environment);
+nothing is stored in code, tests, the database or docs:
+
+| Variable | Meaning |
+|---|---|
+| `GMAIL_COMMS_CLIENT_ID` / `GMAIL_COMMS_CLIENT_SECRET` | The Google Cloud OAuth client used to mint and refresh tokens |
+| `GMAIL_COMMS_REFRESH_TOKEN` | Long-lived grant for the sending mailbox (`martin.logistics@...`) |
+| `GMAIL_FROM_ADDRESS` / `GMAIL_FROM_NAME` / `GMAIL_REPLY_TO` | Sender identity; the address must be the mailbox itself or a verified Send-As alias |
+
+To rotate:
+1. In Google Cloud Console -> APIs & Services -> Credentials, rotate (or add a new) client secret for the OAuth client, and update `GMAIL_COMMS_CLIENT_SECRET` (and `_CLIENT_ID` if the client changed) in Render.
+2. In the mailbox's Google Account -> Security -> Third-party apps & services, revoke the old grant for this app.
+3. In the OAuth Playground (gear -> "Use your own OAuth credentials", Access type Offline) authorise with scopes `https://www.googleapis.com/auth/gmail.modify` and `https://www.googleapis.com/auth/gmail.settings.basic` as the sending mailbox, then exchange the code and copy the refresh token.
+4. Set `GMAIL_COMMS_REFRESH_TOKEN` in Render (saving redeploys).
+5. Check `GET /api/gmail/auth-status` returns `connected: true` (the dashboard's "Gmail disconnected" banner disappears) and `GET /api/gmail/identity` shows the sender alias as verified.
+
+The OAuth consent screen must be **Internal** or **In production**; in "Testing" refresh tokens expire after 7 days and Gmail will
+disconnect again. A revoked or expired token is shown as the red "Gmail disconnected - re-authorise" banner and as a failed
+assignment email status; it is never silent.
+
 ## Zoho API usage (migration `k1c2d3e4f5a6`, approved 2026-10-09)
 
 `zoho_api_usage(usage_day date, category text, source text, count bigint, updated_at timestamptz)`, PK

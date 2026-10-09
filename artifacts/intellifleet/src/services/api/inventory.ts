@@ -38,6 +38,11 @@ export interface SalesOrderSummary {
   glacier_qty_available_for_sale?: number | null;
   assigned_at?: string | null;
   assigned_by?: number | null;
+  driver_ids?: number[];
+  assignment_batch_id?: string | null;
+  email_status?: "queued" | "sent" | "failed" | "skipped" | null;
+  email_error?: string | null;
+  email_sent_at?: string | null;
   product_count?: number;
   products?: { mets_qty_available_for_sale?: number | null; glacier_qty_available_for_sale?: number | null; line_item_id?: string | null; item_id?: string | null; name: string | null; sku: string | null; quantity: number; unit: string | null; total_weight_kg?: number | null; packaging_type?: "pack" | "case" | null; pack_quantity?: number; case_quantity?: number; quantity_packed: number; quantity_shipped: number }[];
   pack_count?: number;
@@ -279,7 +284,7 @@ export function sendAssignmentEmail(
   ids: string[],
   vehicleId: string,
   driverIds: number[],
-  options: { preview?: boolean; htmlBody?: string; subject?: string; manualVehicle?: ManualVehicleInput } = {},
+  options: { preview?: boolean; htmlBody?: string; subject?: string; manualVehicle?: ManualVehicleInput; resend?: boolean; emailOnly?: boolean; assignmentBatchId?: string | null } = {},
 ) {
   return api.post<{
     success?: boolean;
@@ -299,10 +304,39 @@ export function sendAssignmentEmail(
     driver_id: driverIds[0] ?? null,
     driver_ids: driverIds,
     preview: options.preview ?? false,
+    resend: options.resend ?? false,
+    email_only: options.emailOnly ?? false,
+    assignment_batch_id: options.assignmentBatchId ?? undefined,
     html_body: options.htmlBody,
     subject: options.subject,
     manual_vehicle: options.manualVehicle,
   });
+}
+
+export interface AssignmentEmailStatus {
+  status: "queued" | "sent" | "failed" | "skipped" | null;
+  error: string | null;
+  sentAt: string | null;
+  messageId: string | null;
+}
+
+export function getAssignmentEmailStatus(ids: string[]) {
+  return api.get<AssignmentEmailStatus>("/api/load-planning/assignments/email-status", { ids: ids.join(",") });
+}
+
+/** Wait (bounded) until Gmail has answered for this assignment: resolves with the real final status. */
+export async function waitForEmailStatus(ids: string[], timeoutMs = 30000, intervalMs = 1500): Promise<AssignmentEmailStatus> {
+  const deadline = Date.now() + timeoutMs;
+  let last = await getAssignmentEmailStatus(ids);
+  while ((!last.status || last.status === "queued") && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    last = await getAssignmentEmailStatus(ids);
+  }
+  return last;
+}
+
+export function getGmailAuthStatus() {
+  return api.get<{ connected: boolean; reason?: string | null; error?: string | null }>("/api/gmail/auth-status");
 }
 
 export function refreshSalesOrders(
