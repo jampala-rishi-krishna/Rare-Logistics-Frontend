@@ -6,6 +6,7 @@ import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
 import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
 import { formatAddress } from "@/lib/address";
+import { lineStock } from "@/lib/loadPlanningLines";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { FilterField, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { sessionAcknowledgedOrders } from "@/lib/acknowledgeCache";
@@ -49,14 +50,7 @@ function dateLabel(value: unknown) {
 function kg(value: number) {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`;
 }
-// The line item's own Zoho "Available for Sale", shown as-is. A line with no product record
-// at all falls back to the order-level figure stored with the order.
-function lineStock(order: Order, product: Product | null, site: "mets" | "glacier") {
-  const key = site === "mets" ? "mets_qty_available_for_sale" : "glacier_qty_available_for_sale";
-  if (product?.[key] != null) return product[key];
-  return order[key];
-}
-function lineWarehouse(order: Order, product: Product | null) {
+function lineWarehouse(order: Order, product: Product | null | undefined) {
   const lines: any[] = (order as any).raw_json?.line_items ?? [];
   const match = product ? lines.find((line) => (product.line_item_id && line.line_item_id === product.line_item_id) || (product.item_id && line.item_id === product.item_id)) : null;
   const names = match ? [match.location_name ?? match.warehouse_name] : lines.map((line) => line.location_name ?? line.warehouse_name);

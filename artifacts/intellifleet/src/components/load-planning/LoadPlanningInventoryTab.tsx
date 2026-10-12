@@ -15,6 +15,7 @@ import {
 import * as inventoryApi from "@/services/api/inventory";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
+import { lineProduct, lineProductName, lineStock } from "@/lib/loadPlanningLines";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { SalesOrderCardGrid, ViewModeToggle } from "./SalesOrderCardGrid";
 import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
@@ -48,41 +49,12 @@ function refetchOrderLists(client: QueryClient, ids: string[]) {
   ]);
 }
 
-// The line item's own Zoho "Available for Sale". Only saved past-dated orders (whose lines
-// carry no per-item stock at all) fall back to the order-level figure stored with them.
-function lineStock(order: inventoryApi.SalesOrderSummary, product: ReturnType<typeof lineProduct>, site: "mets" | "glacier") {
-  const key = site === "mets" ? "mets_qty_available_for_sale" : "glacier_qty_available_for_sale";
-  const productValue = product?.[key];
-  return productValue != null ? productValue : order[key];
-}
-
 function lineWeightLabel(product: ReturnType<typeof lineProduct>, pending?: boolean) {
   return product?.total_weight_kg == null
     ? pending
       ? "..."
       : "-"
     : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`;
-}
-
-function lineProduct(order: inventoryApi.SalesOrderSummary, item: any, index?: number) {
-  const itemId = item?.item_id ?? item?.itemid ?? item?.item?.item_id ?? item?.item?.id;
-  const lineItemId = item?.line_item_id == null ? null : String(item.line_item_id);
-  const itemIdText = itemId == null ? null : String(itemId);
-  const sku = item?.sku == null ? null : String(item.sku);
-  const products = order.products ?? [];
-  const matched = products.find((entry) => {
-    const entryLineItemId = entry.line_item_id == null ? null : String(entry.line_item_id);
-    const entryItemId = entry.item_id == null ? null : String(entry.item_id);
-    const entrySku = entry.sku == null ? null : String(entry.sku);
-    return (
-      (entryLineItemId && lineItemId && entryLineItemId === lineItemId) ||
-      (entryItemId && itemIdText && entryItemId === itemIdText) ||
-      (entrySku && sku && entrySku === sku)
-    );
-  });
-  // Zoho sometimes omits all line identifiers in the list payload. The backend
-  // preserves line order when building products, so use that stable relationship.
-  return matched ?? (index != null ? products[index] : undefined);
 }
 
 function tomorrowPht() {
@@ -908,7 +880,7 @@ export default function LoadPlanningInventoryTab({
         </>
       ) : (
         <>
-          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{(order.products ?? []).map((product) => product.name).filter(Boolean).join(", ") || "Details unavailable"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{(() => { const product = (order.products ?? []).find((entry) => (entry.line_item_id && entry.line_item_id === item.line_item_id) || (entry.item_id && entry.item_id === item.item_id) || entry.sku === item.sku); return product?.total_weight_kg == null ? "—" : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`; })()}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
+          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, lineIndex, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); const product = lineProduct(order, item, lineIndex); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{lineProductName(product, item)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{lineWeightLabel(product, orders.data?.stock_pending)}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
             <table className="w-full min-w-[2200px] table-fixed text-left text-xs">
               <colgroup>
                 {columnWidths.map((width, index) => (
@@ -960,6 +932,7 @@ export default function LoadPlanningInventoryTab({
                     index,
                   ) => {
                     const flags = fulfillment(order);
+                    const product = lineProduct(order, item, lineIndex);
                     return (
                       <tr
                         key={`${order.id}-${item.line_item_id ?? index}`}
@@ -983,8 +956,8 @@ export default function LoadPlanningInventoryTab({
                           {order.customer_name ?? "-"}
                         </td>
                         <td className="px-3 py-4 align-top">
-                          <div className="font-semibold">{order.product_count ?? 0} product{(order.product_count ?? 0) === 1 ? "" : "s"}</div>
-                          <div className="mt-1 text-[10px] text-[#77787b]">{(order.products ?? []).map((product) => product.name).filter(Boolean).join(", ") || "Details unavailable"}</div>
+                          <div className="font-semibold">{lineProductName(product, item)}</div>
+                          <div className="mt-1 text-[10px] text-[#77787b]">{product?.sku ?? item.sku ?? "No SKU"}</div>
                         </td>
                         <td className="px-3 py-4 align-top whitespace-nowrap">
                           {item.quantity != null ? `${item.quantity} ${item.unit || "units"}` : "—"}
@@ -999,7 +972,7 @@ export default function LoadPlanningInventoryTab({
                           {item.unit ?? "-"}
                         </td>
                         <td className="px-3 py-4 align-top whitespace-nowrap font-semibold">
-                          {lineWeightLabel(lineProduct(order, item, lineIndex), orders.data?.stock_pending)}
+                          {lineWeightLabel(product, orders.data?.stock_pending)}
                         </td>
                         <td className="px-3 py-4 align-top">{locationCity}</td>
                         <td
@@ -1015,10 +988,10 @@ export default function LoadPlanningInventoryTab({
                           {order.notes?.trim() || "—"}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
-                          <StockQty value={lineStock(order, lineProduct(order, item, lineIndex), "mets")} pending={orders.data?.stock_pending} />
+                          <StockQty value={lineStock(order, product, "mets")} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
-                          <StockQty value={lineStock(order, lineProduct(order, item, lineIndex), "glacier")} pending={orders.data?.stock_pending} />
+                          <StockQty value={lineStock(order, product, "glacier")} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="px-3 py-4 align-top capitalize">
                           {status(order.order_status)}
