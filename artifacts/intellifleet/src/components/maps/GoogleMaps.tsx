@@ -2,7 +2,7 @@
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { useEffect, useRef, useState } from "react";
 import type { UiVehicle } from "@/services/adapters";
-import { MarkerAnimator, formatGpsAge, gpsAgeSeconds, parseGpsTime, quantizeHeading } from "@/lib/live-motion";
+import { MarkerAnimator, formatGpsAge, gpsAgeSeconds, parseGpsTime } from "@/lib/live-motion";
 import type * as routesApi from "@/services/api/routes";
 const truckIconUrl = "/truck-RARE-red-container-white-text.svg?v=1";
 const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
@@ -215,42 +215,10 @@ function orientedTruckIcon(v: UiVehicle) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52"><g transform="rotate(${angle} 26 26)"><image href="${source}" x="2" y="2" width="48" height="48"/></g></svg>`;
   return { url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize: new google.maps.Size(52, 52), anchor: new google.maps.Point(26, 26) };
 }
-// Rotated truck icons. The artwork points east; a Google marker icon cannot be rotated, and an <image href>
-// nested inside a data-URL SVG is blocked as an external resource, so each heading step is drawn onto a canvas
-// once and cached as a PNG data URL (72 steps at most). Until the artwork has loaded the plain icon is used.
-const truckImage: { img: HTMLImageElement | null; ready: boolean; waiting: Set<() => void> } = { img: null, ready: false, waiting: new Set() };
-const rotatedIcons = new Map<number, string>();
-function ensureTruckImage(onReady?: () => void) {
-  if (truckImage.ready) return true;
-  if (onReady) truckImage.waiting.add(onReady);
-  if (!truckImage.img) {
-    const img = new Image();
-    img.onload = () => {
-      truckImage.ready = true;
-      truckImage.waiting.forEach((fn) => fn());
-      truckImage.waiting.clear();
-    };
-    img.src = truckIconUrl;
-    truckImage.img = img;
-  }
-  return false;
-}
-function truckIconForHeading(maps: typeof google.maps, angle: number | null) {
-  const plain = { url: truckIconUrl, scaledSize: new maps.Size(52, 52), anchor: new maps.Point(26, 26) };
-  if (angle === null || !truckImage.ready || !truckImage.img) return plain;
-  let url = rotatedIcons.get(angle);
-  if (!url) {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 104;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return plain;
-    ctx.translate(52, 52);
-    ctx.rotate(((angle - 90) * Math.PI) / 180);
-    ctx.drawImage(truckImage.img, -48, -48, 96, 96);
-    url = canvas.toDataURL("image/png");
-    rotatedIcons.set(angle, url);
-  }
-  return { url, scaledSize: new maps.Size(52, 52), anchor: new maps.Point(26, 26) };
+// The truck artwork is a SIDE view with lettering ("RARE"), so it is never rotated by heading: a rotated side view reads as a
+// truck lying on its side. Markers glide along the road but always stand upright.
+function truckIcon(maps: typeof google.maps) {
+  return { url: truckIconUrl, scaledSize: new maps.Size(52, 52), anchor: new maps.Point(26, 26) };
 }
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -301,7 +269,6 @@ export function LiveOpsMap({
   const markers = useRef(new Map<string, google.maps.Marker>());
   const animator = useRef(new MarkerAnimator());
   const frame = useRef<number | null>(null);
-  const appliedAngle = useRef(new Map<string, number | null>());
   const vehicleData = useRef(new Map<string, UiVehicle>());
   const overlays = useRef<google.maps.MVCObject[]>([]);
   const info = useRef<google.maps.InfoWindow | null>(null);
@@ -326,7 +293,6 @@ export function LiveOpsMap({
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       frame.current = null;
       animator.current = new MarkerAnimator();
-      appliedAngle.current.clear();
       markers.current.forEach((m) => m.setMap(null));
       markers.current.clear();
       overlays.current.forEach((x: any) => x.setMap(null));
@@ -351,15 +317,7 @@ export function LiveOpsMap({
     // parked ones are left alone. The loop stops by itself once every glide has finished.
     const applyPoses = () => {
       animator.current.poses(performance.now()).forEach((p, id) => {
-        const marker = markers.current.get(id);
-        if (!marker) return;
-        marker.setPosition(pos(p.lat, p.lng));
-        const angle = quantizeHeading(p.heading);
-        const want = truckImage.ready ? angle : null;
-        if (appliedAngle.current.get(id) !== want) {
-          marker.setIcon(truckIconForHeading(api.maps, want));
-          appliedAngle.current.set(id, want);
-        }
+        markers.current.get(id)?.setPosition(pos(p.lat, p.lng));
       });
     };
     const step = () => {
@@ -369,7 +327,6 @@ export function LiveOpsMap({
     const ensureLoop = () => {
       if (frame.current === null) frame.current = requestAnimationFrame(step);
     };
-    ensureTruckImage(() => { applyPoses(); });
     const nowMs = performance.now();
     vehicles.forEach((v) => {
       vehicleData.current.set(v.id, v);
@@ -386,9 +343,7 @@ export function LiveOpsMap({
           v.plate || v.id,
           color(v),
         );
-        const angle = truckImage.ready ? quantizeHeading(start.heading) : null;
-        x.setIcon(truckIconForHeading(api.maps, angle));
-        appliedAngle.current.set(v.id, angle);
+        x.setIcon(truckIcon(api.maps));
         x.addListener("click", () => {
           const current = vehicleData.current.get(v.id) || v;
           onSelect?.(current);
@@ -403,7 +358,6 @@ export function LiveOpsMap({
       if (!vehicles.some((v) => v.id === id)) {
         x.setMap(null);
         markers.current.delete(id);
-        appliedAngle.current.delete(id);
         animator.current.remove(id);
       }
     });
