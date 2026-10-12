@@ -118,3 +118,18 @@ export async function createUser(body: CreateUserBody): Promise<ApiUser> {
   const res = await api.post<ApiUser | { user: ApiUser }>("/api/admin/users", body);
   return "user" in (res as object) ? (res as { user: ApiUser }).user : (res as ApiUser);
 }
+
+// Admin > Settings: whitelisted non-secret settings (Neon table app_settings; env stays the fallback).
+export type { AdminSetting } from "@/lib/settingsForm";
+
+export function listSettings(): Promise<{ settings: import("@/lib/settingsForm").AdminSetting[] }> {
+  return api.get("/api/admin/settings");
+}
+
+export function saveSetting(key: string, value: string | number): Promise<import("@/lib/settingsForm").AdminSetting> {
+  return api.put(`/api/admin/settings/${encodeURIComponent(key)}`, { value });
+}
+
+export function resetSetting(key: string): Promise<import("@/lib/settingsForm").AdminSetting> {
+  return api.delete(`/api/admin/settings/${encodeURIComponent(key)}`);
+}

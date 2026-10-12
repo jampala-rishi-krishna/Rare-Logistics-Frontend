@@ -57,6 +57,7 @@ import {
   useFleetSocketConnection,
 } from "@/lib/fleet-socket-provider";
 import { animateLatLng, isVehicleStale } from "@/lib/live-map";
+import AdminSettings from "@/pages/admin/AdminSettings";
 import * as routesApi from "@/services/api/routes";
 import {
   NetworkMap,
@@ -2339,6 +2340,7 @@ function AppShell({
             </div>
             {isAdmin && [
               ["/admin/users", "Admin", Settings],
+              ["/admin/settings", "Settings", SlidersHorizontal],
             ].map(([href, label, Icon]) => (
               <Link
                 data-testid={`nav-${String(label).toLowerCase()}`}
@@ -7201,6 +7203,16 @@ function App() {
                       <Route path="/admin/users">
                         <AdminContactControls />
                         <DataTablePage kind="users" />
+                      </Route>
+                      <Route path="/admin/settings">
+                        <AppShell title="Settings">
+                          <PageIntro
+                            eyebrow="Workspace / Settings"
+                            title="Settings"
+                            body="Operational settings you can change without a redeploy."
+                          />
+                          <AdminSettings />
+                        </AppShell>
                       </Route>
                       <Route path="/admin/roles">
                         <DataTablePage kind="roles" />
