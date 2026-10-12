@@ -109,6 +109,8 @@ export interface CreateUserBody {
   phone: string | null;
   role: CreatableRole;
   staff_id?: number | string;
+  password?: string;
+  send_login_email?: boolean;
 }
 
 // Creates the account only; sending the invite is a separate, confirmed step (sendInvite / createInviteLink).

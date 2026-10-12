@@ -27,21 +27,31 @@ export interface StaffLike {
   id: number | string;
   name: string;
   title: string | null;
+  role?: string | null;
+  warehouse?: string | null;
+  email?: string | null;
+  phone?: string | null;
   active: boolean;
 }
 
 // Staff offered in the picker: right title for the role, active, and not already linked to a user.
 export function staffOptionsFor(role: string, staff: readonly StaffLike[], linkedStaffIds: ReadonlyArray<number | string | null | undefined>): StaffLike[] {
   if (!needsStaffLink(role)) return [];
-  const wanted = role === "driver" ? /driver/i : /helper/i;
   const linked = new Set(linkedStaffIds.filter((v) => v !== null && v !== undefined).map(String));
-  return staff.filter((s) => s.active && wanted.test(s.title ?? "") && !linked.has(String(s.id)));
+  return staff.filter((s) => {
+    if (!s.active || linked.has(String(s.id))) return false;
+    const staffRole = (s.role ?? "").toLowerCase();
+    const title = (s.title ?? "").toLowerCase();
+    if (role === "helper") return staffRole === "helper" || title.includes("helper");
+    return staffRole === "driver" || title.includes("driver") || title.includes("rider");
+  });
 }
 
-export function validateNewUser(form: { full_name: string; email: string; phone: string; role: string }): string[] {
+export function validateNewUser(form: { full_name: string; email: string; phone: string; role: string; password?: string }): string[] {
   const errors: string[] = [];
   if (form.full_name.trim().length < 2) errors.push("Full name is required.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.push("A valid email is required.");
   if (!CREATABLE_ROLES.some((r) => r.value === form.role)) errors.push("Choose a role.");
+  if ((form.password ?? "").trim() && (form.password ?? "").length < 8) errors.push("Password must be at least 8 characters.");
   return errors;
 }

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { CREATABLE_ROLES, needsStaffLink, showInviteActions, staffOptionsFor, validateNewUser } from "./userForm.ts";
 
 const staff = [
-  { id: 9, name: "Emert", title: "DRIVER", active: true },
+  { id: 9, name: "Emert", title: "MC RIDER", role: "DRIVER", active: true },
   { id: 10, name: "Ben", title: "Driver", active: true },
   { id: 17, name: "Raymond", title: "HELPER", active: true },
   { id: 18, name: "Gone", title: "HELPER", active: false },
@@ -29,6 +29,7 @@ test("invite actions show for driver, helper and logistics officer only", () => 
 });
 
 test("new user validation", () => {
-  assert.deepEqual(validateNewUser({ full_name: "Ana Cruz", email: "ana@x.com", phone: "", role: "helper" }), []);
+  assert.deepEqual(validateNewUser({ full_name: "Ana Cruz", email: "ana@x.com", phone: "", role: "helper", password: "long-enough" }), []);
   assert.equal(validateNewUser({ full_name: "", email: "bad", phone: "", role: "admin" }).length, 3);
+  assert.ok(validateNewUser({ full_name: "Ana Cruz", email: "ana@x.com", phone: "", role: "helper", password: "short" }).includes("Password must be at least 8 characters."));
 });

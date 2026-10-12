@@ -4,6 +4,7 @@ export interface StaffMember {
   id: number;
   name: string;
   title: string | null;
+  role?: string | null;
   warehouse: string | null;
   email: string | null;
   phone: string | null;

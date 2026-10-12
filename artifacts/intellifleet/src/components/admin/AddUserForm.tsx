@@ -21,6 +21,8 @@ export default function AddUserForm({
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<CreatableRoleValue>("driver");
   const [staffId, setStaffId] = useState("");
+  const [password, setPassword] = useState("");
+  const [sendLoginEmail, setSendLoginEmail] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -32,13 +34,17 @@ export default function AddUserForm({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const problems = validateNewUser({ full_name: fullName, email, phone, role });
+    const problems = validateNewUser({ full_name: fullName, email, phone, role, password });
     setErrors(problems);
     if (problems.length > 0) return;
     setSaving(true);
     try {
       const body: adminApi.CreateUserBody = { full_name: fullName.trim(), email: email.trim(), phone: phone.trim() || null, role };
       if (needsStaffLink(role) && staffId) body.staff_id = Number.isNaN(Number(staffId)) ? staffId : Number(staffId);
+      if (password) {
+        body.password = password;
+        body.send_login_email = sendLoginEmail;
+      }
       onCreated(await adminApi.createUser(body));
     } catch (error) {
       setErrors([errorInfo(error).message]);
@@ -83,11 +89,25 @@ export default function AddUserForm({
         {needsStaffLink(role) && (
           <label className="grid gap-1 text-xs font-semibold md:col-span-2">
             Staff record ({role === "driver" ? "drivers" : "helpers"} not yet linked)
-            <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={field} disabled={staff.isLoading}>
+            <select
+              value={staffId}
+              onChange={(e) => {
+                const value = e.target.value;
+                setStaffId(value);
+                const selected = options.find((s) => String(s.id) === value);
+                if (selected) {
+                  setFullName(selected.name ?? "");
+                  setEmail(selected.email ?? "");
+                  setPhone(selected.phone ?? "");
+                }
+              }}
+              className={field}
+              disabled={staff.isLoading}
+            >
               <option value="">{staff.isLoading ? "Loading staff..." : "No staff link"}</option>
               {options.map((s) => (
                 <option key={String(s.id)} value={String(s.id)}>
-                  {s.name}
+                  {s.name} · {s.title || "Staff"} · {s.warehouse || "No warehouse"} · {s.email || "No email"} · {s.phone || "No phone"}
                 </option>
               ))}
             </select>
@@ -95,6 +115,35 @@ export default function AddUserForm({
             {!staffId && !staff.isLoading && <span className="font-normal text-[#77787b]">Without a staff link this person will see no assignments.</span>}
           </label>
         )}
+        <label className="grid gap-1 text-xs font-semibold md:col-span-2">
+          Initial password
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={field}
+            autoComplete="new-password"
+            placeholder="At least 8 characters"
+          />
+          <span className="font-normal text-[#77787b]">
+            Leave blank to require an invite/reset link before this user can log in.
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-xs font-semibold md:col-span-2">
+          <input
+            type="checkbox"
+            checked={sendLoginEmail}
+            disabled={!password}
+            onChange={(e) => setSendLoginEmail(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Email login details after creating the user
+            <span className="block font-normal text-[#77787b]">
+              Sends the login email to this user only, using the email address above.
+            </span>
+          </span>
+        </label>
       </div>
       {errors.length > 0 && (
         <ul role="alert" className="grid gap-1 text-sm text-[#86000B]">
