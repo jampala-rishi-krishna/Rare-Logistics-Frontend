@@ -3703,6 +3703,22 @@ function OrderTable({
 }) {
   const queryClient = useQueryClient();
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [sendingNow, setSendingNow] = useState<string | null>(null);
+  // "Not sent" chip -> Send: the first Send of the assignment (email + WhatsApp/SMS/voice), identified by its batch id so the
+  // whole assignment is notified, not just this row. The status refreshes from the list below.
+  const sendNow = async (order: Order) => {
+    if (!order.sourceId || !order.batchId || !order.driverIds?.length) return;
+    setSendingNow(order.sourceId);
+    try {
+      await inventoryApi.sendAssignmentEmail([order.sourceId], order.vehicle, order.driverIds[0] ?? null, order.driverIds.slice(1), { assignmentBatchId: order.batchId });
+      await inventoryApi.waitForEmailStatus([order.sourceId]);
+    } catch {
+      /* the refreshed list below shows the real status and reason */
+    } finally {
+      setSendingNow(null);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    }
+  };
   // Retry a failed assignment email. The assignment is identified by its batch id (the server resolves ALL of its
   // orders), so two separate assignments to the same truck are never merged. An older row without a batch id
   // retries just itself.
@@ -3753,7 +3769,7 @@ function OrderTable({
             <td className="mono text-xs">
               {o.vehicle}
               <div>
-                <EmailStatusChip status={o.emailStatus} error={o.emailError} retrying={retrying === o.sourceId} onRetry={() => retryEmail(o)} />
+                <EmailStatusChip status={o.emailStatus} error={o.emailError} retrying={retrying === o.sourceId} onRetry={() => retryEmail(o)} sending={sendingNow === o.sourceId} onSend={() => sendNow(o)} />
               </div>
             </td>
           )}
@@ -5759,8 +5775,10 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     htmlBody: string;
     manualVehicle?: inventoryApi.ManualVehicleInput;
     assignmentBatchId?: string | null;
+    firstSend?: boolean;
   } | null>(null);
-  // The email is sent automatically when the assignment is saved; this only feeds its status panel.
+  // Assigning sends nothing: the preview opens right after the assignment is saved and the dispatcher presses Send.
+  // This also feeds the status panel ("Not sent" with a Send button if the preview was closed).
   const [lastAssignment, setLastAssignment] = useState<{
     salesOrderIds: string[];
     vehicleId: string;
@@ -5944,35 +5962,39 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         onNotice(`${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Third-party truck has no staff notification recipient.${overCapacityNote}`);
         return;
       }
-      setLastAssignment({ salesOrderIds: ids, vehicleId: vehicle, driverIds: assignedDriverIds, manualVehicle: manualVehiclePayload, assignmentBatchId: assigned?.assignment_batch_id ?? null });
+      const savedAssignment = { salesOrderIds: ids, vehicleId: vehicle, driverIds: assignedDriverIds, manualVehicle: manualVehiclePayload, assignmentBatchId: assigned?.assignment_batch_id ?? null };
+      setLastAssignment(savedAssignment);
       onNotice(
-        `${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. The assignment email is being sent automatically.${overCapacityNote}`,
+        `${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Nothing has been sent yet: review the email and press Send to notify the driver.${overCapacityNote}`,
       );
+      await openEmailEditor(savedAssignment, true);
     } catch (e: any) {
       setError(e?.message || "Assignment failed.");
     } finally {
       setBusy(false);
     }
   };
-  // Optional "Resend / edit email": loads the draft on demand. Sending from it is an explicit resend, never a gate.
-  const openEmailEditor = async () => {
-    if (!lastAssignment) return;
+  // Opens the email draft. firstSend (the assignment is still "Not sent"): Send is the real notification - email plus
+  // WhatsApp/SMS/voice. Otherwise it is the optional "Resend / edit email", which is email only.
+  const openEmailEditor = async (assignment = lastAssignment, firstSend = false) => {
+    if (!assignment) return;
     setError("");
     try {
-      const preview = await inventoryApi.sendAssignmentEmail(lastAssignment.salesOrderIds, lastAssignment.vehicleId, lastAssignment.driverIds[0] ?? null, lastAssignment.driverIds.slice(1), {
+      const preview = await inventoryApi.sendAssignmentEmail(assignment.salesOrderIds, assignment.vehicleId, assignment.driverIds[0] ?? null, assignment.driverIds.slice(1), {
         preview: true,
-        manualVehicle: lastAssignment.manualVehicle,
+        manualVehicle: assignment.manualVehicle,
       });
       if (!preview.driverHtmlBody || !preview.driverSubject)
         throw new Error(preview.error || "Assignment email preview could not be generated.");
       setAssignmentPreview({
-        salesOrderIds: lastAssignment.salesOrderIds,
-        vehicleId: lastAssignment.vehicleId,
-        driverIds: lastAssignment.driverIds,
+        salesOrderIds: assignment.salesOrderIds,
+        vehicleId: assignment.vehicleId,
+        driverIds: assignment.driverIds,
         subject: preview.driverSubject,
         htmlBody: preview.driverHtmlBody,
-        manualVehicle: lastAssignment.manualVehicle,
-        assignmentBatchId: lastAssignment.assignmentBatchId,
+        manualVehicle: assignment.manualVehicle,
+        assignmentBatchId: assignment.assignmentBatchId,
+        firstSend,
       });
     } catch (e: any) {
       setError(e?.message || "Could not open the email draft.");
@@ -6317,15 +6339,15 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
           driverIds={lastAssignment.driverIds}
           manualVehicle={lastAssignment.manualVehicle}
           assignmentBatchId={lastAssignment.assignmentBatchId}
-          onEdit={openEmailEditor}
+          onEdit={(firstSend) => void openEmailEditor(lastAssignment, firstSend)}
         />
       )}
       {assignmentPreview && (
         <AssignmentEmailPreviewModal
           preview={assignmentPreview}
           onClose={() => setAssignmentPreview(null)}
-          onSent={() => {
-            onNotice("Assignment email resent and confirmed by Gmail.");
+          onSent={(firstSend) => {
+            onNotice(firstSend ? "Assignment email sent and confirmed by Gmail." : "Assignment email resent and confirmed by Gmail.");
             queryClient.invalidateQueries({ queryKey: ["assignment-email-status"] });
           }}
         />

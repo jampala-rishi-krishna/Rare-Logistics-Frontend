@@ -40,7 +40,7 @@ export interface SalesOrderSummary {
   assigned_by?: number | null;
   driver_ids?: number[];
   assignment_batch_id?: string | null;
-  email_status?: "queued" | "sent" | "failed" | "skipped" | null;
+  email_status?: "not_sent" | "queued" | "sent" | "failed" | "skipped" | null;
   email_error?: string | null;
   email_sent_at?: string | null;
   product_count?: number;
@@ -316,7 +316,7 @@ export function sendAssignmentEmail(
 }
 
 export interface AssignmentEmailStatus {
-  status: "queued" | "sent" | "failed" | "skipped" | null;
+  status: "not_sent" | "queued" | "sent" | "failed" | "skipped" | null;
   error: string | null;
   sentAt: string | null;
   messageId: string | null;

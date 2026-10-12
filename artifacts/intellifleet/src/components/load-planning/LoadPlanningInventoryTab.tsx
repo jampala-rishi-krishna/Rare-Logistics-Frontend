@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
+import { sendOptions } from "@/lib/emailStatus";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { lineProduct, lineProductName, lineStock } from "@/lib/loadPlanningLines";
@@ -119,9 +120,11 @@ export function AssignmentEmailPreviewModal({
     htmlBody: string;
     manualVehicle?: inventoryApi.ManualVehicleInput;
     assignmentBatchId?: string | null;
+    /** The assignment has not been sent yet: this Send is the real notification (email + WhatsApp/SMS/voice). Otherwise it is a resend. */
+    firstSend?: boolean;
   };
   onClose: () => void;
-  onSent: () => void;
+  onSent: (firstSend: boolean) => void;
 }) {
   const [htmlBody, setHtmlBody] = useState(preview.htmlBody);
   const [sending, setSending] = useState(false);
@@ -136,7 +139,7 @@ export function AssignmentEmailPreviewModal({
         preview.vehicleId,
         preview.driverIds[0] ?? null,
         preview.driverIds.slice(1),
-        { htmlBody, subject: preview.subject, manualVehicle: preview.manualVehicle, resend: true, assignmentBatchId: preview.assignmentBatchId },
+        { htmlBody, subject: preview.subject, manualVehicle: preview.manualVehicle, ...sendOptions(preview.firstSend ?? false), assignmentBatchId: preview.assignmentBatchId },
       );
       if (!result.success)
         throw new Error(
@@ -149,7 +152,7 @@ export function AssignmentEmailPreviewModal({
       if (final.status !== "sent")
         throw new Error(final.status === "skipped" ? `Email skipped: ${final.error || "no recipient"}` : "Gmail has not confirmed the email yet - check the assignment status.");
       setSent(true);
-      onSent();
+      onSent(preview.firstSend ?? false);
     } catch (e: any) {
       setError(e?.message || "The assignment email could not be sent.");
     } finally {
@@ -188,7 +191,7 @@ export function AssignmentEmailPreviewModal({
             <span className="text-sm text-[#c4291f]">{error}</span>
           ) : (
             <span className="text-xs text-[#77787b]">
-              You can edit this email before sending.
+              {preview.firstSend ? "Nothing has been sent yet. You can edit this email, then press Send to notify the driver." : "You can edit this email before sending."}
             </span>
           )}
           <div className="flex gap-2">
