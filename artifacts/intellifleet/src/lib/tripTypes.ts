@@ -131,6 +131,8 @@ export interface DriverOrder {
   total_kg: number;
   total_packs: number;
   notes: string | null;
+  order_status?: string | null;
+  shipment_status?: string | null;
   delivery_status: string | null;
   details_loading: boolean;
   workflow?: OrderWorkflow | null;

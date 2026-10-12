@@ -6,45 +6,47 @@ import { useOfflineQueue } from "@/lib/offlineRuntime";
 import type { Batch } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
 import { useToday } from "./queries";
-import { ChipBadge, CrewList, ErrorState, MissingDriverNotice, OfflineNote, Skeleton, Stat, StatusBadge, errorText, useDriverMe, useDriverScope } from "./shared";
+import { CrewList, ErrorState, MissingDriverNotice, OfflineNote, Skeleton, Stat, StatusBadge, errorText, useDriverMe, useDriverScope } from "./shared";
 
 const POLL_MS = 60_000;
+
+function batchStatus(batch: Batch) {
+  if (batch.assignment_status && batch.assignment_status !== "assigned") return batch.assignment_status;
+  if (batch.email_status && batch.email_status !== "sent") return batch.email_status;
+  return "Assigned";
+}
 
 function BatchCard({ batch, adminDriverId, pendingCount }: { batch: Batch; adminDriverId: string | null; pendingCount: number }) {
   const href = withDriverParams(`/driver/assignment/${encodeURIComponent(batch.batch_id)}`, { driver_id: adminDriverId });
   const route = [batch.first_area, batch.last_area].filter(Boolean).join(" → ");
-  const trip = batch.trip ?? null;
   return (
-    <article className="border border-[#e4e3df] bg-white" data-testid={`driver-batch-${batch.batch_id}`}>
+    <article className="overflow-hidden border border-[#d8d7d2] bg-white shadow-[0_8px_28px_rgba(0,0,0,0.05)]" data-testid={`driver-batch-${batch.batch_id}`}>
       <Link href={href} className="block min-h-[44px] p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wide text-[#77787b]">Vehicle</div>
             <div className="font-mono text-xl font-bold">{batch.vehicle}</div>
           </div>
-          <div className="flex items-center gap-2">
-            {!trip && batch.email_status && <StatusBadge status={batch.email_status} />}
+          <div className="flex shrink-0 items-center gap-2">
+            <StatusBadge status={batchStatus(batch)} />
             <ChevronRight size={20} className="text-[#77787b]" />
           </div>
         </div>
-        {trip && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <ChipBadge chip={trip.chip} label={trip.chip_label} />
-            {pendingCount > 0 && (
-              <span className="inline-flex items-center border border-[#e6c36a] bg-[#fff6dd] px-2 py-1 text-xs font-bold text-[#6b4a00]">
-                Pending sync ({pendingCount})
-              </span>
-            )}
+        {pendingCount > 0 && (
+          <div className="mt-2 inline-flex items-center border border-[#e6c36a] bg-[#fff6dd] px-2 py-1 text-xs font-bold text-[#6b4a00]">
+            Pending sync ({pendingCount})
           </div>
         )}
-        <div className="mt-4 grid grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-3 gap-3 border-y border-[#efeeeb] py-3">
           <Stat label="Orders" value={batch.so_count} />
           <Stat label="Total" value={formatKg(batch.total_kg)} />
           <Stat label="Packs" value={batch.total_packs.toLocaleString("en-US")} />
         </div>
-        {route && <div className="mt-3 break-words text-sm">{route}</div>}
-        {batch.departure_time && <div className="mt-1 text-sm text-[#55565a]">Departure {batch.departure_time}</div>}
-        {!batch.stop_order_set && <div className="mt-2 text-xs text-[#77787b]">Stop order not set</div>}
+        <div className="mt-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Route</div>
+          <div className="mt-1 break-words text-sm font-semibold">{route || "Assigned route"}</div>
+          {batch.departure_time && <div className="mt-1 text-sm text-[#55565a]">Departure {batch.departure_time}</div>}
+        </div>
       </Link>
       <div className="border-t border-[#efeeeb] px-4 pb-2">
         <CrewList crew={batch.crew} helpers={batch.helpers} />

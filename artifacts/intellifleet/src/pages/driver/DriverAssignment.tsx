@@ -1,7 +1,7 @@
 import { Link, useParams, useSearchParams } from "wouter";
 import { ArrowLeft, MapPin, Navigation } from "lucide-react";
 import * as driverApi from "@/services/api/driver";
-import { formatClock, formatKg, formatLongDate, formatQty, mapsSearchUrl, personName, telHref, withDriverParams } from "@/lib/driver";
+import { formatKg, formatLongDate, formatQty, mapsSearchUrl, telHref, withDriverParams } from "@/lib/driver";
 import { useOfflineQueue } from "@/lib/offlineRuntime";
 import { deriveBatchState } from "@/lib/tripState";
 import type { EffectiveBatch, EffectiveOrder } from "@/lib/tripState";
@@ -10,7 +10,6 @@ import DriverLayout from "./DriverLayout";
 import { assignmentHref, subpageHref, useAssignmentQuery, useCrewAction, useRouteQuery } from "./queries";
 import {
   BlockerNote,
-  ChipBadge,
   CrewList,
   ErrorState,
   MissingDriverNotice,
@@ -18,6 +17,7 @@ import {
   PhoneLink,
   Skeleton,
   Stat,
+  StatusBadge,
   btnPrimary,
   btnSecondary,
   errorText,
@@ -27,6 +27,18 @@ import {
 import type { DriverScope } from "./shared";
 
 const linkBtn = (primary: boolean) => (primary ? btnPrimary : btnSecondary);
+
+function assignmentStatus(status: string | null | undefined, emailStatus: string | null | undefined) {
+  if (status && status !== "assigned") return status;
+  if (emailStatus && emailStatus !== "sent") return emailStatus;
+  return "Assigned";
+}
+
+function orderStatusLabel(eff: EffectiveOrder) {
+  const order = eff.order;
+  const stop = order.workflow?.stop ?? null;
+  return order.delivery_status || order.shipment_status || order.order_status || stop?.outcome || "Assigned";
+}
 
 function OrderCard({
   eff,
@@ -56,8 +68,7 @@ function OrderCard({
   const stop = wf?.stop ?? null;
   const navigateUrl = route?.stops.find((s) => String(s.so_id) === eff.so_id)?.navigate_url ?? (order.address_text ? mapsSearchUrl(order.address_text) : null);
   const showButtons = canAct && (eff.canAcknowledge || eff.canCheckIn || eff.canCheckOut);
-  const ackBy = wf?.ack ? `${personName(wf.ack.by)}${wf.ack.at ? ` at ${formatClock(wf.ack.at)}` : ""}` : null;
-  const arrivedBy = stop?.checkin_at ? `${personName(stop.checkin_by)}${stop.checkin_at ? ` at ${formatClock(stop.checkin_at)}` : ""}` : null;
+  const statusLabel = orderStatusLabel(eff);
 
   return (
     <article className="border border-[#e4e3df] bg-white p-4" data-testid={`driver-order-${order.so_number}`}>
@@ -71,26 +82,10 @@ function OrderCard({
         </div>
       </div>
 
-      {eff.statusLabel && (
+      {statusLabel && (
         <div className="mt-2 text-sm font-bold" data-testid={`driver-order-status-${order.so_number}`}>
-          {eff.statusLabel}
+          {statusLabel}
         </div>
-      )}
-      {ackBy && <div className="text-xs text-[#55565a]">Acknowledged by {ackBy}</div>}
-      {arrivedBy && <div className="text-xs text-[#55565a]">Arrived: {arrivedBy}</div>}
-      {stop?.checkout_at && (
-        <div className="text-xs text-[#55565a]">
-          Checked out by {personName(stop.checkout_by)} at {formatClock(stop.checkout_at)}
-          {stop.reason ? ` - ${stop.reason}` : ""}
-        </div>
-      )}
-      {stop?.checkin_far && (
-        <div role="alert" className="mt-2 border-l-2 border-[#a16819] bg-[#fff8ec] p-3 text-sm font-semibold text-[#6b4a00]" data-testid="driver-checkin-far">
-          You checked in {stop.checkin_distance_m !== null ? `${Math.round(stop.checkin_distance_m)} m` : "far"} from this address. Check that you are at the right stop.
-        </div>
-      )}
-      {!stop?.checkin_far && stop?.checkin_distance_m !== null && stop?.checkin_distance_m !== undefined && (
-        <div className="text-xs text-[#55565a]">{Math.round(stop.checkin_distance_m)} m from the address at check-in</div>
       )}
 
       {eff.attention.map((a, i) => (
@@ -291,6 +286,7 @@ export default function DriverAssignment() {
   const batch = detail.data?.data;
   const state = batch ? deriveBatchState(batch, queue.entries) : null;
   const canAct = !scope.isAdmin;
+  const driverActionsEnabled = false;
 
   const startTrip = () => void actions.run({ kind: "start", label: "Start trip", path: driverApi.paths.start(batchId), doneMessage: "Trip started" });
   const endTrip = () => {
@@ -331,7 +327,7 @@ export default function DriverAssignment() {
                 <div className="text-xs font-semibold uppercase tracking-wide text-[#77787b]">{formatLongDate(batch.delivery_date)}</div>
                 <div className="mt-1 font-mono text-2xl font-bold">{batch.vehicle}</div>
               </div>
-              {batch.trip && <ChipBadge chip={state.chip} label={state.chipLabel} />}
+              <StatusBadge status={assignmentStatus(batch.assignment_status, batch.email_status)} />
             </div>
             {state.pendingCount > 0 && (
               <div className="mt-2 inline-flex border border-[#e6c36a] bg-[#fff6dd] px-2 py-1 text-xs font-bold text-[#6b4a00]">Pending sync ({state.pendingCount})</div>
@@ -355,7 +351,7 @@ export default function DriverAssignment() {
           </section>
 
           {scope.isAdmin && <BlockerNote text="Admin view is read only. Crew actions are done by the driver or helper." />}
-          {canAct && batch.trip && (
+          {driverActionsEnabled && canAct && batch.trip && (
             <PrimaryArea state={state} route={route.data?.data} scope={scope} batchId={batchId} busy={actions.busy || !actions.ready} onStart={startTrip} onEnd={endTrip} />
           )}
           {route.data?.data.warning && <p className="text-xs text-[#6b4a00]">{route.data.data.warning}</p>}
@@ -370,7 +366,7 @@ export default function DriverAssignment() {
                 route={route.data?.data}
                 scope={scope}
                 batchId={batchId}
-                canAct={canAct && Boolean(batch.trip)}
+                canAct={driverActionsEnabled && canAct && Boolean(batch.trip)}
                 busy={actions.busy || !actions.ready}
                 onCheckIn={checkIn}
                 onRetry={(id) => void queue.retry(id)}

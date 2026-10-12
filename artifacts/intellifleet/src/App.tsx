@@ -1957,7 +1957,6 @@ function RoleSwitcher({ role }: { role: string }) {
 }
 function Login() {
   const [, setLocation] = useLocation();
-  const rolePreviewEnabled = import.meta.env.VITE_ENABLE_ROLE_PREVIEW === "true";
   const [role, setRole] = useState<Role | null>(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -2023,6 +2022,16 @@ function Login() {
       setIsSigningIn(false);
     }
   };
+  const selectRole = (item: Role) => {
+    setRole(item);
+    const sharedLogin: Partial<Record<Role, string>> = {
+      Dispatcher: "dispatcher@rgf.com",
+      Planner: "planner@rgf.com",
+      Admin: "admin@rgf.com",
+    };
+    if (sharedLogin[item]) setIdentifier(sharedLogin[item] as string);
+    if (item === "Driver" || item === "Warehouse" || item === "Client") setIdentifier("");
+  };
   if (checkingSession)
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-[#f2f2ef] text-sm text-[#77787b]">
@@ -2083,7 +2092,6 @@ function Login() {
                 Continue <ArrowRight size={16} />
               </Button>
             </form>
-            {rolePreviewEnabled && (
             <div className="mt-8 border-t border-[#d9d8d3] pt-5">
               <div className="micro mb-3 text-[#a16819]">
                 Role-based access
@@ -2103,7 +2111,7 @@ function Login() {
                     data-testid={`button-preview-${item.toLowerCase()}`}
                     key={item}
                     type="button"
-                    onClick={() => setRole(item)}
+                    onClick={() => selectRole(item)}
                     className={cx(
                       "min-w-0 max-w-full truncate border px-2 py-2 text-xs font-semibold",
                       role === item
@@ -2116,7 +2124,6 @@ function Login() {
                 ))}
               </div>
             </div>
-            )}
           </div>
           <div className="text-xs text-[#77787b]">
             Rare Global Food Trading Corp. · IntelliFleet
