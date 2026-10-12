@@ -162,7 +162,8 @@ export function AssignmentEmailPreviewModal({
       const result = await inventoryApi.sendAssignmentEmail(
         preview.salesOrderIds,
         preview.vehicleId,
-        preview.driverIds,
+        preview.driverIds[0] ?? null,
+        preview.driverIds.slice(1),
         { htmlBody, subject: preview.subject, manualVehicle: preview.manualVehicle, resend: true, assignmentBatchId: preview.assignmentBatchId },
       );
       if (!result.success)

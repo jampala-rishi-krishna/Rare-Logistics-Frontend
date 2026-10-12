@@ -32,14 +32,18 @@ export function patchIntegration(provider: string, state: IntegrationState): Pro
   return api.patch<ApiIntegration>(`/integrations/${provider}`, { state });
 }
 
+export type InviteState = "none" | "pending" | "expired" | "used";
+
 export interface ApiUser {
-  ROWID: string;
+  id: number | string;
   full_name: string;
-  email: string;
-  phone: number;
+  email: string | null;
+  phone: string | null;
   role: string;
-  status: string;
-  profile_photo_url: string | null;
+  status: "active" | "disabled" | null;
+  staff_id: number | string | null;
+  must_change_password: boolean;
+  invite_state: InviteState;
 }
 
 export interface ApiRole {
@@ -52,6 +56,21 @@ export interface ApiRole {
 // The backend gates every admin route to role 'admin'.
 export function listUsers(): Promise<ApiUser[]> {
   return api.get<ApiUser[]>("/users");
+}
+
+export type InvitePurpose = "invite" | "reset";
+
+export function createInviteLink(userId: number | string, purpose: InvitePurpose): Promise<{ link: string; expires_at: string }> {
+  return api.post<{ link: string; expires_at: string }>(`/api/admin/users/${encodeURIComponent(String(userId))}/invite-link`, { purpose });
+}
+
+// Emails a real person: callers must confirm with the admin first.
+export function sendInvite(userId: number | string, purpose: InvitePurpose): Promise<{ sent: true; to: string; expires_at: string }> {
+  return api.post<{ sent: true; to: string; expires_at: string }>(`/api/admin/users/${encodeURIComponent(String(userId))}/send-invite`, { purpose });
+}
+
+export function setUserStatus(userId: number | string, status: "active" | "disabled"): Promise<{ ok: true }> {
+  return api.post<{ ok: true }>(`/api/admin/users/${encodeURIComponent(String(userId))}/status`, { status });
 }
 
 export function listRoles(): Promise<ApiRole[]> {
@@ -80,4 +99,20 @@ export interface ZohoUsageHealth {
 
 export function getZohoUsage(): Promise<ZohoUsageHealth> {
   return api.get<ZohoUsageHealth>("/api/admin/zoho-usage");
+}
+
+export type CreatableRole = "logistics_officer" | "driver" | "helper" | "dispatcher" | "planner" | "warehouse";
+
+export interface CreateUserBody {
+  full_name: string;
+  email: string;
+  phone: string | null;
+  role: CreatableRole;
+  staff_id?: number | string;
+}
+
+// Creates the account only; sending the invite is a separate, confirmed step (sendInvite / createInviteLink).
+export async function createUser(body: CreateUserBody): Promise<ApiUser> {
+  const res = await api.post<ApiUser | { user: ApiUser }>("/api/admin/users", body);
+  return "user" in (res as object) ? (res as { user: ApiUser }).user : (res as ApiUser);
 }

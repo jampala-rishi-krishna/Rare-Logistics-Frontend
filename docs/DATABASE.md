@@ -1,6 +1,6 @@
 # IntelliFleet Neon database
 
-Updated 2026-10-08. Alembic head: `j1b2c3d4e5f6` (the earlier `i1a2b3c4d5e6` added `sales_orders.helper_ids` and seeded the six third-party trucks; this file had not recorded it).
+Updated 2026-10-12. Alembic head: `n4f5a6b7c8d9` (driver portal). Earlier heads: `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
 
 Neon stores durable business history and configuration only. Current/future Sales
 Orders, Fleet telemetry, staff directory data, alerts, routes, optimization runs,
@@ -12,7 +12,8 @@ the only date-filtered Neon reads.
 
 | Table | Purpose | Write policy |
 |---|---|---|
-| `users` | Authentication users and roles | Login/user-management operations only |
+| `users` | Authentication users and roles. `staff_id` (migration `n4f5a6b7c8d9`) links a login to its n8n staff-directory record | Login/user-management operations only: admin creates a login, sets a password via invite link, enables/disables |
+| `user_invites` | Single-use set-password / reset links (migration `n4f5a6b7c8d9`): `user_id`, SHA-256 `token_hash`, `purpose` invite/reset, `expires_at` (24h), `used_at` | One INSERT when an admin creates a link (earlier pending links for that user are expired in the same transaction), one UPDATE when a link is redeemed. Read when a link is redeemed and when Admin > Users lists users |
 | `vehicles` | Vehicle roster plus merged capacity/operating configuration | Roster/configuration changes; no live telemetry |
 | `sales_orders` | Slim historical Sales Order snapshots and assignment state | Assignment, manifest/status transition, and delivery/completion events only |
 | `sales_order_lines` | Line-item snapshot belonging to a historical Sales Order | Replaced with its parent snapshot on the same event |
@@ -28,6 +29,17 @@ the only date-filtered Neon reads.
 | `fuel_logs` | Fuel fill-ups (litres, amount, odometer, full tank) | Explicit user entry only |
 | `zoho_api_usage` | Per-day Zoho API call counters, PK (usage_day, category, source), ~20 rows/day | Additive UPSERT every 60s from `services/zoho_usage.py`, only when there is an unflushed delta; also on shutdown/SIGTERM. Read once at startup to restore today's total. Admin > Users usage tile |
 | `alembic_version` | Migration marker | Alembic only; never truncate manually |
+
+## Driver portal (migration `n4f5a6b7c8d9`, approved 2026-10-12)
+
+- `users.staff_id` (int, nullable, unique index): the driver's id in the n8n staff directory. Driver API endpoints scope every query by the `staff_id` of the logged-in user, never by a request parameter (admins pass `?driver_id=`).
+- `user_invites`: see the table above. Only the token hash is stored; the token exists only in the emailed / copied link and is never logged.
+- `sales_orders.delivery_notes` (text) and `sales_orders.delivery_contact` (JSONB `{person, phone, attention}`): copied from the SO detail **already in memory** inside `sync_history_row`, i.e. in the same INSERT/UPDATE as the assignment (no extra write, no Zoho call). NULL = the detail was not cached at assign time; a later sync that has the detail fills them, one without it never blanks them. Past days therefore keep notes/contact in history.
+- **Read paths added (driver app only):** `GET /api/driver/today|history|assignments/{batch_id}` read `sales_orders` + `sales_order_lines` filtered by `driver_id` (+ date / batch). *Today* is cached in memory per driver and re-read only when the live assignment state changes (`live_sales_order_cache.assignment_generation()`) or after 5 minutes, so a phone polling every 60s does not query Neon each time. History is a plain date-filtered read (dates before today, Manila). None of these endpoints calls Zoho.
+- **Helpers:** `driver_id` is the driver; `helper_ids` keeps every selected staff id including the driver (backward compatible). Helpers are always `set(helper_ids) - {driver_id}`, by value (`services/staff_roles.py`). No schema change, no backfill; existing rows are read the same way.
+- **Not persisted (deliberately):** stop order and departure time. The driver app lists orders in assignment order and shows "stop order not set".
+- **Login throttle** is in memory (`services/login_rate_limiter.py`): 5 failures / 15 min per typed identifier, per account and per IP. It resets on restart and is not shared between workers (single instance today).
+- **Disabling a login:** the admin status endpoint invalidates the 10-minute user cache, so it applies to the next request on that instance. If `users.status` is changed directly in the database, the user is cut off when their cache entry expires - at most 10 minutes - even though a driver JWT lives 30 days.
 
 ## Assignment email status (migrations `l2d3e4f5a6b7`, `m3e4f5a6b7c8`, approved 2026-10-09)
 

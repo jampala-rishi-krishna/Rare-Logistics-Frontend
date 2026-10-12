@@ -113,7 +113,7 @@ export interface AssignmentOptions {
     assigned_weight_kg: number;
     remaining_capacity_kg: number | null;
   }[];
-  drivers: { id: number; name: string; title: string | null }[];
+  drivers: { id: number; name: string; title: string | null; kind?: "driver" | "helper"; phone?: string | null }[];
 }
 export interface ManualVehicleInput {
   vehicle_id: string;
@@ -243,7 +243,8 @@ export function listSalesOrderCities(dateFrom: string, dateTo: string) {
 export function assignSalesOrders(
   ids: string[],
   vehicleId: string,
-  driverIds: number[],
+  driverId: number | null,
+  helperIds: number[],
   manualVehicle?: ManualVehicleInput,
 ) {
   return api.post(
@@ -251,8 +252,8 @@ export function assignSalesOrders(
     {
       salesorder_ids: ids,
       vehicle_id: vehicleId,
-      driver_id: driverIds[0] ?? null,
-      driver_ids: driverIds,
+      driver_id: driverId,
+      helper_ids: helperIds,
       manual_vehicle: manualVehicle,
     },
   );
@@ -283,7 +284,8 @@ export function createNewDriver(input: NewDriverInput) {
 export function sendAssignmentEmail(
   ids: string[],
   vehicleId: string,
-  driverIds: number[],
+  driverId: number | null,
+  helperIds: number[],
   options: { preview?: boolean; htmlBody?: string; subject?: string; manualVehicle?: ManualVehicleInput; resend?: boolean; emailOnly?: boolean; assignmentBatchId?: string | null } = {},
 ) {
   return api.post<{
@@ -301,8 +303,8 @@ export function sendAssignmentEmail(
   }>("/api/load-planning/assignments/send-assignment-email", {
     salesorder_ids: ids,
     vehicle_id: vehicleId,
-    driver_id: driverIds[0] ?? null,
-    driver_ids: driverIds,
+    driver_id: driverId,
+    helper_ids: helperIds,
     preview: options.preview ?? false,
     resend: options.resend ?? false,
     email_only: options.emailOnly ?? false,

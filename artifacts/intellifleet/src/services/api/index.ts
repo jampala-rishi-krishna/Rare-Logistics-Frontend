@@ -9,3 +9,6 @@ export * as warehouseApi from "./warehouse";
 export * as adminApi from "./admin";
 export * as agentApi from "./agent";
 export * as reportsApi from "./reports";
+export * as driverApi from "./driver";
+export * as officerApi from "./officer";
+export * as overviewApi from "./overview";

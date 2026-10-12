@@ -138,6 +138,18 @@ import {
 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import { formatAddress } from "@/lib/address";
+import { SECTION_ROLES, filterNavGroups, postLoginRoute, redirectForDisallowedRole } from "@/lib/roles";
+import AddUserForm from "@/components/admin/AddUserForm";
+import { showInviteActions } from "@/lib/userForm";
+import OfficerPending from "@/pages/officer/OfficerPending";
+import OfficerHandover from "@/pages/officer/OfficerHandover";
+import OfficerOutstanding from "@/pages/officer/OfficerOutstanding";
+import OfficerHistory from "@/pages/officer/OfficerHistory";
+import DriverOverview from "@/pages/overview/DriverOverview";
+import SetPassword from "@/pages/SetPassword";
+import DriverToday from "@/pages/driver/DriverToday";
+import DriverAssignment from "@/pages/driver/DriverAssignment";
+import DriverHistory from "@/pages/driver/DriverHistory";
 
 type Role = "Dispatcher" | "Planner" | "Driver" | "Warehouse" | "Client" | "Admin";
 // Widened from a fixed enum to a plain string: real order status values come
@@ -194,23 +206,6 @@ interface Order {
 
 const orders: Order[] = [];
 const alertsSeed: Alert[] = [];
-// Purely decorative points for MockMap's schematic (non-Leaflet) map when no real `points`
-// prop is passed - used only by the marketing/mock Route builder and customer tracking portal,
-// never by the Control Tower (which always passes real vehicles via LiveOpsMap instead).
-const mockMapPoints: Vehicle[] = [
-  {
-    id: "IF-204",
-    plate: "IF-204",
-    driver: "Marco Santos",
-    speed: 62,
-    fuel: 74,
-    status: "On time",
-    x: 46,
-    y: 55,
-    zone: "Cavite",
-  },
-];
-
 const LIVE_POSITION_ANIMATION_MS = 4800;
 
 // REAL DATA ONLY - no fallback to fixtures for vehicles because:
@@ -558,6 +553,7 @@ const navGroups = [
     label: "Execution",
     items: [
       ["/app/orders", "Orders", ClipboardCheck],
+      ["/app/driver-overview", "Driver Overview", Activity],
       ["/app/comms", "Communications", MessageSquare],
       ["/app/reports", "Reports", BarChart3],
     ],
@@ -575,14 +571,36 @@ const rolePaths: Record<Role, string> = {
 const cx = (...classes: Array<string | false | undefined>) =>
   classes.filter(Boolean).join(" ");
 
-function RoleGate({ children, allowed }: { children: ReactNode; allowed: string[] }) {
+function RoleGate({ children, allowed }: { children: ReactNode; allowed: readonly string[] }) {
   const [, setLocation] = useLocation();
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    authApi.getSession().then(({ user }) => {
-      if (!allowed.includes(user.role.toLowerCase())) setLocation("/app/tower");
-      else setReady(true);
-    }).catch(() => setLocation("/login"));
+    let active = true;
+    if (!getStoredSessionId()) {
+      setLocation("/login");
+      return;
+    }
+    authApi
+      .getSession()
+      .then(({ user }) => {
+        if (!active) return;
+        const role = user.role.toLowerCase();
+        if (user.mustChangePassword) {
+          setLocation("/set-password");
+        } else if (!allowed.includes(role)) {
+          const target = redirectForDisallowedRole(role);
+          if (target === "/login") clearStoredSessionId();
+          setLocation(target);
+        } else {
+          setReady(true);
+        }
+      })
+      .catch(() => {
+        if (active) setLocation("/login");
+      });
+    return () => {
+      active = false;
+    };
   }, [allowed.join(","), setLocation]);
   return ready ? <>{children}</> : <div className="flex min-h-[100dvh] items-center justify-center text-sm text-[#77787b]">Checking access...</div>;
 }
@@ -937,7 +955,6 @@ function PublicFooter() {
       </div>
       <div className="mx-auto mt-9 flex max-w-[1440px] flex-col gap-1 border-t border-[#333] pt-4 text-[11px] text-[#777] sm:flex-row sm:justify-between md:mt-16 md:pt-5 md:text-xs">
         <span>© 2026 Rare Global Food Trading Corp.</span>
-        <span>Frontend demonstration · mocked data</span>
       </div>
     </footer>
   );
@@ -1940,8 +1957,9 @@ function RoleSwitcher({ role }: { role: string }) {
 }
 function Login() {
   const [, setLocation] = useLocation();
-  const [role, setRole] = useState<Role>("Dispatcher");
-  const [email, setEmail] = useState("dispatcher@rgf.com");
+  const rolePreviewEnabled = import.meta.env.VITE_ENABLE_ROLE_PREVIEW === "true";
+  const [role, setRole] = useState<Role | null>(null);
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -1955,9 +1973,12 @@ function Login() {
     }, 400);
     return () => window.clearInterval(timer);
   }, [isSigningIn]);
-  const routeForRole = (userRole: string) => {
-    const roleKey = (Object.keys(rolePaths).find((key) => key.toLowerCase() === userRole.toLowerCase()) || "Dispatcher") as Role;
-    setLocation(rolePaths[roleKey]);
+  // Forced password change first, then the role's home. Returns false for an unknown role.
+  const routeAfterAuth = (user: authApi.ApiUser) => {
+    const target = postLoginRoute(user);
+    if (target === "/login") return false;
+    setLocation(target);
+    return true;
   };
   useEffect(() => {
     // If a session is already stored (and still valid), skip the form.
@@ -1967,7 +1988,12 @@ function Login() {
     }
     authApi
       .getSession()
-      .then((res) => routeForRole(res.user.role))
+      .then((res) => {
+        if (!routeAfterAuth(res.user)) {
+          clearStoredSessionId();
+          setCheckingSession(false);
+        }
+      })
       .catch(() => {
         clearStoredSessionId();
         setCheckingSession(false);
@@ -1979,14 +2005,19 @@ function Login() {
     setAuthError("Signing in...");
     setIsSigningIn(true);
     try {
-      const result = await authApi.login(email, password);
+      const result = await authApi.login(identifier.trim(), password);
       setStoredSessionId(result.token);
-      routeForRole(result.user.role);
+      if (!routeAfterAuth(result.user)) {
+        clearStoredSessionId();
+        setAuthError("This account has no workspace assigned. Contact your administrator.");
+      }
     } catch (error) {
       setAuthError(
         error instanceof ApiError && error.status === 401
-          ? "Invalid email or password."
-          : "Unable to reach the sign-in service. Start the backend and try again.",
+          ? "Invalid credentials."
+          : error instanceof ApiError && error.status === 429
+            ? "Too many attempts. Please try again later."
+            : "Unable to reach the sign-in service. Check your connection and try again.",
       );
     } finally {
       setIsSigningIn(false);
@@ -2023,13 +2054,16 @@ function Login() {
             )}
             <form className="mt-9 grid gap-4" onSubmit={handleSubmit}>
               <label className="grid gap-2 text-sm font-semibold">
-                Work email
+                Email or phone number
                 <input
                   data-testid="input-login-email"
                   required
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  inputMode="email"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="border border-[#d8d7d2] bg-white px-3 py-3 outline-none focus:border-black"
                 />
               </label>
@@ -2039,6 +2073,7 @@ function Login() {
                   data-testid="input-login-password"
                   required
                   type="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="border border-[#d8d7d2] bg-white px-3 py-3 outline-none focus:border-black"
@@ -2048,6 +2083,7 @@ function Login() {
                 Continue <ArrowRight size={16} />
               </Button>
             </form>
+            {rolePreviewEnabled && (
             <div className="mt-8 border-t border-[#d9d8d3] pt-5">
               <div className="micro mb-3 text-[#a16819]">
                 Role-based access
@@ -2067,11 +2103,7 @@ function Login() {
                     data-testid={`button-preview-${item.toLowerCase()}`}
                     key={item}
                     type="button"
-                    onClick={() => {
-                      setRole(item);
-                      // Roles that have a shared work account pre-fill its email.
-                      if (["Dispatcher", "Planner", "Admin"].includes(item)) setEmail(`${item.toLowerCase()}@rgf.com`);
-                    }}
+                    onClick={() => setRole(item)}
                     className={cx(
                       "min-w-0 max-w-full truncate border px-2 py-2 text-xs font-semibold",
                       role === item
@@ -2084,6 +2116,7 @@ function Login() {
                 ))}
               </div>
             </div>
+            )}
           </div>
           <div className="text-xs text-[#77787b]">
             Rare Global Food Trading Corp. · IntelliFleet
@@ -2243,7 +2276,8 @@ function AppShell({
     };
   }, [setLocation]);
   const [alerts, setAlerts] = useState(alertsSeed);
-  const links = navGroups.flatMap((g) => g.items);
+  const visibleNavGroups = filterNavGroups(navGroups, currentRole);
+  const links = visibleNavGroups.flatMap((g) => g.items);
   if (checkingAuth)
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-[#fafaf8] text-sm text-[#77787b]">
@@ -2262,7 +2296,7 @@ function AppShell({
             </div>
           </div>
           <nav className="thin-scroll flex-1 overflow-y-auto p-3">
-            {navGroups.map((group) => (
+            {visibleNavGroups.map((group) => (
               <div className="mb-6" key={group.label}>
                 <div className="sidebar-section-label micro mb-2 px-3 text-[#999]">
                   {group.label}
@@ -2515,7 +2549,7 @@ function MockMap({
   onSelect?: (v: Vehicle) => void;
   points?: Vehicle[];
 }) {
-  const [points, setPoints] = useState(livePoints ?? mockMapPoints);
+  const [points, setPoints] = useState(livePoints ?? []);
   // Only jitter-animate when no real position data was passed in - real
   // vehicle positions come from POST /vehicles/:id/position ticks, not a
   // client-side simulation.
@@ -3455,23 +3489,6 @@ function DataTablePage({
     ],
   };
   const [title, body] = labels[kind];
-  const action =
-    kind === "loads" || kind === "routes" ? (
-      <Button
-        onClick={() =>
-          setNotice(
-            `${kind === "routes" ? "Route draft created" : kind === "loads" ? "Load workspace ready" : "New order form opened"} — mocked for this demo.`,
-          )
-        }
-      >
-        <Plus size={15} />
-        {kind === "routes"
-          ? "New route"
-          : kind === "loads"
-            ? "New load"
-            : "New order"}
-      </Button>
-    ) : undefined;
   return (
     <AppShell title={title}>
       {kind !== "reports" && kind !== "comms" && (
@@ -3479,7 +3496,6 @@ function DataTablePage({
           eyebrow={`Workspace / ${title}`}
           title={title}
           body={body}
-          action={kind === "loads" ? undefined : action}
         />
       )}
       {notice && (
@@ -3672,7 +3688,7 @@ function OrderTable({
     if (!order.sourceId || !order.driverIds?.length) return;
     setRetrying(order.sourceId);
     try {
-      await inventoryApi.sendAssignmentEmail(ids, order.vehicle, order.driverIds, { emailOnly: true, assignmentBatchId: order.batchId });
+      await inventoryApi.sendAssignmentEmail(ids, order.vehicle, order.driverIds[0] ?? null, order.driverIds.slice(1), { emailOnly: true, assignmentBatchId: order.batchId });
       await inventoryApi.waitForEmailStatus(ids);
     } catch {
       /* the refreshed list below shows the real status and reason */
@@ -3828,76 +3844,6 @@ function OrderDrawer({
           Close detail
         </Button>
       </aside>
-    </div>
-  );
-}
-function LegacyRouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
-  return (
-    <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-      <div className="border border-[#e4e3df] bg-white p-5">
-        <div className="micro text-[#77787b]">Route builder</div>
-        <h2 className="display-face mt-3 text-2xl font-bold">Cavite → Cebu</h2>
-        <div className="mt-7 grid gap-3">
-          {[
-            "Cavite cold store",
-            "Batangas cross-dock",
-            "Cebu distribution hub",
-          ].map((stop, i) => (
-            <div
-              className="flex items-center gap-3 border border-[#e4e3df] p-3"
-              key={stop}
-            >
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-black text-[10px] text-white">
-                {i + 1}
-              </span>
-              <span className="text-sm font-semibold">{stop}</span>
-              <MoreHorizontal size={15} className="ml-auto text-[#77787b]" />
-            </div>
-          ))}
-        </div>
-        <div className="mt-8 micro text-[#77787b]">Optimization mode</div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {["Fastest", "Cheapest", "Shortest", "Multimodal"].map((mode, i) => (
-            <button
-              data-testid={`button-route-mode-${mode.toLowerCase()}`}
-              className={cx(
-                "border px-2 py-2 text-xs font-semibold",
-                i === 0
-                  ? "border-black bg-black text-white"
-                  : "border-[#d8d7d2]",
-              )}
-              key={mode}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-        <Button
-          onClick={() =>
-            onNotice("Route saved and assigned to IF-204 — mocked locally.")
-          }
-          className="mt-7 w-full rounded-[4px]"
-        >
-          Save & assign <ArrowRight size={15} />
-        </Button>
-      </div>
-      <div className="grid gap-4">
-        <div className="min-h-[355px] border border-[#e4e3df]">
-          <MockMap />
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          {[
-            ["Distance", "824 km"],
-            ["Duration", "13h 40m"],
-            ["Est. cost", "₱18,640"],
-          ].map(([l, v]) => (
-            <div className="border border-[#e4e3df] bg-white p-4" key={l}>
-              <div className="micro text-[#77787b]">{l}</div>
-              <div className="display-face mt-4 text-2xl font-bold">{v}</div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -4181,88 +4127,6 @@ function LiveWarehouseChecklist() {
   );
 }
 
-function LegacyLoadWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
-  return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_330px]">
-      <div className="border border-[#e4e3df] bg-white p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="micro text-[#77787b]">
-              Draft manifest / RGF-24091
-            </div>
-            <h2 className="display-face mt-2 text-2xl font-bold">
-              Cavite → Cebu
-            </h2>
-          </div>
-          <StatusChip status="Draft" />
-        </div>
-        <div className="mt-7 grid gap-2">
-          {[
-            ["Frozen chicken", "42 cases", "-18°C"],
-            ["Fresh dairy", "18 cases", "2–4°C"],
-            ["Produce", "26 cases", "4–8°C"],
-            ["Dry provisions", "12 cases", "Ambient"],
-          ].map(([name, count, temp], i) => (
-            <div
-              className="flex items-center gap-4 border border-[#e4e3df] p-4"
-              key={name}
-            >
-              <div className="grid h-9 w-9 place-items-center bg-[#f2f2ef]">
-                <Boxes size={16} />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold">{name}</div>
-                <div className="mt-1 text-xs text-[#77787b]">
-                  {count} · {temp}
-                </div>
-              </div>
-              <button
-                data-testid={`button-load-item-${i}`}
-                className="text-xs font-semibold underline underline-offset-2"
-              >
-                Assign
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="border border-[#e4e3df] bg-white p-5">
-        <div className="micro text-[#77787b]">Vehicle capacity</div>
-        <div className="mt-4 flex items-end justify-between">
-          <span className="display-face text-4xl font-bold">78%</span>
-          <span className="mono text-xs text-[#77787b]">IF-204 / 18 t</span>
-        </div>
-        <div className="mt-4 h-3 bg-[#e8e7e3]">
-          <div className="h-full bg-black" style={{ width: "78%" }} />
-        </div>
-        <div className="mt-7 grid gap-3 text-xs">
-          <div className="flex justify-between">
-            <span className="text-[#77787b]">Cold cargo</span>
-            <span className="font-semibold">11.8 t</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[#77787b]">Available</span>
-            <span className="font-semibold">5.2 t</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[#77787b]">Temperature zones</span>
-            <span className="font-semibold">3</span>
-          </div>
-        </div>
-        <Button
-          onClick={() =>
-            onNotice(
-              "Manifest confirmed — driver notification queued in mock gateway.",
-            )
-          }
-          className="mt-9 w-full rounded-[4px]"
-        >
-          Confirm manifest <Check size={15} />
-        </Button>
-      </div>
-    </div>
-  );
-}
 function AlertTable() {
   const { data: items } = useAlertsData();
   const queryClient = useQueryClient();
@@ -4465,202 +4329,339 @@ function Reports() {
     </div>
   );
 }
-const FIXTURE_TEMPLATE_ROWS = [
-  [
-    "Driver acknowledgement",
-    "SMS",
-    "Approved",
-    "Please confirm route {route_id} and estimated departure {eta}.",
-  ],
-  [
-    "Customer ETA update",
-    "WhatsApp",
-    "Approved",
-    "Your IntelliFleet delivery {order_id} is on its way. Estimated arrival: {eta}.",
-  ],
-  [
-    "Critical escalation",
-    "Voice AI",
-    "Draft",
-    "Critical cold-chain alert for {vehicle_id}. Please acknowledge this message.",
-  ],
-  [
-    "Delivery completed",
-    "Viber",
-    "Draft",
-    "Order {order_id} was delivered at {delivered_at}.",
-  ],
-  [
-    "Temperature exception",
-    "SMS",
-    "Approved",
-    "Action required: {order_id} recorded a temperature exception.",
-  ],
-] as const;
+function QueryNotice({
+  isLoading,
+  isError,
+  error,
+  onRetry,
+  empty,
+  emptyText,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  onRetry: () => void;
+  empty: boolean;
+  emptyText: string;
+}) {
+  if (isLoading)
+    return <div className="border border-[#e4e3df] bg-white p-5 text-sm text-[#77787b]">Loading…</div>;
+  if (isError)
+    return (
+      <div role="alert" className="border border-[#f0c4c7] bg-[#fff1f2] p-5 text-sm text-[#86000B]">
+        <div className="font-semibold">Could not load this list.</div>
+        <div className="mt-1 break-words">{error instanceof Error ? error.message : "Request failed."}</div>
+        <button type="button" onClick={onRetry} className="mt-3 border border-[#86000B] bg-white px-4 py-2 text-xs font-semibold">
+          Try again
+        </button>
+      </div>
+    );
+  if (empty)
+    return <div className="border border-[#e4e3df] bg-white p-5 text-sm text-[#55565a]">{emptyText}</div>;
+  return null;
+}
 function Templates() {
-  const { data: live } = useQuery({
+  const live = useQuery({
     queryKey: ["templates"],
     queryFn: () => commsApi.listTemplates(),
     staleTime: 5000,
-    retry: false,
+    retry: 1,
   });
-  const rows =
-    live && live.length
-      ? live.map((t) => [t.name, t.channel, t.status, t.body] as const)
-      : FIXTURE_TEMPLATE_ROWS;
+  const rows = (live.data ?? []).map((t) => [t.name, t.channel, t.status, t.body] as const);
   return (
-    <div className="grid gap-4 md:grid-cols-[1fr_350px]">
-      <div className="grid gap-2">
-        {rows.map(([name, ch, status, body], i) => (
-          <button
-            data-testid={`button-template-${i}`}
-            className="border border-[#e4e3df] bg-white p-5 text-left hover:border-black"
-            key={name}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="font-semibold">{name}</div>
-                <div className="mt-1 text-xs text-[#77787b]">
-                  {ch} · v{2 - (i % 2)}
-                </div>
-              </div>
-              <StatusChip status={status} />
+    <div className="grid gap-2">
+      <QueryNotice
+        isLoading={live.isLoading}
+        isError={live.isError}
+        error={live.error}
+        onRetry={() => void live.refetch()}
+        empty={rows.length === 0}
+        emptyText="No templates found."
+      />
+      {rows.map(([name, ch, status, body], i) => (
+        <div
+          data-testid={`button-template-${i}`}
+          className="border border-[#e4e3df] bg-white p-5 text-left"
+          key={name}
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="font-semibold">{name}</div>
+              <div className="mt-1 text-xs text-[#77787b]">{ch}</div>
             </div>
-            <div className="mono mt-5 max-w-2xl text-xs leading-5 text-[#55565a]">
-              {body}
-            </div>
-          </button>
-        ))}
-      </div>
-      <div className="h-fit border border-[#e4e3df] bg-white p-5">
-        <div className="micro text-[#77787b]">Live preview</div>
-        <div className="mt-6 bg-[#f2f2ef] p-4">
-          <div className="mb-3 text-[10px] text-[#77787b]">
-            WhatsApp · customer
+            <StatusChip status={status} />
           </div>
-          <div className="ml-auto max-w-[240px] rounded-[12px] rounded-br-[3px] bg-[#dcebdc] p-3 text-xs leading-5">
-            Your IntelliFleet delivery RGF-24091 is on its way. Estimated
-            arrival: today, 16:40.
-            <div className="mt-2 text-right text-[10px] text-[#77787b]">
-              06:41 · Delivered
-            </div>
+          <div className="mono mt-5 max-w-2xl text-xs leading-5 text-[#55565a]">
+            {body}
           </div>
         </div>
-      </div>
+      ))}
     </div>
   );
 }
-const FIXTURE_USER_ROWS = [
-  ["Mara Santos", "Operations admin", "All workspaces", "Just now", "Active"],
-  ["Ramon Dela Cruz", "Driver", "Fleet / assigned routes", "2m ago", "Active"],
-  [
-    "Leah Villanueva",
-    "Warehouse manager",
-    "Cavite cold store",
-    "18m ago",
-    "Active",
-  ],
-  ["Sofia Lim", "Client", "Metro Retail Group", "1h ago", "Active"],
-  ["Paolo Reyes", "Dispatcher", "Central Luzon", "3h ago", "Invited"],
-] as const;
+const INVITE_STATE_LABEL: Record<adminApi.InviteState, string> = {
+  none: "No invite",
+  pending: "Invite pending",
+  expired: "Invite expired",
+  used: "Invite used",
+};
+type UserAction = { user: adminApi.ApiUser; kind: "invite" | "reset" | "disable" | "enable" };
 function UsersTable() {
-  const { data: live } = useQuery({
+  const queryClient = useQueryClient();
+  const live = useQuery({
     queryKey: ["users"],
     queryFn: () => adminApi.listUsers(),
     staleTime: 5000,
-    retry: false,
+    retry: 1,
   });
-  const rows =
-    live && live.length
-      ? live.map(
-          (u) => [u.full_name, u.role, u.email, u.status, u.status] as const,
-        )
-      : FIXTURE_USER_ROWS;
-  return (
-    <TableFrame
-      head={
-        <>
-          <th className="px-4 py-3">User</th>
-          <th>Role</th>
-          <th>Workspace</th>
-          <th>Last active</th>
-          <th>Status</th>
-          <th />
-        </>
+  const users = live.data ?? [];
+  const [pending, setPending] = useState<UserAction | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
+  // Only used when the clipboard is unavailable: lets the admin select and copy the link by hand.
+  const [linkFallback, setLinkFallback] = useState<{ userId: string; link: string } | null>(null);
+  const userKey = (u: adminApi.ApiUser) => String(u.id);
+  const [adding, setAdding] = useState(false);
+  const [created, setCreated] = useState<adminApi.ApiUser | null>(null);
+
+  const runAction = async (action: UserAction) => {
+    const { user, kind } = action;
+    setPending(null);
+    setBusyId(userKey(user));
+    setMessage(null);
+    setLinkFallback(null);
+    try {
+      if (kind === "invite" || kind === "reset") {
+        const result = await adminApi.sendInvite(user.id, kind);
+        setMessage({ tone: "good", text: `${kind === "invite" ? "Invite" : "Password reset"} email sent to ${result.to}.` });
+      } else {
+        await adminApi.setUserStatus(user.id, kind === "disable" ? "disabled" : "active");
+        setMessage({ tone: "good", text: `${user.full_name} is now ${kind === "disable" ? "disabled" : "active"}.` });
       }
-    >
-      {rows.map((u, i) => (
-        <tr key={u[0] + i}>
-          <td className="px-4 py-4">
-            <div className="flex items-center gap-3">
-              <div className="grid h-8 w-8 place-items-center rounded-full bg-[#e9e8e4] text-[10px] font-bold">
-                {u[0]
-                  .split(" ")
-                  .map((x) => x[0])
-                  .join("")}
-              </div>
-              <div>
-                <div className="font-semibold">{u[0]}</div>
-                <div className="mt-1 text-xs text-[#77787b]">
-                  {live && live.length
-                    ? live[i].email
-                    : `user-${i + 1}@rgftrading.com`}
-                </div>
-              </div>
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (error) {
+      setMessage({ tone: "bad", text: error instanceof Error ? error.message : "The action failed." });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const copyLink = async (user: adminApi.ApiUser) => {
+    setBusyId(userKey(user));
+    setMessage(null);
+    setLinkFallback(null);
+    try {
+      const result = await adminApi.createInviteLink(user.id, user.invite_state === "used" ? "reset" : "invite");
+      let copied = false;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(result.link);
+          copied = true;
+        }
+      } catch {
+        copied = false;
+      }
+      if (copied) {
+        setMessage({ tone: "good", text: `Link for ${user.full_name} copied to the clipboard.` });
+      } else {
+        setLinkFallback({ userId: userKey(user), link: result.link });
+        setMessage({ tone: "good", text: `Copy the link for ${user.full_name} from the box below.` });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (error) {
+      setMessage({ tone: "bad", text: error instanceof Error ? error.message : "Could not create the link." });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmText = (action: UserAction) => {
+    const email = action.user.email;
+    if (action.kind === "invite") return `Send an invite email to ${email}? They will receive a real email with a link to set their password.`;
+    if (action.kind === "reset") return `Send a password reset email to ${email}? They will receive a real email with a link to choose a new password.`;
+    if (action.kind === "disable") return `Disable ${action.user.full_name}? They will no longer be able to sign in.`;
+    return `Enable ${action.user.full_name}? They will be able to sign in again.`;
+  };
+
+  const actionButton = "border border-[#d8d7d2] bg-white px-2.5 py-1.5 text-xs font-semibold hover:bg-[#efefed] disabled:opacity-40";
+
+  return (
+    <div className="grid gap-3">
+      {!adding && (
+        <div>
+          <button
+            type="button"
+            data-testid="users-add-button"
+            className="inline-flex items-center gap-2 bg-black px-4 py-2 text-sm font-semibold text-white"
+            onClick={() => {
+              setAdding(true);
+              setCreated(null);
+              setMessage(null);
+            }}
+          >
+            <Plus size={15} />
+            Add user
+          </button>
+        </div>
+      )}
+      {adding && (
+        <AddUserForm
+          existingUsers={users}
+          onCancel={() => setAdding(false)}
+          onCreated={(user) => {
+            setAdding(false);
+            setCreated(user);
+            setMessage({ tone: "good", text: `${user.full_name} was created. Send an invite so they can set a password.` });
+            void queryClient.invalidateQueries({ queryKey: ["users"] });
+          }}
+        />
+      )}
+      {created && (
+        <div className="flex flex-wrap items-center gap-3 border border-[#cddfd2] bg-[#edf6f0] px-4 py-3 text-sm" data-testid="users-created-banner">
+          <span className="min-w-0 flex-1 break-words">
+            <span className="font-semibold">{created.full_name}</span> ({created.role}
+            {created.email ? `, ${created.email}` : ""}) is ready for an invite.
+          </span>
+          <button type="button" className={actionButton} disabled={!created.email} onClick={() => setPending({ user: created, kind: "invite" })}>
+            Send invite
+          </button>
+          <button type="button" className={actionButton} onClick={() => void copyLink(created)}>
+            Copy invite link
+          </button>
+          <button type="button" aria-label="Dismiss" onClick={() => setCreated(null)}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      {message && (
+        <div
+          role="status"
+          data-testid="users-action-message"
+          className={`flex items-start justify-between gap-3 border px-4 py-3 text-sm ${message.tone === "bad" ? "border-[#f0c4c7] bg-[#fff1f2] text-[#86000B]" : "border-[#cddfd2] bg-[#edf6f0] text-[#1e7b44]"}`}
+        >
+          <span className="min-w-0 break-words">{message.text}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => setMessage(null)}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      {linkFallback && (
+        <input
+          readOnly
+          aria-label="Invite link"
+          data-testid="users-link-fallback"
+          value={linkFallback.link}
+          onFocus={(e) => e.currentTarget.select()}
+          className="w-full border border-[#d8d7d2] bg-white px-3 py-2 font-mono text-xs"
+        />
+      )}
+      <QueryNotice
+        isLoading={live.isLoading}
+        isError={live.isError}
+        error={live.error}
+        onRetry={() => void live.refetch()}
+        empty={users.length === 0}
+        emptyText="No users found"
+      />
+      {users.length > 0 && (
+        <TableFrame
+          head={
+            <>
+              <th className="px-4 py-3">User</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Staff ID</th>
+              <th>Invite</th>
+              <th>Actions</th>
+            </>
+          }
+        >
+          {users.map((u) => {
+            const isDriver = showInviteActions(u.role);
+            const busy = busyId === userKey(u);
+            const disabled = u.status === "disabled";
+            return (
+              <tr key={userKey(u)} data-testid={`user-row-${userKey(u)}`}>
+                <td className="px-4 py-4 font-semibold">{u.full_name}</td>
+                <td className="text-xs text-[#55565a]">{u.email || "-"}</td>
+                <td className="text-xs text-[#55565a]">{u.phone || "-"}</td>
+                <td>
+                  <StatusChip status={u.role} tone="neutral" />
+                </td>
+                <td>
+                  <StatusChip status={u.status ?? "unknown"} tone={disabled ? "bad" : "good"} />
+                </td>
+                <td className="mono text-xs">{u.staff_id ?? "-"}</td>
+                <td className="text-xs text-[#55565a]">{INVITE_STATE_LABEL[u.invite_state] ?? u.invite_state}</td>
+                <td className="py-3 pr-4">
+                  {isDriver ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      <button type="button" className={actionButton} disabled={busy || !u.email} title={u.email ? undefined : "No email on file"} onClick={() => setPending({ user: u, kind: "invite" })}>
+                        Send invite
+                      </button>
+                      <button type="button" className={actionButton} disabled={busy || !u.email} title={u.email ? undefined : "No email on file"} onClick={() => setPending({ user: u, kind: "reset" })}>
+                        Reset password
+                      </button>
+                      <button type="button" className={actionButton} disabled={busy} onClick={() => void copyLink(u)}>
+                        Copy invite link
+                      </button>
+                      <button type="button" className={actionButton} disabled={busy} onClick={() => setPending({ user: u, kind: disabled ? "enable" : "disable" })}>
+                        {disabled ? "Enable" : "Disable"}
+                      </button>
+                    </div>
+                  ) : null}
+                </td>
+              </tr>
+            );
+          })}
+        </TableFrame>
+      )}
+      {pending && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" data-testid="users-confirm-dialog">
+          <div className="w-full max-w-md border border-[#d8d7d2] bg-white p-5">
+            <p className="text-sm leading-6">{confirmText(pending)}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="border border-[#d8d7d2] px-4 py-2 text-sm font-semibold" onClick={() => setPending(null)}>
+                Cancel
+              </button>
+              <button type="button" className="bg-black px-4 py-2 text-sm font-semibold text-white" onClick={() => void runAction(pending)}>
+                {pending.kind === "invite" ? "Send invite" : pending.kind === "reset" ? "Send reset email" : pending.kind === "disable" ? "Disable" : "Enable"}
+              </button>
             </div>
-          </td>
-          <td>
-            <StatusChip status={u[1]} tone="neutral" />
-          </td>
-          <td className="text-xs text-[#55565a]">{u[2]}</td>
-          <td className="mono text-[11px]">{u[3]}</td>
-          <td>
-            <StatusChip status={u[4]} tone="good" />
-          </td>
-          <td>
-            <MoreHorizontal size={16} />
-          </td>
-        </tr>
-      ))}
-    </TableFrame>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
-const FIXTURE_ROLE_ROWS = [
-  ["Dispatcher", "Routes, fleet, loads, alerts, communications, reports"],
-  ["Driver", "Assigned routes, stops, status updates, history"],
-  ["Warehouse Manager", "Loading, receiving, temperature exceptions"],
-  ["Client", "Orders, tracking, delivery support"],
-  ["Superadmin", "Users, roles, integrations, templates, audit log"],
-] as const;
 function Roles() {
-  const { data: live } = useQuery({
+  const live = useQuery({
     queryKey: ["roles"],
     queryFn: () => adminApi.listRoles(),
     staleTime: 5000,
-    retry: false,
+    retry: 1,
   });
-  const rows =
-    live && live.length
-      ? live.map(
-          (r) => [r.name, r.description || "No description set"] as const,
-        )
-      : FIXTURE_ROLE_ROWS;
+  const rows = (live.data ?? []).map((r) => [r.name, r.description || "No description set"] as const);
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {rows.map(([role, permissions]) => (
-        <div className="border border-[#e4e3df] bg-white p-5" key={role}>
-          <div className="flex items-center justify-between">
+    <div className="grid gap-3">
+      <QueryNotice
+        isLoading={live.isLoading}
+        isError={live.isError}
+        error={live.error}
+        onRetry={() => void live.refetch()}
+        empty={rows.length === 0}
+        emptyText="No roles found."
+      />
+      <div className="grid gap-3 md:grid-cols-2">
+        {rows.map(([role, permissions]) => (
+          <div className="border border-[#e4e3df] bg-white p-5" key={role}>
             <div className="font-semibold">{role}</div>
-            <button
-              data-testid={`button-edit-role-${role.toLowerCase().replace(" ", "-")}`}
-              className="text-xs font-semibold underline underline-offset-2"
-            >
-              Edit
-            </button>
+            <p className="mt-3 text-sm leading-6 text-[#55565a]">{permissions}</p>
           </div>
-          <p className="mt-3 text-sm leading-6 text-[#55565a]">{permissions}</p>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -4760,401 +4761,56 @@ function Integrations() {
     </div>
   );
 }
-const FIXTURE_AUDIT_ROWS = [
-  ["06:42:12", "Mara Santos", "Acknowledged alert", "ALT-738", "AUD-00891"],
-  ["06:41:55", "System", "Delivered message", "RGF-24091", "AUD-00890"],
-  [
-    "06:39:24",
-    "Leah Villanueva",
-    "Confirmed manifest",
-    "RGF-24084",
-    "AUD-00889",
-  ],
-  [
-    "06:34:08",
-    "Mara Santos",
-    "Changed role permissions",
-    "Dispatcher",
-    "AUD-00888",
-  ],
-  [
-    "06:28:46",
-    "Ramon Dela Cruz",
-    "Updated stop status",
-    "STP-4402",
-    "AUD-00887",
-  ],
-] as const;
 function Audit() {
-  const { data: live } = useQuery({
+  const live = useQuery({
     queryKey: ["audit-log"],
     queryFn: () => adminApi.listAuditLog(),
     staleTime: 5000,
-    retry: false,
+    retry: 1,
   });
-  const rows =
-    live && live.length
-      ? live.map(
-          (e) =>
-            [
-              e.event_time,
-              e.actor_id || "System",
-              e.action,
-              `${e.target_entity} ${e.target_id}`,
-              e.ROWID,
-            ] as const,
-        )
-      : FIXTURE_AUDIT_ROWS;
-  return (
-    <TableFrame
-      head={
-        <>
-          <th className="px-4 py-3">Timestamp</th>
-          <th>Actor</th>
-          <th>Action</th>
-          <th>Target</th>
-          <th>Reference</th>
-        </>
-      }
-    >
-      {rows.map((r) => (
-        <tr key={r[4]}>
-          <td className="mono px-4 py-4 text-[11px]">{r[0]}</td>
-          <td className="text-sm">{r[1]}</td>
-          <td className="text-sm font-semibold">{r[2]}</td>
-          <td className="mono text-xs">{r[3]}</td>
-          <td className="mono text-[11px] text-[#77787b]">{r[4]}</td>
-        </tr>
-      ))}
-    </TableFrame>
+  const rows = (live.data ?? []).map(
+    (e) =>
+      [
+        e.event_time,
+        e.actor_id || "System",
+        e.action,
+        `${e.target_entity} ${e.target_id}`,
+        e.ROWID,
+      ] as const,
   );
-}
-
-function DriverToday() {
-  const [, setLocation] = useLocation();
-  const [state, setState] = useState("Awaiting response");
   return (
-    <div className="mx-auto min-h-[100dvh] max-w-[520px] bg-[#fafaf8] px-5 py-5">
-      <div className="flex items-center justify-between">
-        <Logo />
-        <div className="grid h-9 w-9 place-items-center rounded-full bg-black text-xs font-bold text-white">
-          RD
-        </div>
-      </div>
-      <div className="mt-12">
-        <div className="micro text-[#77787b]">
-          Tuesday, 26 August · 06:42 PHT
-        </div>
-        <h1 className="display-face mt-3 text-5xl font-bold leading-[.9]">
-          Good morning,
-          <br />
-          Ramon.
-        </h1>
-        <p className="mt-5 text-sm text-[#55565a]">
-          Your next move is ready when you are.
-        </p>
-      </div>
-      <div className="mt-10 border border-[#e4e3df] bg-white p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="micro text-[#77787b]">Today’s assignment</div>
-            <h2 className="display-face mt-3 text-3xl font-bold">
-              Cavite → Cebu
-            </h2>
-          </div>
-          <StatusChip status="New assignment" tone="neutral" />
-        </div>
-        <div className="mt-6 grid grid-cols-3 gap-3 border-y border-[#e4e3df] py-4 text-xs">
-          <div>
-            <div className="text-[#77787b]">Stops</div>
-            <div className="mono mt-1 font-semibold">04</div>
-          </div>
-          <div>
-            <div className="text-[#77787b]">Cargo</div>
-            <div className="mt-1 font-semibold">98 cases</div>
-          </div>
-          <div>
-            <div className="text-[#77787b]">Departure</div>
-            <div className="mono mt-1 font-semibold">07:00</div>
-          </div>
-        </div>
-        <div className="mt-5 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center bg-[#f2f2ef]">
-            <Truck size={18} />
-          </div>
-          <div>
-            <div className="text-sm font-semibold">IF-204 · DCD 8953</div>
-            <div className="mt-1 text-xs text-[#77787b]">
-              Temperature-controlled · 18 t
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3">
-        <button
-          data-testid="button-driver-accept"
-          onClick={() => {
-            setState("Accepted");
-            setLocation("/driver/route/RT-884");
-          }}
-          className="button-black min-h-[58px] rounded-[4px] text-base font-bold"
+    <div className="grid gap-3">
+      <QueryNotice
+        isLoading={live.isLoading}
+        isError={live.isError}
+        error={live.error}
+        onRetry={() => void live.refetch()}
+        empty={rows.length === 0}
+        emptyText="No audit entries yet."
+      />
+      {rows.length > 0 && (
+        <TableFrame
+          head={
+            <>
+              <th className="px-4 py-3">Timestamp</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Target</th>
+              <th>Reference</th>
+            </>
+          }
         >
-          {state === "Accepted" ? "Accepted" : "Accept assignment"}{" "}
-          <Check size={18} />
-        </button>
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            data-testid="button-driver-decline"
-            onClick={() => setState("Declined")}
-            variant="outline"
-            className="min-h-[52px] rounded-[4px]"
-          >
-            Decline
-          </Button>
-          <Button
-            data-testid="button-driver-call"
-            onClick={() => setState("Dispatch notified")}
-            variant="outline"
-            className="min-h-[52px] rounded-[4px]"
-          >
-            <Phone size={16} />
-            Call dispatch
-          </Button>
-        </div>
-      </div>
-      <div
-        data-testid="text-driver-state"
-        className="mt-5 text-center text-xs text-[#77787b]"
-      >
-        {state}
-      </div>
-      <div className="mt-14 grid grid-cols-2 gap-3">
-        <Link
-          data-testid="driver-history-link"
-          href="/driver/history"
-          className="border border-[#e4e3df] bg-white p-4 text-sm font-semibold"
-        >
-          History <ArrowRight className="float-right" size={15} />
-        </Link>
-        <Link
-          data-testid="driver-status-link"
-          href="/driver/status"
-          className="border border-[#e4e3df] bg-white p-4 text-sm font-semibold"
-        >
-          Update status <ArrowRight className="float-right" size={15} />
-        </Link>
-      </div>
-      <AgentChat compact />
-    </div>
-  );
-}
-function DriverRoute() {
-  const [list, setList] = useState([
-    "En Route",
-    "Loading",
-    "Scheduled",
-    "Scheduled",
-  ]);
-  const [, setLocation] = useLocation();
-  return (
-    <div className="mx-auto min-h-[100dvh] max-w-[520px] bg-[#fafaf8] px-5 py-5">
-      <div className="flex items-center justify-between">
-        <Link data-testid="driver-route-back" href="/driver/today">
-          <ArrowRight className="rotate-180" size={19} />
-        </Link>
-        <div className="micro">Active route</div>
-        <button data-testid="button-driver-menu">
-          <MoreHorizontal size={19} />
-        </button>
-      </div>
-      <div className="mt-10">
-        <div className="micro text-[#77787b]">RT-884 · 4 stops</div>
-        <h1 className="display-face mt-3 text-4xl font-bold">Cavite → Cebu</h1>
-        <div className="mt-5 flex items-center gap-3 text-xs text-[#55565a]">
-          <span className="h-2 w-2 rounded-full bg-[#1e7b44] live-dot" />
-          On schedule · ETA tomorrow, 16:40
-        </div>
-      </div>
-      <div className="route-flow mt-10 grid gap-3">
-        {[
-          "Cavite cold store",
-          "Batangas cross-dock",
-          "Cebu distribution hub",
-          "Metro Retail Group · final delivery",
-        ].map((stop, i) => (
-          <div
-            className="route-step border border-[#e4e3df] bg-white p-4"
-            key={stop}
-          >
-            <div className="flex items-center gap-3">
-              <span
-                className={cx(
-                  "grid h-8 w-8 place-items-center rounded-full text-xs font-bold",
-                  list[i] === "Delivered"
-                    ? "bg-[#edf6f0] text-[#1e7b44]"
-                    : list[i] === "En Route"
-                      ? "bg-black text-white"
-                      : "bg-[#f2f2ef]",
-                )}
-              >
-                {i + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold">{stop}</div>
-                <div className="mt-1 text-xs text-[#77787b]">
-                  {i === 0
-                    ? "Departed 07:04"
-                    : i === 1
-                      ? "Expected 11:25"
-                      : i === 2
-                        ? "Expected tomorrow 13:10"
-                        : "Expected tomorrow 16:40"}
-                </div>
-              </div>
-              <StatusChip status={list[i]} />
-            </div>
-            {i < 3 && (
-              <button
-                data-testid={`button-stop-status-${i}`}
-                onClick={() =>
-                  setList((a) =>
-                    a.map((x, j) =>
-                      j === i
-                        ? x === "Scheduled"
-                          ? "Arrived"
-                          : x === "Arrived"
-                            ? "Loading"
-                            : x === "Loading"
-                              ? "Loaded"
-                              : "Delivered"
-                        : x,
-                    ),
-                  )
-                }
-                className="mt-4 w-full border-t border-[#efeeeb] pt-3 text-left text-xs font-semibold"
-              >
-                Update stop status{" "}
-                <ArrowRight className="float-right" size={14} />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      <button
-        data-testid="button-voice-command"
-        onClick={() => setLocation("/driver/status")}
-        className="button-black mt-7 flex min-h-[58px] w-full items-center justify-center gap-3 rounded-[4px] text-sm font-bold"
-      >
-        <Radio size={18} />
-        Voice command
-      </button>
-    </div>
-  );
-}
-function DriverStatus() {
-  const [listening, setListening] = useState(false);
-  return (
-    <div className="mx-auto min-h-[100dvh] max-w-[520px] bg-[#fafaf8] px-5 py-5">
-      <div className="flex items-center justify-between">
-        <Link data-testid="driver-status-back" href="/driver/today">
-          <ArrowRight className="rotate-180" size={19} />
-        </Link>
-        <div className="micro">Status update</div>
-        <div className="w-5" />
-      </div>
-      <div className="mt-14 text-center">
-        <div className="micro text-[#77787b]">Hands-free demo</div>
-        <h1 className="display-face mt-4 text-5xl font-bold leading-none">
-          Tell us what
-          <br />
-          changed.
-        </h1>
-        <p className="mx-auto mt-5 max-w-xs text-sm leading-6 text-[#55565a]">
-          Tap the mic and try “I’ve arrived” or “temperature issue.”
-        </p>
-        <button
-          data-testid="button-listening-mic"
-          onClick={() => setListening(!listening)}
-          className={cx(
-            "relative mx-auto mt-12 grid h-28 w-28 place-items-center rounded-full bg-black text-white",
-            listening &&
-              "before:absolute before:inset-[-12px] before:rounded-full before:border before:border-[#c4291f]",
-          )}
-        >
-          {listening ? <Activity size={31} /> : <Radio size={31} />}
-        </button>
-        <div
-          data-testid="status-voice-listening"
-          className="mt-7 text-sm font-semibold"
-        >
-          {listening ? "Listening… say a command" : "Ready for a voice command"}
-        </div>
-        {listening && (
-          <button
-            data-testid="button-mock-voice-response"
-            onClick={() => setListening(false)}
-            className="mt-5 text-sm text-link"
-          >
-            Use mock response: “I’ve arrived”
-          </button>
-        )}
-      </div>
-      <div className="mt-16 grid gap-2">
-        {[
-          "En Route",
-          "Arrived",
-          "Loading",
-          "Loaded",
-          "Delivered",
-          "Vehicle Issue",
-          "Temperature Issue",
-        ].map((status, i) => (
-          <button
-            data-testid={`button-status-${status.toLowerCase().replaceAll(" ", "-")}`}
-            onClick={() => setListening(false)}
-            key={status}
-            className="flex items-center justify-between border border-[#e4e3df] bg-white p-4 text-left text-sm font-semibold hover:border-black"
-          >
-            {status}
-            <ChevronRight size={16} />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-function DriverHistory() {
-  return (
-    <div className="mx-auto min-h-[100dvh] max-w-[520px] px-5 py-5">
-      <div className="flex items-center justify-between">
-        <Link data-testid="driver-history-back" href="/driver/today">
-          <ArrowRight className="rotate-180" size={19} />
-        </Link>
-        <div className="micro">Route history</div>
-        <div className="w-5" />
-      </div>
-      <h1 className="display-face mt-12 text-5xl font-bold">Your runs.</h1>
-      <div className="mt-10 grid gap-3">
-        {[
-          ["25 Aug", "Manila → Tagaytay", "Delivered", "04h 12m"],
-          ["24 Aug", "Cavite → Batangas", "Delivered", "02h 48m"],
-          ["22 Aug", "Valenzuela → Baguio", "Partial", "08h 31m"],
-          ["21 Aug", "Makati → Laguna", "Delivered", "03h 16m"],
-        ].map((r) => (
-          <div className="border border-[#e4e3df] bg-white p-5" key={r[0]}>
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="mono text-[10px] text-[#77787b]">{r[0]}</div>
-                <div className="mt-2 font-semibold">{r[1]}</div>
-              </div>
-              <StatusChip status={r[2]} />
-            </div>
-            <div className="mt-5 text-xs text-[#77787b]">
-              {r[3]} · 4 stops · IF-204
-            </div>
-          </div>
-        ))}
-      </div>
+          {rows.map((r) => (
+            <tr key={r[4]}>
+              <td className="mono px-4 py-4 text-[11px]">{r[0]}</td>
+              <td className="text-sm">{r[1]}</td>
+              <td className="text-sm font-semibold">{r[2]}</td>
+              <td className="mono text-xs">{r[3]}</td>
+              <td className="mono text-[11px] text-[#77787b]">{r[4]}</td>
+            </tr>
+          ))}
+        </TableFrame>
+      )}
     </div>
   );
 }
@@ -5334,56 +4990,42 @@ function Warehouse({
   );
 }
 
+const PORTAL_UNAVAILABLE = "Order tracking for customers is not available yet.";
+
+function PortalUnavailable({ heading }: { heading: string }) {
+  return (
+    <div className="mx-auto min-h-[100dvh] max-w-[760px] px-5 py-6">
+      <div className="flex items-center justify-between">
+        <Logo />
+        <Link href="/portal/support" className="text-xs text-link">
+          Support
+        </Link>
+      </div>
+      <div className="mt-14">
+        <div className="micro text-[#77787b]">{heading}</div>
+        <h1 className="display-face mt-4 text-4xl font-bold leading-none">{PORTAL_UNAVAILABLE}</h1>
+        <p className="mt-5 max-w-md text-sm leading-6 text-[#55565a]" data-testid="portal-unavailable">
+          Your deliveries will appear here once customer tracking is switched on. In the meantime, contact support for the status of an order.
+        </p>
+        <Link data-testid="portal-support-cta" href="/portal/support" className="mt-8 inline-flex text-sm text-link">
+          Contact support <ArrowRight className="ml-2" size={15} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function Portal({ page }: { page: "orders" | "tracking" | "support" }) {
   const [supportSent, setSupportSent] = useState(false);
-  const { id: trackingId } = useParams<{ id: string }>();
-  const orderQuery = useQuery({
-    queryKey: ["order", trackingId],
-    queryFn: () => ordersApi.getOrder(trackingId as string),
-    enabled: page === "tracking" && Boolean(trackingId),
+  // Client users are not allowed to read the planning order list (403): any error or an empty
+  // result is shown as an honest "not available" state, never as placeholder data.
+  const ordersQuery = useQuery({
+    queryKey: ["portal-orders"],
+    queryFn: () => inventoryApi.listSalesOrders("2026-01-01", "2027-12-31", 1, "All", "", "assigned", [], {}),
+    enabled: page === "orders",
     retry: false,
   });
-  const { data: portalOrders } = useOrdersData("2026-01-01", "2027-12-31");
-  if (page === "tracking" && orderQuery.isLoading)
-    return (
-      <div className="mx-auto flex min-h-[100dvh] max-w-[760px] items-center justify-center px-5 py-6 text-sm text-[#77787b]">
-        Loading order {trackingId}…
-      </div>
-    );
-  if (page === "tracking" && orderQuery.isError)
-    return (
-      <div className="mx-auto min-h-[100dvh] max-w-[760px] px-5 py-6">
-        <div className="flex items-center justify-between">
-          <Logo />
-          <Link
-            data-testid="portal-tracking-back"
-            href="/portal/orders"
-            className="text-sm text-link"
-          >
-            All orders
-          </Link>
-        </div>
-        <div className="mt-16">
-          <div className="micro text-[#77787b]">Order not found</div>
-          <h1 className="display-face mt-4 text-4xl font-bold leading-none">
-            We couldn’t find order {trackingId}.
-          </h1>
-          <p className="mt-5 max-w-md text-sm leading-6 text-[#55565a]">
-            This order id doesn’t match anything in the live orders table —
-            double-check the link, or it may not be seeded yet.
-          </p>
-          <Link
-            data-testid="portal-tracking-back-cta"
-            href="/portal/orders"
-            className="button-black mt-8 inline-flex rounded-full px-5 py-3 text-sm font-semibold"
-          >
-            Back to your orders
-          </Link>
-        </div>
-      </div>
-    );
-  const liveOrder =
-    page === "tracking" && orderQuery.data ? adaptOrder(orderQuery.data) : null;
+  if (page === "tracking") return <PortalUnavailable heading="Order tracking" />;
   if (page === "support")
     return (
       <div className="mx-auto min-h-[100dvh] max-w-[760px] px-5 py-6">
@@ -5421,7 +5063,7 @@ function Portal({ page }: { page: "orders" | "tracking" | "support" }) {
                 data-testid="input-support-order"
                 required
                 className="border border-[#d8d7d2] bg-white p-3 outline-none"
-                defaultValue="RGF-24091"
+                placeholder="Sales order number"
               />
             </label>
             <label className="grid gap-2 text-sm font-semibold">
@@ -5442,155 +5084,52 @@ function Portal({ page }: { page: "orders" | "tracking" | "support" }) {
         </div>
       </div>
     );
-  if (page === "tracking")
+  if (ordersQuery.isLoading)
     return (
-      <div className="mx-auto min-h-[100dvh] max-w-[760px] px-5 py-6">
-        <div className="flex items-center justify-between">
-          <Logo />
-          <Link
-            data-testid="portal-tracking-back"
-            href="/portal/orders"
-            className="text-sm text-link"
-          >
-            All orders
-          </Link>
-        </div>
-        <div className="mt-14">
-          <div className="micro text-[#77787b]">
-            {"Live delivery · "}
-            {liveOrder?.id ?? trackingId}
-          </div>
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
-            <h1 className="display-face text-5xl font-bold leading-none">
-              On its way.
-            </h1>
-            <StatusChip status={liveOrder?.status ?? "En Route"} />
-          </div>
-          <p className="mt-4 text-sm text-[#55565a]">
-            {liveOrder
-              ? liveOrder.customer + " · " + liveOrder.route
-              : "Metro Retail Group · Cavite → Cebu"}
-          </p>
-          <div className="mt-8 h-[320px] border border-[#e4e3df]">
-            <MockMap />
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2 border border-[#e4e3df] bg-white p-5">
-            <div>
-              <div className="micro text-[#77787b]">Arrives</div>
-              <div className="display-face mt-2 text-xl font-bold">
-                {liveOrder?.eta ?? "16:40"}
-              </div>
-              <div className="mt-1 text-xs text-[#77787b]">Today</div>
-            </div>
-            <div>
-              <div className="micro text-[#77787b]">Temperature</div>
-              <div className="display-face mt-2 text-xl font-bold">
-                {liveOrder?.temperature ?? "2.8°C"}
-              </div>
-              <div className="mt-1 text-xs text-[#1e7b44]">Within range</div>
-            </div>
-            <div>
-              <div className="micro text-[#77787b]">Driver</div>
-              <div className="mt-2 text-sm font-semibold">
-                {liveOrder ? "Assigned" : "Marco Santos"}
-              </div>
-              <div className="mt-1 text-xs text-[#77787b]">
-                {liveOrder?.vehicle ?? "IF-204"}
-              </div>
-            </div>
-          </div>
-          <div className="mt-8 border-t border-[#e4e3df] pt-6">
-            <div className="micro mb-5 text-[#77787b]">Delivery milestones</div>
-            {[
-              "Order confirmed",
-              "Loaded at Cavite",
-              "In transit",
-              "Delivery handoff",
-            ].map((x, i) => (
-              <div className="mb-5 flex items-center gap-3 text-sm" key={x}>
-                <span
-                  className={cx(
-                    "grid h-6 w-6 place-items-center rounded-full",
-                    i < 3 ? "bg-black text-white" : "border border-[#d8d7d2]",
-                  )}
-                >
-                  {i < 3 ? <Check size={13} /> : i + 1}
-                </span>
-                <span className={i < 3 ? "font-semibold" : "text-[#77787b]"}>
-                  {x}
-                </span>
-                {i < 3 && (
-                  <span className="mono ml-auto text-[10px] text-[#77787b]">
-                    {["06:08", "07:01", "09:18"][i]}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-          <Link
-            data-testid="portal-support-link"
-            href="/portal/support"
-            className="button-black mt-4 flex rounded-[4px]"
-          >
-            Need help? Contact support{" "}
-            <ArrowRight className="ml-auto" size={15} />
-          </Link>
-        </div>
+      <div className="mx-auto flex min-h-[100dvh] max-w-[760px] items-center justify-center px-5 py-6 text-sm text-[#77787b]">
+        Loading your orders...
       </div>
     );
+  const portalItems = ordersQuery.isError ? [] : (ordersQuery.data?.items ?? []);
+  if (portalItems.length === 0) return <PortalUnavailable heading="Your deliveries" />;
   return (
     <div className="mx-auto min-h-[100dvh] max-w-[760px] px-5 py-6">
       <div className="flex items-center justify-between">
         <Logo />
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-[#77787b]">Metro Retail Group</span>
-          <div className="grid h-8 w-8 place-items-center rounded-full bg-black text-xs font-bold text-white">
-            MR
-          </div>
-        </div>
+        <Link href="/portal/support" className="text-xs text-link">
+          Support
+        </Link>
       </div>
       <div className="mt-14">
         <div className="micro text-[#77787b]">Your deliveries</div>
         <h1 className="display-face mt-4 text-5xl font-bold leading-none">
           A clear view
           <br />
-          of what’s moving.
+          of what&rsquo;s moving.
         </h1>
-        <p className="mt-5 text-sm leading-6 text-[#55565a]">
-          Updates are kept simple. Open an order for live movement and delivery
-          detail.
-        </p>
       </div>
       <div className="mt-10 grid gap-3">
-        {portalOrders.slice(0, 4).map((o) => (
-          <Link
-            data-testid={`portal-order-${o.id}`}
-            href={`/portal/orders/${o.id}`}
-            className="block border border-[#e4e3df] bg-white p-5 hover:border-black"
-            key={o.id}
-          >
+        {portalItems.slice(0, 20).map((o) => (
+          <div data-testid={`portal-order-${o.id}`} className="block border border-[#e4e3df] bg-white p-5" key={o.id}>
             <div className="flex items-start justify-between">
               <div>
-                <div className="mono text-[10px] text-[#77787b]">{o.id}</div>
-                <div className="mt-2 font-semibold">{o.route}</div>
-                <div className="mt-1 text-xs text-[#77787b]">{o.customer}</div>
+                <div className="mono text-[10px] text-[#77787b]">{o.salesorder_number || o.id}</div>
+                <div className="mt-2 font-semibold">{o.shipping_city || "-"}</div>
+                <div className="mt-1 text-xs text-[#77787b]">{o.customer_name || "-"}</div>
               </div>
-              <StatusChip status={o.status} />
+              <StatusChip status={o.order_status || "Confirmed"} />
             </div>
-            <div className="mt-5 flex justify-between border-t border-[#efeeeb] pt-4 text-xs">
-              <span className="text-[#77787b]">Estimated arrival</span>
-              <span className="font-semibold">{o.eta}</span>
-            </div>
-          </Link>
+            {o.expected_shipment_date && (
+              <div className="mt-5 flex justify-between border-t border-[#efeeeb] pt-4 text-xs">
+                <span className="text-[#77787b]">Expected shipment</span>
+                <span className="font-semibold">{o.expected_shipment_date}</span>
+              </div>
+            )}
+          </div>
         ))}
       </div>
-      <Link
-        data-testid="portal-support-cta"
-        href="/portal/support"
-        className="mt-8 inline-flex text-sm text-link"
-      >
-        Have a question? Contact support{" "}
-        <ArrowRight className="ml-2" size={15} />
+      <Link data-testid="portal-support-cta" href="/portal/support" className="mt-8 inline-flex text-sm text-link">
+        Have a question? Contact support <ArrowRight className="ml-2" size={15} />
       </Link>
     </div>
   );
@@ -6164,7 +5703,8 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     refetchOnWindowFocus: true,
   });
   const [vehicle, setVehicle] = useState("");
-  const [driverIds, setDriverIds] = useState<number[]>([]);
+  const [driverId, setDriverId] = useState<number | null>(null);
+  const [helperIds, setHelperIds] = useState<number[]>([]);
   const [newDriverOpen, setNewDriverOpen] = useState(false);
   const [manualVehicleOpen, setManualVehicleOpen] = useState(false);
   const [manualVehicle, setManualVehicle] = useState({
@@ -6205,11 +5745,11 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     manualVehicle?: inventoryApi.ManualVehicleInput;
     assignmentBatchId?: string | null;
   } | null>(null);
-  const toggleDriver = (driverId: number) => {
-    setDriverIds((current) =>
-      current.includes(driverId)
-        ? current.filter((existing) => existing !== driverId)
-        : [...current, driverId],
+  const toggleHelper = (helperId: number) => {
+    setHelperIds((current) =>
+      current.includes(helperId)
+        ? current.filter((existing) => existing !== helperId)
+        : [...current, helperId],
     );
   };
   if (!id) return null;
@@ -6287,6 +5827,11 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     Boolean(
       selected && data.order.requires_reefer && selected.reefer === false,
     );
+  const driverOptions = data.drivers.filter((d) => d.kind === "driver");
+  const helperOptions = data.drivers.filter((d) => d.kind === "helper");
+  // A driver is required, except for third-party / manually entered trucks (no staff to notify).
+  const driverRequired = !(selected?.third_party || manualVehicleOpen);
+  const missingDriver = driverRequired && driverId === null && !newDriverOpen;
   const confirm = async () => {
     if (alreadyAssigned) {
       setError(
@@ -6295,6 +5840,10 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
       return;
     }
     if (!vehicle || blocked) return;
+    if (missingDriver) {
+      setError("Select a driver for this truck.");
+      return;
+    }
     if (manualVehicleOpen) {
       if (!manualVehicleId) {
         setError("Manual truck: plate/name is required.");
@@ -6328,7 +5877,8 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     setBusy(true);
     setError("");
     try {
-      let assignedDriverIds = driverIds;
+      let assignedDriver: number | null = driverId;
+      let assignedHelperIds = helperIds;
       if (newDriverOpen) {
         let driver = createdDriver;
         if (!driver) {
@@ -6342,8 +5892,14 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
           setCreatedDriver(driver);
           options.refetch();
         }
-        assignedDriverIds = [...driverIds.filter((d) => d !== driver!.id), driver.id];
+        if (/helper/i.test(driver.title || newDriver.title)) {
+          assignedHelperIds = [...helperIds.filter((h) => h !== driver!.id), driver.id];
+        } else {
+          assignedDriver = driver.id;
+          assignedHelperIds = helperIds.filter((h) => h !== driver!.id);
+        }
       }
+      const assignedDriverIds = [...(assignedDriver !== null ? [assignedDriver] : []), ...assignedHelperIds];
       const manualVehiclePayload =
         manualVehicleOpen && manualVehicleOption
           ? {
@@ -6355,7 +5911,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
               third_party: manualVehicleOption.third_party,
             }
           : undefined;
-      const assigned: any = await inventoryApi.assignSalesOrders(ids, vehicle, assignedDriverIds, manualVehiclePayload);
+      const assigned: any = await inventoryApi.assignSalesOrders(ids, vehicle, assignedDriver, assignedHelperIds, manualVehiclePayload);
       const overCapacityNote = assigned?.over_capacity
         ? ` Warning: over capacity by ${Number(assigned.over_capacity_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg (${Number(assigned.over_capacity_percent).toLocaleString("en-US", { maximumFractionDigits: 1 })}%).`
         : "";
@@ -6380,7 +5936,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     if (!lastAssignment) return;
     setError("");
     try {
-      const preview = await inventoryApi.sendAssignmentEmail(lastAssignment.salesOrderIds, lastAssignment.vehicleId, lastAssignment.driverIds, {
+      const preview = await inventoryApi.sendAssignmentEmail(lastAssignment.salesOrderIds, lastAssignment.vehicleId, lastAssignment.driverIds[0] ?? null, lastAssignment.driverIds.slice(1), {
         preview: true,
         manualVehicle: lastAssignment.manualVehicle,
       });
@@ -6588,41 +6144,62 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
           </div>
         )}
         <div className="mt-3">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#55565a]">
-            Assign driver(s) — optional, select all that apply
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#55565a]" htmlFor="assignment-driver">
+            Driver{driverRequired ? " (required)" : " (optional for third-party / manual trucks)"}
+          </label>
+          <select
+            id="assignment-driver"
+            data-testid="select-assignment-driver"
+            value={driverId === null ? "" : String(driverId)}
+            disabled={newDriverOpen && !/helper/i.test(newDriver.title)}
+            onChange={(e) => setDriverId(e.target.value === "" ? null : Number(e.target.value))}
+            className="w-full border border-[#d8d7d2] bg-white px-2 py-2 text-sm"
+          >
+            <option value="">{driverRequired ? "Select a driver" : "No driver"}</option>
+            {driverOptions.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.title ? ` · ${d.title}` : ""}
+                {d.phone ? ` · ${d.phone}` : ""}
+              </option>
+            ))}
+          </select>
+          {driverOptions.length === 0 && (
+            <div className="mt-1 text-xs text-[#77787b]">No active drivers available.</div>
+          )}
+          <div className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-[#55565a]">
+            Helper(s) — optional
           </div>
           <div className="grid gap-1 border border-[#d8d7d2] bg-white p-2 text-sm md:grid-cols-2">
-            {data.drivers.length === 0 && (
-              <div className="text-xs text-[#77787b]">
-                No active riders/drivers/helpers available.
-              </div>
+            {helperOptions.length === 0 && (
+              <div className="text-xs text-[#77787b]">No active helpers available.</div>
             )}
-            {data.drivers.map((d) => (
+            {helperOptions.map((d) => (
               <label
                 key={d.id}
                 className="flex cursor-pointer items-center gap-2 px-1 py-1"
               >
                 <input
                   type="checkbox"
-                  checked={driverIds.includes(d.id)}
-                  onChange={() => toggleDriver(d.id)}
+                  checked={helperIds.includes(d.id)}
+                  onChange={() => toggleHelper(d.id)}
                 />
                 <span>
                   {d.name}
-                  {d.title ? ` · ${d.title}` : ""}
+                  {d.phone ? ` · ${d.phone}` : ""}
                 </span>
               </label>
             ))}
-            <label className="flex cursor-pointer items-center gap-2 px-1 py-1 font-semibold">
-              <input
-                type="checkbox"
-                checked={newDriverOpen}
-                disabled={Boolean(createdDriver)}
-                onChange={() => setNewDriverOpen((open) => !open)}
-              />
-              <span>+ New Driver</span>
-            </label>
           </div>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 px-1 py-1 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={newDriverOpen}
+              disabled={Boolean(createdDriver)}
+              onChange={() => setNewDriverOpen((open) => !open)}
+            />
+            <span>+ New Driver</span>
+          </label>
           {newDriverOpen && (
             <div className="mt-2 border border-[#d8d7d2] bg-white p-3 text-sm">
               <div className="mb-2 text-xs text-[#77787b]">
@@ -6694,6 +6271,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
             !vehicle ||
             blocked ||
             busy ||
+            missingDriver ||
             (manualVehicleOpen &&
               (!manualVehicleId ||
                 (manualVehicle.capacity_kg.trim() &&
@@ -7510,70 +7088,123 @@ function App() {
                 </Route>
                 <Route path="/request-demo" component={RequestDemo} />
                 <Route path="/login" component={Login} />
-                <Route path="/app/tower" component={Tower} />
-                <Route path="/app/fleet">
-                  <DataTablePage kind="fleet" />
+                <Route path="/set-password" component={SetPassword} />
+                <Route path="/app/*?">
+                  <RoleGate allowed={SECTION_ROLES.app}>
+                    <Switch>
+                      <Route path="/app/tower" component={Tower} />
+                      <Route path="/app/fleet">
+                        <DataTablePage kind="fleet" />
+                      </Route>
+                      <Route path="/app/fleet-health">
+                        <AppShell title="Fleet Health">
+                          <FleetHealthPage />
+                        </AppShell>
+                      </Route>
+                      <Route path="/app/routes">
+                        <DataTablePage kind="routes" />
+                      </Route>
+                      <Route path="/app/loads">
+                        <DataTablePage kind="loads" />
+                      </Route>
+                      <Route path="/app/orders">
+                        <DataTablePage kind="orders" />
+                      </Route>
+                      <Route path="/app/driver-overview">
+                        <RoleGate allowed={SECTION_ROLES.driverOverview}>
+                          <AppShell title="Driver Overview">
+                            <DriverOverview />
+                          </AppShell>
+                        </RoleGate>
+                      </Route>
+                      <Route path="/app/comms">
+                        <DataTablePage kind="comms" />
+                      </Route>
+                      <Route path="/app/reports">
+                        <DataTablePage kind="reports" />
+                      </Route>
+                      <Route component={NotFound} />
+                    </Switch>
+                  </RoleGate>
                 </Route>
-                <Route path="/app/fleet-health">
-                  <AppShell title="Fleet Health">
-                    <FleetHealthPage />
-                  </AppShell>
+                <Route path="/driver/*?">
+                  <RoleGate allowed={SECTION_ROLES.driver}>
+                    <Switch>
+                      <Route path="/driver/today" component={DriverToday} />
+                      <Route path="/driver/assignment/:batch_id" component={DriverAssignment} />
+                      <Route path="/driver/history" component={DriverHistory} />
+                      <Route component={NotFound} />
+                    </Switch>
+                  </RoleGate>
                 </Route>
-                <Route path="/app/routes">
-                  <DataTablePage kind="routes" />
+                <Route path="/officer/*?">
+                  <RoleGate allowed={SECTION_ROLES.officer}>
+                    <Switch>
+                      <Route path="/officer/pending" component={OfficerPending} />
+                      <Route path="/officer/handover/:id" component={OfficerHandover} />
+                      <Route path="/officer/outstanding" component={OfficerOutstanding} />
+                      <Route path="/officer/history" component={OfficerHistory} />
+                      <Route component={NotFound} />
+                    </Switch>
+                  </RoleGate>
                 </Route>
-                <Route path="/app/loads">
-                  <DataTablePage kind="loads" />
+                <Route path="/warehouse/*?">
+                  <RoleGate allowed={SECTION_ROLES.warehouse}>
+                    <Switch>
+                      <Route path="/warehouse/dashboard">
+                        <Warehouse page="dashboard" />
+                      </Route>
+                      <Route path="/warehouse/loading">
+                        <LiveWarehouseChecklist />
+                      </Route>
+                      <Route path="/warehouse/receiving">
+                        <Warehouse page="receiving" />
+                      </Route>
+                      <Route path="/warehouse/exceptions">
+                        <Warehouse page="exceptions" />
+                      </Route>
+                      <Route component={NotFound} />
+                    </Switch>
+                  </RoleGate>
                 </Route>
-                <Route path="/app/orders">
-                  <DataTablePage kind="orders" />
+                <Route path="/portal/*?">
+                  <RoleGate allowed={SECTION_ROLES.portal}>
+                    <Switch>
+                      <Route path="/portal/orders">
+                        <Portal page="orders" />
+                      </Route>
+                      <Route path="/portal/orders/:id">
+                        <Portal page="tracking" />
+                      </Route>
+                      <Route path="/portal/support">
+                        <Portal page="support" />
+                      </Route>
+                      <Route component={NotFound} />
+                    </Switch>
+                  </RoleGate>
                 </Route>
-                <Route path="/app/comms">
-                  <DataTablePage kind="comms" />
-                </Route>
-                <Route path="/app/reports">
-                  <DataTablePage kind="reports" />
-                </Route>
-                <Route path="/driver/today"><RoleGate allowed={["driver", "admin"]}><DriverToday /></RoleGate></Route>
-                <Route path="/driver/route/:id"><RoleGate allowed={["driver", "admin"]}><DriverRoute /></RoleGate></Route>
-                <Route path="/driver/status"><RoleGate allowed={["driver", "admin"]}><DriverStatus /></RoleGate></Route>
-                <Route path="/driver/history"><RoleGate allowed={["driver", "admin"]}><DriverHistory /></RoleGate></Route>
-                <Route path="/warehouse/dashboard">
-                  <Warehouse page="dashboard" />
-                </Route>
-                <Route path="/warehouse/loading">
-                  <LiveWarehouseChecklist />
-                </Route>
-                <Route path="/warehouse/receiving">
-                  <Warehouse page="receiving" />
-                </Route>
-                <Route path="/warehouse/exceptions">
-                  <Warehouse page="exceptions" />
-                </Route>
-                <Route path="/portal/orders">
-                  <Portal page="orders" />
-                </Route>
-                <Route path="/portal/orders/:id">
-                  <Portal page="tracking" />
-                </Route>
-                <Route path="/portal/support">
-                  <Portal page="support" />
-                </Route>
-                <Route path="/admin/users">
-                  <AdminContactControls />
-                  <DataTablePage kind="users" />
-                </Route>
-                <Route path="/admin/roles">
-                  <DataTablePage kind="roles" />
-                </Route>
-                <Route path="/admin/integrations">
-                  <DataTablePage kind="integrations" />
-                </Route>
-                <Route path="/admin/templates">
-                  <DataTablePage kind="templates" />
-                </Route>
-                <Route path="/admin/audit-log">
-                  <DataTablePage kind="audit" />
+                <Route path="/admin/*?">
+                  <RoleGate allowed={SECTION_ROLES.admin}>
+                    <Switch>
+                      <Route path="/admin/users">
+                        <AdminContactControls />
+                        <DataTablePage kind="users" />
+                      </Route>
+                      <Route path="/admin/roles">
+                        <DataTablePage kind="roles" />
+                      </Route>
+                      <Route path="/admin/integrations">
+                        <DataTablePage kind="integrations" />
+                      </Route>
+                      <Route path="/admin/templates">
+                        <DataTablePage kind="templates" />
+                      </Route>
+                      <Route path="/admin/audit-log">
+                        <DataTablePage kind="audit" />
+                      </Route>
+                      <Route component={NotFound} />
+                    </Switch>
+                  </RoleGate>
                 </Route>
                 <Route component={NotFound} />
               </Switch>

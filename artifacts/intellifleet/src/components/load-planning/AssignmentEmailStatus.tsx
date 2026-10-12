@@ -80,7 +80,7 @@ export function AssignmentEmailStatusPanel({
     setRetrying(true);
     setRetryError("");
     try {
-      await inventoryApi.sendAssignmentEmail(salesOrderIds, vehicleId, driverIds, { emailOnly: true, manualVehicle, assignmentBatchId });
+      await inventoryApi.sendAssignmentEmail(salesOrderIds, vehicleId, driverIds[0] ?? null, driverIds.slice(1), { emailOnly: true, manualVehicle, assignmentBatchId });
       await queryClient.invalidateQueries({ queryKey: key });
     } catch (e: any) {
       setRetryError(e?.message || "Retry failed.");
