@@ -69,6 +69,7 @@ test("driver params only add driver_id when given", () => {
   assert.deepEqual(driverIdQuery(null), {});
   assert.deepEqual(driverIdQuery("12"), { driver_id: "12" });
   assert.equal(withDriverParams("/driver/today", { driver_id: null }), "/driver/today");
+  assert.equal(withDriverParams("/driver/today", { driver_id: "42" }), "/driver/today?driver_id=42");
   assert.equal(withDriverParams("/driver/assignment/b1", { from: "history", driver_id: "12" }), "/driver/assignment/b1?from=history&driver_id=12");
 });
 

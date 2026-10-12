@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "wouter";
+import { Link, useSearchParams } from "wouter";
 import * as authApi from "@/services/api/auth";
 import * as driverApi from "@/services/api/driver";
 import { formatClock, telHref } from "@/lib/driver";
@@ -73,7 +73,10 @@ export function errorText(error: unknown): string {
 export function MissingDriverNotice() {
   return (
     <div className="border border-[#e4e3df] bg-white p-4 text-sm text-[#55565a]">
-      Admin view: open this page with <span className="font-mono">?driver_id=&lt;staff id&gt;</span> to see a driver&apos;s assignments.
+      Select a driver to view their assignments.
+      <Link href="/app/driver-overview" className="mt-3 inline-flex min-h-[40px] items-center border border-[#d8d7d2] px-3 font-semibold text-black">
+        Choose a driver
+      </Link>
     </div>
   );
 }

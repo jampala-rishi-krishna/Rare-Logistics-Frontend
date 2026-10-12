@@ -38,6 +38,27 @@ test("SO26-18379 keeps the distinct beef SKU stock matched to its own line", () 
   assert.equal(lineStock(order, product, "glacier"), -43.417);
 });
 
+test("SO26-18441 shows the matched physical stock value, including negative, zero, and decimals", () => {
+  const order = {
+    mets_qty_available_for_sale: -13.14,
+    products: [
+      { line_item_id: "li-p059", item_id: "4489499000071564775", sku: "RGF-P059-2", mets_qty_available_for_sale: 196.48, glacier_qty_available_for_sale: 0 },
+      { line_item_id: "li-p320", item_id: "4489499000239895407", sku: "RGF-P320", mets_qty_available_for_sale: 5.38, glacier_qty_available_for_sale: 0 },
+    ],
+  };
+  const lines = [
+    { line_item_id: "li-p059", item_id: "4489499000071564775", sku: "RGF-P059-2" },
+    { line_item_id: "li-p320", item_id: "4489499000239895407", sku: "RGF-P320" },
+  ];
+  const expected = [[196.48, 0], [5.38, 0]];
+  lines.forEach((line, index) => {
+    const product = lineProduct(order, line, index);
+    assert.equal(product?.sku, line.sku);
+    assert.equal(lineStock(order, product, "mets"), expected[index][0]);
+    assert.equal(lineStock(order, product, "glacier"), expected[index][1]);
+  });
+});
+
 test("identified rows do not fall back to combined order-level stock when product stock is missing", () => {
   const order = {
     mets_qty_available_for_sale: 0,
@@ -49,6 +70,8 @@ test("identified rows do not fall back to combined order-level stock when produc
   assert.equal(lineProductName(missingProduct, { name: "Second SKU" }), "Second SKU");
   assert.equal(lineStock(order, missingProduct, "mets"), null);
   assert.equal(lineStock(order, missingProduct, "glacier"), null);
+  assert.equal(lineStock(order, undefined, "mets"), null);
+  assert.equal(lineStock(order, undefined, "glacier"), null);
 });
 
 test("a matched product with null stock stays null instead of using another SKU's order-level stock", () => {

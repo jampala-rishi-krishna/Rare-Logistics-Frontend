@@ -1958,6 +1958,7 @@ function RoleSwitcher({ role }: { role: string }) {
 }
 function Login() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [role, setRole] = useState<Role | null>(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -2006,6 +2007,7 @@ function Login() {
     setIsSigningIn(true);
     try {
       const result = await authApi.login(identifier.trim(), password);
+      queryClient.clear();
       setStoredSessionId(result.token);
       if (!routeAfterAuth(result.user)) {
         clearStoredSessionId();
@@ -2187,6 +2189,7 @@ function AppShell({
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [currentUser, setCurrentUser] = useState<authApi.ApiUser | null>(null);
+  const queryClient = useQueryClient();
   const currentRole = currentUser?.role?.toLowerCase() || "dispatcher";
   const isAdmin = currentRole === "admin";
   const roleLabel = isAdmin ? "Admin" : currentRole === "planner" ? "Planner" : "Dispatcher";
@@ -2200,6 +2203,7 @@ function AppShell({
       }
     }
     clearStoredSessionId();
+    queryClient.clear();
     setLocation("/login");
   };
   const submitPasswordChange = async (event: React.FormEvent) => {

@@ -45,9 +45,7 @@ export function lineProductName(product: Product | null | undefined, item: any):
   return product?.name || item?.name || item?.item_description || item?.description || "Details unavailable";
 }
 
-// The row must show the selected SKU's own warehouse stock. Only an order with no
-// line product at all can fall back to the order-level legacy stock snapshot.
 export function lineStock(order: OrderWithProducts, product: Product | null | undefined, site: "mets" | "glacier") {
   const key = site === "mets" ? "mets_qty_available_for_sale" : "glacier_qty_available_for_sale";
-  return product === undefined ? (order[key] ?? null) : (product?.[key] ?? null);
+  return product?.[key] ?? null;
 }

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import * as overviewApi from "@/services/api/overview";
 import * as dispatchApi from "@/services/api/dispatch";
+import { withDriverParams } from "@/lib/driver";
 import {
   DEFAULT_STALE_MINUTES,
   STALE_STORAGE_KEY,
@@ -253,6 +255,7 @@ export default function DriverOverview() {
                   <th>Vehicle</th>
                   <th>State</th>
                   <th>Progress</th>
+                  <th>Driver view</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,6 +266,14 @@ export default function DriverOverview() {
                     <td className="font-mono text-xs">{r.vehicle ?? "-"}</td>
                     <td>{r.state.replaceAll("_", " ")}</td>
                     <td>{r.progress && r.progress.total > 0 ? `${r.progress.done} of ${r.progress.total}` : "-"}</td>
+                    <td className="pr-3">
+                      <Link
+                        href={withDriverParams("/driver/today", { driver_id: String(r.staff_id) })}
+                        className="inline-flex min-h-[40px] items-center border border-[#d8d7d2] px-3 text-xs font-semibold hover:border-black"
+                      >
+                        View
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

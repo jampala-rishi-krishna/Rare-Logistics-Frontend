@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CalendarClock, ClipboardList, LogOut, RefreshCw } from "lucide-react";
 import { clearStoredSessionId } from "@/services/api/client";
+import * as authApi from "@/services/api/auth";
 import { alreadyDoneText, withDriverParams } from "@/lib/driver";
 import { subscribeResults, useOfflineQueue } from "@/lib/offlineRuntime";
 import type { QueueEntry } from "@/lib/offlineQueue";
@@ -110,9 +111,15 @@ export default function DriverLayout({
     [queryClient],
   );
 
-  const logout = () => {
+  const logout = async () => {
     if (pending + needsAttention > 0 && !window.confirm(`${pending + needsAttention} action(s) are still saved on this phone and not synced. Log out anyway?`)) return;
+    try {
+      await authApi.logout();
+    } catch {
+      // The local session must still be cleared when offline.
+    }
     clearStoredSessionId();
+    queryClient.clear();
     setLocation("/login");
   };
   const adminParam = { driver_id: scope.adminDriverId };
@@ -154,7 +161,7 @@ export default function DriverLayout({
           )}
           <button
             type="button"
-            onClick={logout}
+            onClick={() => void logout()}
             data-testid="driver-logout"
             aria-label="Log out"
             className="inline-flex min-h-[44px] shrink-0 items-center gap-2 border border-[#d8d7d2] bg-white px-3 text-sm font-semibold"
