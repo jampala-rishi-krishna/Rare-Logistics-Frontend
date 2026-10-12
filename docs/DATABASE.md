@@ -28,7 +28,7 @@ the only date-filtered Neon reads.
 | `pretrip_checklists` | Pre-trip checklist per truck per working day | Explicit user entry only |
 | `fuel_logs` | Fuel fill-ups (litres, amount, odometer, full tank) | Explicit user entry only |
 | `zoho_api_usage` | Per-day Zoho API call counters, PK (usage_day, category, source), ~20 rows/day | Additive UPSERT every 60s from `services/zoho_usage.py`, only when there is an unflushed delta; also on shutdown/SIGTERM. Read once at startup to restore today's total. Admin > Users usage tile |
-| `app_settings` | Admin-editable NON-SECRET settings: `key` (PK), `value`, `updated_by`, `updated_at` (migration `p6b7c8d9e0f1`, approved 2026-10-12). Fixed whitelist of 4 keys; see "App settings" below | One UPSERT per Save in Admin > Settings (one DELETE per "Reset to default"). Read ONCE at startup into memory; never read per request |
+| `app_settings` | Admin-editable NON-SECRET settings: `key` (PK), `value`, `updated_by`, `updated_at` (migration `p6b7c8d9e0f1`, approved 2026-10-12). Fixed whitelist of 5 keys; see "App settings" below | One UPSERT per Save in Admin > Settings (one DELETE per "Reset to default"). Read ONCE at startup into memory; never read per request |
 | `form_templates` | Versioned forms: the delivery **acknowledge checklist** and the delivery **check-out** form (`kind`, `version`, `is_draft`, `active`) (migration `o5a6b7c8d9e0`). Seeded v1 of each as DRAFT placeholders | One INSERT per version when an admin saves a template in Driver Overview > Checklist settings (the previous version is flagged inactive in the same transaction). Read by the driver app's templates call and by validation of every acknowledge / check-out |
 | `form_template_items` | The fields of a template version (`key`, `label`, `item_type`, `required`, `options`, `prefill`, `show_when`, `position`) | Inserted together with their `form_templates` row only; never edited in place |
 | `trips` | One row per assignment batch (`batch_id` unique): status `pending/on_trip/returned/handover_submitted/closed`, start/end times + GPS, end distance | Created lazily by the first crew action on a batch; updated by start, end, and when the handover is closed. One write per crew action |
@@ -76,7 +76,7 @@ field list is a placeholder to be replaced in Admin).
 
 ## Admin-editable settings (`app_settings`, migration `p6b7c8d9e0f1`, approved 2026-10-12)
 
-`app_settings(key text PK, value text, updated_by text, updated_at timestamptz)`. Only four non-secret keys can ever be stored
+`app_settings(key text PK, value text, updated_by text, updated_at timestamptz)`. Only five non-secret keys can ever be stored
 (`services/app_settings.py` whitelist; anything else is refused with 404 and nothing is written):
 
 | Key | Meaning | Rules | Fallback (when no row) |
@@ -84,6 +84,7 @@ field list is a placeholder to be replaced in Admin).
 | `DISPATCH_PHONE` | Number the driver app's "Call dispatch" dials; empty hides the button | digits, `+ - ( )` and spaces, max 32 | env `DISPATCH_PHONE`, else empty |
 | `DRIVER_STALE_MINUTES` | Driver Overview "stale" threshold | whole number 1-1440 | env, else 15 |
 | `ZOHO_DAILY_BUDGET` | Platform soft budget of Zoho calls/day (80% pauses non-essential calls) | whole number 100 to `ZOHO_ORG_DAILY_LIMIT` | env, else 4500 |
+| `ZOHO_GUARD_CACHE_ONLY_PCT` | Percentage of `ZOHO_DAILY_BUDGET` at which non-essential Zoho calls pause (the app serves cached data) | whole number 50-99 | env, else 92 |
 | `ZOHO_FAILSAFE_SO_DETAIL_CAP` | SO-detail calls allowed while today's usage total could not be restored from Neon | whole number 0-1000 | env, else 50 |
 
 Resolution order: admin override > environment variable > built-in default. **Read path:** one `SELECT` of the table at startup
@@ -142,7 +143,7 @@ assignment email status; it is never silent.
 non-zero (idle = zero writes), and on shutdown/SIGTERM. A failed flush keeps the delta for the next cycle. At startup the
 day's rows are loaded into memory before the first Zoho call; if that load fails the budget guard allows essential calls
 only until it succeeds. `token_refresh` rows are stored but excluded from the total/budget. Day boundary: `ZOHO_USAGE_TZ`
-(default Asia/Manila). `ZOHO_DAILY_BUDGET` (platform soft budget, default 4500, 80% blocks non-essential calls) and
+(default Asia/Manila). `ZOHO_DAILY_BUDGET` (platform soft budget, default 4500; non-essential calls pause at `ZOHO_GUARD_CACHE_ONLY_PCT` (default 92%) of it and everything except acknowledge/lock stops at 100%) and
 `ZOHO_FAILSAFE_SO_DETAIL_CAP` (default 50; applies only while the startup restore has failed - caps SO detail calls until it
 succeeds) are now **editable in Admin > Settings** (see "Admin-editable settings"); the env vars are only the fallback.
 `ZOHO_ORG_DAILY_LIMIT` (display and the upper bound for the budget, default 10000) stays env-only. `lock_status` (the separate
