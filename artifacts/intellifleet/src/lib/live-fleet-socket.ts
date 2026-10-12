@@ -11,6 +11,7 @@ export interface FleetPosition {
   fuel_pct_live: number;
   address: string;
   last_updated: string;
+  gps_time?: string | null;
 }
 
 interface FleetPositionsMessage {
@@ -21,6 +22,7 @@ interface FleetPositionsMessage {
 }
 
 type Handler = (positions: FleetPosition[]) => void;
+type HeartbeatHandler = () => void;
 type ConnectionHandler = (connected: boolean) => void;
 
 const WS_URL = (import.meta.env.VITE_CARTRACK_WS_URL as string | undefined) || "ws://localhost:8000/ws/fleet";
@@ -33,6 +35,7 @@ class LiveFleetSocket {
   private reconnectTimer: number | null = null;
   private positionHandlers = new Set<Handler>();
   private connectionHandlers = new Set<ConnectionHandler>();
+  private heartbeatHandlers = new Set<HeartbeatHandler>();
   private closedByClient = false;
 
   connect() {
@@ -59,16 +62,18 @@ class LiveFleetSocket {
       } catch {
         return; // ignore malformed frames
       }
-      if (message.type === "FLEET_POSITIONS" && Array.isArray(message.positions)) {
+      if ((message as { type: string }).type === "GPS_HEARTBEAT") {
+        this.heartbeatHandlers.forEach((h) => h());
+      } else if (message.type === "FLEET_POSITIONS" && Array.isArray(message.positions)) {
         this.positionHandlers.forEach((h) => h(message.positions));
       } else if (message.type === "VEHICLE_POSITION_UPDATE") {
-        const update = message as unknown as FleetPosition & { vehicle_id: number; plate_no: string; fuel_pct: number | null };
+        const update = message as unknown as FleetPosition & { vehicle_id: number; plate_no: string; fuel_pct: number | null; gps_time?: string | null };
         this.positionHandlers.forEach((h) => h([{
           vehicle_id: String(update.vehicle_id), registration: update.plate_no,
           current_lat: update.current_lat, current_lng: update.current_lng,
           heading: update.heading, speed_kph: update.speed_kph,
           ignition_on: update.ignition_on, fuel_pct_live: update.fuel_pct ?? 0,
-          address: "", last_updated: update.last_updated,
+          address: "", last_updated: update.last_updated, gps_time: update.gps_time ?? null,
         }]));
       }
     };
@@ -86,6 +91,11 @@ class LiveFleetSocket {
   onPositions(handler: Handler) {
     this.positionHandlers.add(handler);
     return () => this.positionHandlers.delete(handler);
+  }
+
+  onHeartbeat(handler: HeartbeatHandler) {
+    this.heartbeatHandlers.add(handler);
+    return () => this.heartbeatHandlers.delete(handler);
   }
 
   onConnectionChange(handler: ConnectionHandler) {

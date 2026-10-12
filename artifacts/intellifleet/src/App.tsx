@@ -54,9 +54,10 @@ import {
 } from "@/services/adapters";
 import {
   FleetSocketProvider,
+  useFleetFeedStale,
   useFleetSocketConnection,
 } from "@/lib/fleet-socket-provider";
-import { animateLatLng, isVehicleStale } from "@/lib/live-map";
+import { vehiclesRefetchInterval } from "@/lib/live-motion";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import * as routesApi from "@/services/api/routes";
 import {
@@ -212,20 +213,22 @@ interface Order {
 
 const orders: Order[] = [];
 const alertsSeed: Alert[] = [];
-const LIVE_POSITION_ANIMATION_MS = 4800;
 
 // REAL DATA ONLY - no fallback to fixtures for vehicles because:
 // 1. Fixture IDs don't match real Cartrack vehicle ROWIDs
 // 2. Live socket updates only work if cache has real vehicle IDs
 // 3. Fixture fallback masks real API problems and blocks live updates
 function useVehiclesData(liveTracking = true, selectedDate?: string) {
+  const socketConnected = useFleetSocketConnection();
   const query = useQuery({
     queryKey: selectedDate ? ["vehicles", selectedDate] : ["vehicles"],
     queryFn: async () => (await fleetApi.listVehicles(undefined, selectedDate)).map(adaptVehicle),
     staleTime: 0, // Always stale - force WebSocket updates to sync
-    // Fleet is reconciled by the backend every 30 minutes even when no tab is open.
-    // Keep the page aligned with that authoritative snapshot as well as on focus.
-    refetchInterval: liveTracking ? 5000 : 30 * 60 * 1000,
+    // The Fleet snapshot page keeps its slow 30-minute reconcile (the backend reconciles Zoho every 60 minutes
+    // and on Refresh). Live pages do NOT poll while the WebSocket is connected - it pushes every change, and
+    // FleetSocketProvider refetches once on load and on each reconnect. Only while the socket is down do they
+    // fall back to polling every 30s.
+    refetchInterval: vehiclesRefetchInterval(liveTracking, socketConnected),
     refetchOnWindowFocus: true,
     retry: 3,
     retryDelay: 1000,
@@ -2977,6 +2980,7 @@ function Tower() {
   const { data: alerts } = useAlertsData();
   const routesWithStops = useRoutesWithStops();
   const connected = useFleetSocketConnection();
+  const feedStale = useFleetFeedStale();
   const qc = useQueryClient();
   const ackRemote = useAcknowledgeAlert();
   const acknowledge = (id: string) => {
@@ -3047,9 +3051,9 @@ function Tower() {
       setApplyingOptimization(false);
     }
   };
-  const staleFleet =
-    vehicles.length > 0 &&
-    vehicles.every((v) => isVehicleStale(v.lastUpdated ?? null));
+  // Stale = the socket is up but neither a heartbeat nor a position has arrived for a minute. (Not "every
+  // vehicle's last_updated is old": a parked fleet legitimately sends no position updates.)
+  const staleFleet = vehicles.length > 0 && connected && feedStale;
   const openAlerts = alerts.filter((a) => a.status === "Open").length;
   const criticalAlerts = alerts.filter(
     (a) => a.status === "Open" && a.severity === "Critical",

@@ -54,6 +54,8 @@ export interface UiVehicle {
   currentLng: number;
   heading: number;
   lastUpdated: string;
+  // When the device took the current fix (UTC ISO). lastUpdated is the server's poll time.
+  gpsTime: string | null;
   ignitionOn: boolean;
   address: string;
   associatedSos: ApiVehicle["associated_sos"];
@@ -86,6 +88,7 @@ export function adaptVehicle(v: ApiVehicle): UiVehicle {
     currentLng: v.current_lng,
     heading: v.heading,
     lastUpdated: v.last_updated,
+    gpsTime: v.gps_time ?? null,
     ignitionOn: v.ignition_on,
     address: "",
     associatedSos: v.associated_sos || [],

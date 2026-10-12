@@ -2,8 +2,8 @@
 // separates data-transform logic from the component tree.
 import { parseZcqlDatetime } from "@/services/adapters";
 
-// The backend polls provider telemetry every 30s; a vehicle is considered
-// stale once its last_updated is meaningfully older than that cadence.
+// The backend polls provider telemetry every CARTRACK_POLL_INTERVAL_SECONDS (15s in production); the
+// threshold below is deliberately generous so one slow poll does not flag a vehicle as stale.
 const STALE_THRESHOLD_MS = 30_000 * 1.5;
 
 // Uses adapters.ts's parseZcqlDatetime rather than `new Date()` directly - the naive

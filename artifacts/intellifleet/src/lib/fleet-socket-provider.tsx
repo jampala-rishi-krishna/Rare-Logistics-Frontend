@@ -3,21 +3,42 @@
 // navigation. Previously every page that wanted live positions (Tower, DataTablePage) called
 // its own connect()/disconnect() pair, which tore down and reopened the one shared socket on
 // every navigation between them (see the Control Tower "stuck at 0 kph" investigation).
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { liveFleetSocket, type FleetPosition } from "@/lib/live-fleet-socket";
 import { projectLatLngToMapXY, type UiVehicle } from "@/services/adapters";
+import { isFeedStale } from "@/lib/live-motion";
 
-const FleetSocketContext = createContext<{ connected: boolean }>({ connected: false });
+const FleetSocketContext = createContext<{ connected: boolean; feedStale: boolean }>({ connected: false, feedStale: true });
 
 export function FleetSocketProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [connected, setConnected] = useState(liveFleetSocket.isConnected);
+  const lastFeedAt = useRef<number | null>(null);
+  const [feedStale, setFeedStale] = useState(true);
 
   useEffect(() => {
-    const offConnection = liveFleetSocket.onConnectionChange(setConnected);
+    // The backend sends one GPS_HEARTBEAT per poll and a position only when a vehicle's fix changed, so a
+    // parked fleet is quiet. "Feed alive" therefore means any heartbeat or position in the last minute.
+    const markFeed = () => {
+      lastFeedAt.current = Date.now();
+      setFeedStale(false);
+    };
+    const tick = window.setInterval(() => setFeedStale(isFeedStale(lastFeedAt.current, Date.now())), 5_000);
+    let hasConnectedBefore = false;
+    const offConnection = liveFleetSocket.onConnectionChange((isConnected) => {
+      setConnected(isConnected);
+      if (!isConnected) return;
+      markFeed();
+      // While the socket is up /vehicles is not polled at all: one fetch on load, plus one on every RE-connect
+      // to pick up whatever moved while we were disconnected. (The first connect is covered by the page's own load.)
+      if (hasConnectedBefore) void queryClient.invalidateQueries({ queryKey: ["vehicles"], exact: true });
+      hasConnectedBefore = true;
+    });
+    const offHeartbeat = liveFleetSocket.onHeartbeat(markFeed);
     const offPositions = liveFleetSocket.onPositions((positions: FleetPosition[]) => {
-      // Control Tower owns the 5-second live view. Fleet is an operational snapshot:
+      markFeed();
+      // Control Tower owns the live view. Fleet is an operational snapshot:
       // it is refreshed manually or every 30 minutes as one consistent dataset.
       if (window.location.pathname.endsWith("/app/fleet")) return;
       queryClient.setQueryData<UiVehicle[]>(["vehicles"], (old) => {
@@ -37,6 +58,7 @@ export function FleetSocketProvider({ children }: { children: ReactNode }) {
             ignitionOn: pos.ignition_on,
             address: pos.address || vehicle.address,
             lastUpdated: pos.last_updated,
+            gpsTime: pos.gps_time ?? vehicle.gpsTime,
             status: pos.speed_kph > 0 ? "Active" : (Date.now() - new Date(pos.last_updated).getTime() <= 5 * 60 * 1000 ? "Idle" : "No signal"),
             x,
             y,
@@ -49,15 +71,22 @@ export function FleetSocketProvider({ children }: { children: ReactNode }) {
     // router in App(), so it never unmounts on internal navigation. Only a full page
     // unload/reload (or logout, if that ever unmounts the provider) tears the socket down.
     return () => {
+      window.clearInterval(tick);
       offConnection();
+      offHeartbeat();
       offPositions();
       liveFleetSocket.disconnect();
     };
   }, [queryClient]);
 
-  return <FleetSocketContext.Provider value={{ connected }}>{children}</FleetSocketContext.Provider>;
+  return <FleetSocketContext.Provider value={{ connected, feedStale }}>{children}</FleetSocketContext.Provider>;
 }
 
 export function useFleetSocketConnection(): boolean {
   return useContext(FleetSocketContext).connected;
+}
+
+// True when the socket is up but neither a heartbeat nor a position has arrived for a minute.
+export function useFleetFeedStale(): boolean {
+  return useContext(FleetSocketContext).feedStale;
 }
