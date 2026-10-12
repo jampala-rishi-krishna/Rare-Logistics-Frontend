@@ -131,6 +131,7 @@ Steps A, 2b, 3, 4, 5, and 6 are complete and verified in the continuation sectio
 ## Warehouse available-for-sale stock feature (2026-09-24)
 
 - Added live, in-memory Zoho item-stock resolution in `backend/services/warehouse_stock.py` with exact case-insensitive mappings for `Mets Cold Storage Services Inc. RGF` and `Glacier South MSSI`, five-worker bounded concurrency, five-minute cache, and `—`/null fallback for missing or unmatched stock.
+- 2026-10-12 live verification found that the opt-in branch-mapping flag was unset, allowing the broad legacy Mets matcher to let `Mets Cold Storage Services Inc. MSSI / SUPERMARKET` overwrite RGF stock. Known branch IDs now always use their branch-specific warehouse rules; regression coverage checks Zoho's available-for-sale field and committed quantities.
 - Added `Mets Qty Available for Sale` and `Glacier Qty Available for Sale` columns to Inventory, Load Planning, and Confirmed SO tables. The table values are SO-level minimums across all line-item IDs; per-item detail remains available for future drawer expansion.
 - Added historical snapshot columns to `sales_orders`: `mets_qty_available_for_sale` and `glacier_qty_available_for_sale`, written only during existing history writes. Migration `f7c8d9e0a1b2` is applied and is the current head.
 - Verification: backend import passed, 48 tests passed, frontend typecheck passed.

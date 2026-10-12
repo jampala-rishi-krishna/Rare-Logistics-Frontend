@@ -1934,10 +1934,11 @@ function RoleSwitcher({ role }: { role: string }) {
   const [, setLocation] = useLocation();
   const initialRole = (Object.keys(rolePaths).find((key) => key.toLowerCase() === role.toLowerCase()) || "Dispatcher") as Role;
   const [view, setView] = useState<Role>(initialRole);
+  const adminSession = role.toLowerCase() === "admin";
   const choose = (next: Role) => {
     setView(next);
     localStorage.setItem("if-role", next);
-    setLocation(rolePaths[next]);
+    setLocation(adminSession && next === "Driver" ? "/app/driver-overview" : rolePaths[next]);
   };
   return (
     <select
