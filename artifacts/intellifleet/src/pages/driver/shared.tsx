@@ -218,7 +218,7 @@ export function ToastHost() {
   const tone = (t: ToastTone) =>
     t === "error" ? "bg-[#86000B] text-white" : t === "warn" ? "bg-[#a16819] text-white" : "bg-black text-white";
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-50 mx-auto grid max-w-[640px] gap-2 px-4" aria-live="polite">
+    <div className="pointer-events-none fixed inset-x-0 bottom-28 z-50 mx-auto grid max-w-[640px] gap-2 px-4" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} role="status" className={`pointer-events-auto px-4 py-3 text-sm font-semibold shadow-lg ${tone(t.tone)}`}>
           {t.text}

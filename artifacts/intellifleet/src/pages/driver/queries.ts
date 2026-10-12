@@ -7,7 +7,7 @@ import { fetchWithCache, saveToCache, useRuntime } from "@/lib/offlineRuntime";
 import { buildActionBody } from "@/lib/tripActions";
 import type { ActionSpec, SubmitOutcome } from "@/lib/tripActions";
 import type { QueueBlob, QueueKind } from "@/lib/offlineQueue";
-import { alreadyDoneText, withDriverParams } from "@/lib/driver";
+import { alreadyDoneText } from "@/lib/driver";
 import type { DriverScope } from "./shared";
 import { showToast } from "./shared";
 
@@ -121,6 +121,8 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
           setLocation("/login");
         } else {
           showToast(outcome.info.message, "error");
+          // The server state moved on (e.g. the trip already started): refresh the flags.
+          void queryClient.invalidateQueries({ queryKey: ["driver-assignment", batchId] });
         }
         return outcome;
       } finally {
@@ -134,10 +136,4 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
   return { run, busy, ready: Boolean(runtime) };
 }
 
-export function assignmentHref(batchId: string, adminDriverId: string | null, extra: Record<string, string | null> = {}): string {
-  return withDriverParams(`/driver/assignment/${encodeURIComponent(batchId)}`, { ...extra, driver_id: adminDriverId });
-}
-
-export function subpageHref(batchId: string, sub: string, adminDriverId: string | null): string {
-  return withDriverParams(`/driver/assignment/${encodeURIComponent(batchId)}/${sub}`, { driver_id: adminDriverId });
-}
+export { assignmentPath as assignmentHref, subpagePath as subpageHref } from "@/lib/tripNav";

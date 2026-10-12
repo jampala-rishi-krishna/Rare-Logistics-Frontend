@@ -1,15 +1,17 @@
 import { Link, useParams, useSearchParams } from "wouter";
 import { ArrowLeft, MapPin, Navigation } from "lucide-react";
-import * as driverApi from "@/services/api/driver";
-import { formatKg, formatLongDate, formatQty, mapsSearchUrl, telHref, withDriverParams } from "@/lib/driver";
+import { formatClock, formatKg, formatLongDate, formatQty, mapsSearchUrl, personName, telHref, withDriverParams } from "@/lib/driver";
 import { useOfflineQueue } from "@/lib/offlineRuntime";
 import { deriveBatchState } from "@/lib/tripState";
 import type { EffectiveBatch, EffectiveOrder } from "@/lib/tripState";
+import { ackPath, acknowledgeLeft, actionsEnabled, checkinNotice, checkoutPath, handoverPath, nextToAcknowledge, routePath, timelinePath } from "@/lib/tripNav";
 import type { RouteInfo } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
-import { assignmentHref, subpageHref, useAssignmentQuery, useCrewAction, useRouteQuery } from "./queries";
+import { assignmentHref, useAssignmentQuery, useRouteQuery } from "./queries";
+import { useTripActions } from "./subscreen";
 import {
   BlockerNote,
+  ChipBadge,
   CrewList,
   ErrorState,
   MissingDriverNotice,
@@ -46,6 +48,7 @@ function OrderCard({
   scope,
   batchId,
   canAct,
+  hasTrip,
   busy,
   onCheckIn,
   onRetry,
@@ -56,6 +59,7 @@ function OrderCard({
   scope: DriverScope;
   batchId: string;
   canAct: boolean;
+  hasTrip: boolean;
   busy: boolean;
   onCheckIn: (eff: EffectiveOrder) => void;
   onRetry: (id: string) => void;
@@ -67,8 +71,9 @@ function OrderCard({
   const contactPhone = telHref(contact?.phone) ? contact?.phone : null;
   const stop = wf?.stop ?? null;
   const navigateUrl = route?.stops.find((s) => String(s.so_id) === eff.so_id)?.navigate_url ?? (order.address_text ? mapsSearchUrl(order.address_text) : null);
-  const showButtons = canAct && (eff.canAcknowledge || eff.canCheckIn || eff.canCheckOut);
-  const statusLabel = orderStatusLabel(eff);
+  const statusLabel = hasTrip ? eff.statusLabel : orderStatusLabel(eff);
+  const ack = wf?.ack ?? null;
+  const notice = checkinNotice(stop);
 
   return (
     <article className="border border-[#e4e3df] bg-white p-4" data-testid={`driver-order-${order.so_number}`}>
@@ -87,6 +92,32 @@ function OrderCard({
           {statusLabel}
         </div>
       )}
+
+      {ack && (
+        <div className="text-xs text-[#55565a]" data-testid="driver-ack-by">
+          Acknowledged by {personName(ack.by) || "crew"}
+          {ack.at ? ` at ${formatClock(ack.at)}` : ""}
+        </div>
+      )}
+      {stop?.checkin_at && (
+        <div className="text-xs text-[#55565a]">
+          Arrived {formatClock(stop.checkin_at)} by {personName(stop.checkin_by) || "crew"}
+        </div>
+      )}
+      {stop?.checkout_at && (
+        <div className="text-xs text-[#55565a]">
+          Checked out {formatClock(stop.checkout_at)} by {personName(stop.checkout_by) || "crew"}
+          {stop.reason ? ` - ${stop.reason}` : ""}
+        </div>
+      )}
+      {notice &&
+        (notice.far ? (
+          <div role="alert" className="mt-2 border-l-2 border-[#a16819] bg-[#fff8ec] p-3 text-sm font-semibold text-[#6b4a00]" data-testid="driver-checkin-far">
+            {notice.text}
+          </div>
+        ) : (
+          <div className="text-xs text-[#55565a]">{notice.text}</div>
+        ))}
 
       {eff.attention.map((a, i) => (
         <div key={a.id ?? i} role="alert" className="mt-3 border border-[#f0c4c7] bg-[#fff1f2] p-3 text-sm text-[#86000B]">
@@ -138,21 +169,20 @@ function OrderCard({
       {canAct && (
         <div className="mt-3 grid gap-2">
           {eff.canAcknowledge && (
-            <Link href={subpageHref(batchId, `acknowledge/${encodeURIComponent(eff.so_id)}`, scope.adminDriverId)} data-testid={`driver-ack-${order.so_number}`} className={linkBtn(true)}>
+            <Link href={ackPath(batchId, eff.so_id, scope.adminDriverId)} data-testid={`driver-ack-${order.so_number}`} className={linkBtn(true)}>
               Acknowledge
             </Link>
           )}
           {eff.canCheckIn && (
             <button type="button" disabled={busy} onClick={() => onCheckIn(eff)} data-testid={`driver-arrived-${order.so_number}`} className={btnPrimary}>
-              Arrived
+              {busy ? "Getting location..." : "Arrived"}
             </button>
           )}
           {eff.canCheckOut && (
-            <Link href={subpageHref(batchId, `checkout/${encodeURIComponent(eff.so_id)}`, scope.adminDriverId)} data-testid={`driver-checkout-${order.so_number}`} className={linkBtn(true)}>
+            <Link href={checkoutPath(batchId, eff.so_id, scope.adminDriverId)} data-testid={`driver-checkout-${order.so_number}`} className={linkBtn(true)}>
               Deliver / Check out
             </Link>
           )}
-          {!showButtons && null}
         </div>
       )}
       {canAct && !(eff.canAcknowledge || eff.canCheckIn || eff.canCheckOut) && eff.blocker && (
@@ -212,19 +242,32 @@ function PrimaryArea({
   onEnd: () => void;
 }) {
   const links = route?.maps_links ?? [];
-  const routeHref = subpageHref(batchId, "route", scope.adminDriverId);
-  const handoverHref = subpageHref(batchId, "handover", scope.adminDriverId);
-  const timelineHref = withDriverParams(`/driver/trip/${encodeURIComponent(batchId)}`, { driver_id: scope.adminDriverId });
+  const routeHref = routePath(batchId, scope.adminDriverId);
+  const handoverHref = handoverPath(batchId, scope.adminDriverId);
+  const timelineHref = timelinePath(batchId, scope.adminDriverId);
+  const nextAck = state.status === "pending" ? nextToAcknowledge(state.orders, null) : null;
+  const ackLeft = acknowledgeLeft(state.orders);
   return (
     <section className="grid gap-3" data-testid="driver-primary-area">
-      {state.status === "pending" &&
-        (state.canStart ? (
-          <button type="button" disabled={busy} onClick={onStart} data-testid="driver-start-trip" className={btnPrimary}>
-            Start trip
-          </button>
-        ) : (
-          <BlockerNote text={state.startBlocker} />
-        ))}
+      {state.status === "pending" && (
+        <>
+          {nextAck && (
+            <Link href={ackPath(batchId, nextAck, scope.adminDriverId)} data-testid="driver-ack-next" className={btnPrimary}>
+              Acknowledge orders ({ackLeft} left)
+            </Link>
+          )}
+          {state.canStart ? (
+            <button type="button" disabled={busy} onClick={onStart} data-testid="driver-start-trip" className={btnPrimary}>
+              {busy ? "Getting location..." : "Start trip"}
+            </button>
+          ) : (
+            <BlockerNote text={state.startBlocker} />
+          )}
+          <Link href={routeHref} data-testid="driver-route-link" className={btnSecondary}>
+            View route and stops
+          </Link>
+        </>
+      )}
       {state.status === "on_trip" && (
         <>
           {links.length > 0 ? (
@@ -245,7 +288,7 @@ function PrimaryArea({
           </Link>
           {state.canEnd ? (
             <button type="button" disabled={busy} onClick={onEnd} data-testid="driver-end-trip" className={btnPrimary}>
-              End trip - back at warehouse
+              {busy ? "Getting location..." : "End trip - back at warehouse"}
             </button>
           ) : (
             <BlockerNote text={state.endBlocker} />
@@ -279,28 +322,14 @@ export default function DriverAssignment() {
   const detail = useAssignmentQuery(scope, batchId);
   const route = useRouteQuery(scope, batchId);
   const queue = useOfflineQueue();
-  const actions = useCrewAction(scope, batchId ?? "");
+  const trip = useTripActions(scope, batchId ?? "");
 
   const fromHistory = params.get("from") === "history";
   const backHref = withDriverParams(fromHistory ? "/driver/history" : "/driver/today", { driver_id: scope.adminDriverId });
   const batch = detail.data?.data;
   const state = batch ? deriveBatchState(batch, queue.entries) : null;
-  const canAct = !scope.isAdmin;
-  const driverActionsEnabled = false;
-
-  const startTrip = () => void actions.run({ kind: "start", label: "Start trip", path: driverApi.paths.start(batchId), doneMessage: "Trip started" });
-  const endTrip = () => {
-    if (!window.confirm("End the trip? Only do this when you are back at the warehouse.")) return;
-    void actions.run({ kind: "end", label: "End trip", path: driverApi.paths.end(batchId), doneMessage: "Trip ended" });
-  };
-  const checkIn = (eff: EffectiveOrder) =>
-    void actions.run({
-      kind: "check_in",
-      so_id: eff.so_id,
-      label: `Arrived at ${eff.order.so_number}`,
-      path: driverApi.paths.checkIn(batchId, eff.so_id),
-      doneMessage: `Arrived at ${eff.order.so_number}`,
-    });
+  // Crew only (admin viewers stay read-only), and only once the batch with its trip info is loaded.
+  const canAct = actionsEnabled(scope, batch);
 
   return (
     <DriverLayout scope={scope} name={me.data?.name ?? null}>
@@ -329,6 +358,11 @@ export default function DriverAssignment() {
               </div>
               <StatusBadge status={assignmentStatus(batch.assignment_status, batch.email_status)} />
             </div>
+            {batch.trip && (
+              <div className="mt-2">
+                <ChipBadge chip={state.chip} label={state.chipLabel} />
+              </div>
+            )}
             {state.pendingCount > 0 && (
               <div className="mt-2 inline-flex border border-[#e6c36a] bg-[#fff6dd] px-2 py-1 text-xs font-bold text-[#6b4a00]">Pending sync ({state.pendingCount})</div>
             )}
@@ -351,8 +385,8 @@ export default function DriverAssignment() {
           </section>
 
           {scope.isAdmin && <BlockerNote text="Admin view is read only. Crew actions are done by the driver or helper." />}
-          {driverActionsEnabled && canAct && batch.trip && (
-            <PrimaryArea state={state} route={route.data?.data} scope={scope} batchId={batchId} busy={actions.busy || !actions.ready} onStart={startTrip} onEnd={endTrip} />
+          {canAct && (
+            <PrimaryArea state={state} route={route.data?.data} scope={scope} batchId={batchId} busy={trip.busy} onStart={() => void trip.startTrip()} onEnd={() => void trip.endTrip()} />
           )}
           {route.data?.data.warning && <p className="text-xs text-[#6b4a00]">{route.data.data.warning}</p>}
 
@@ -366,9 +400,10 @@ export default function DriverAssignment() {
                 route={route.data?.data}
                 scope={scope}
                 batchId={batchId}
-                canAct={driverActionsEnabled && canAct && Boolean(batch.trip)}
-                busy={actions.busy || !actions.ready}
-                onCheckIn={checkIn}
+                canAct={canAct}
+                hasTrip={Boolean(batch.trip)}
+                busy={trip.busy}
+                onCheckIn={(e) => void trip.checkIn(e.so_id, e.order.so_number)}
                 onRetry={(id) => void queue.retry(id)}
                 onDismiss={(id) => {
                   if (window.confirm("Discard this action? It was not accepted and will be lost.")) void queue.dismiss(id);

@@ -6,7 +6,7 @@ import { useOfflineQueue } from "@/lib/offlineRuntime";
 import type { Batch } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
 import { useToday } from "./queries";
-import { CrewList, ErrorState, MissingDriverNotice, OfflineNote, Skeleton, Stat, StatusBadge, errorText, useDriverMe, useDriverScope } from "./shared";
+import { ChipBadge, CrewList, ErrorState, MissingDriverNotice, OfflineNote, Skeleton, Stat, StatusBadge, errorText, useDriverMe, useDriverScope } from "./shared";
 
 const POLL_MS = 60_000;
 
@@ -32,6 +32,11 @@ function BatchCard({ batch, adminDriverId, pendingCount }: { batch: Batch; admin
             <ChevronRight size={20} className="text-[#77787b]" />
           </div>
         </div>
+        {batch.trip && (
+          <div className="mt-2">
+            <ChipBadge chip={batch.trip.chip} label={batch.trip.chip_label} />
+          </div>
+        )}
         {pendingCount > 0 && (
           <div className="mt-2 inline-flex items-center border border-[#e6c36a] bg-[#fff6dd] px-2 py-1 text-xs font-bold text-[#6b4a00]">
             Pending sync ({pendingCount})

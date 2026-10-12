@@ -151,6 +151,11 @@ import SetPassword from "@/pages/SetPassword";
 import DriverToday from "@/pages/driver/DriverToday";
 import DriverAssignment from "@/pages/driver/DriverAssignment";
 import DriverHistory from "@/pages/driver/DriverHistory";
+import DriverAcknowledge from "@/pages/driver/DriverAcknowledge";
+import DriverRoute from "@/pages/driver/DriverRoute";
+import DriverCheckout from "@/pages/driver/DriverCheckout";
+import DriverHandover from "@/pages/driver/DriverHandover";
+import DriverTrip from "@/pages/driver/DriverTrip";
 
 type Role = "Dispatcher" | "Planner" | "Driver" | "Warehouse" | "Client" | "Admin";
 // Widened from a fixed enum to a plain string: real order status values come
@@ -7146,6 +7151,11 @@ function App() {
                     <Switch>
                       <Route path="/driver/today" component={DriverToday} />
                       <Route path="/driver/assignment/:batch_id" component={DriverAssignment} />
+                      <Route path="/driver/assignment/:batch_id/acknowledge/:so_id" component={DriverAcknowledge} />
+                      <Route path="/driver/assignment/:batch_id/route" component={DriverRoute} />
+                      <Route path="/driver/assignment/:batch_id/checkout/:so_id" component={DriverCheckout} />
+                      <Route path="/driver/assignment/:batch_id/handover" component={DriverHandover} />
+                      <Route path="/driver/trip/:batch_id" component={DriverTrip} />
                       <Route path="/driver/history" component={DriverHistory} />
                       <Route component={NotFound} />
                     </Switch>
