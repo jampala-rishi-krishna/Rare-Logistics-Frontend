@@ -1,6 +1,6 @@
 # IntelliFleet Neon database
 
-Updated 2026-10-12. Alembic head: `n4f5a6b7c8d9` (driver portal). Earlier heads: `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
+Updated 2026-10-12. Alembic head: `p6b7c8d9e0f1` (`app_settings`). Earlier heads: `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
 
 Neon stores durable business history and configuration only. Current/future Sales
 Orders, Fleet telemetry, staff directory data, alerts, routes, optimization runs,
@@ -28,6 +28,16 @@ the only date-filtered Neon reads.
 | `pretrip_checklists` | Pre-trip checklist per truck per working day | Explicit user entry only |
 | `fuel_logs` | Fuel fill-ups (litres, amount, odometer, full tank) | Explicit user entry only |
 | `zoho_api_usage` | Per-day Zoho API call counters, PK (usage_day, category, source), ~20 rows/day | Additive UPSERT every 60s from `services/zoho_usage.py`, only when there is an unflushed delta; also on shutdown/SIGTERM. Read once at startup to restore today's total. Admin > Users usage tile |
+| `app_settings` | Admin-editable NON-SECRET settings: `key` (PK), `value`, `updated_by`, `updated_at` (migration `p6b7c8d9e0f1`, approved 2026-10-12). Fixed whitelist of 4 keys; see "App settings" below | One UPSERT per Save in Admin > Settings (one DELETE per "Reset to default"). Read ONCE at startup into memory; never read per request |
+| `form_templates` | Versioned forms: the delivery **acknowledge checklist** and the delivery **check-out** form (`kind`, `version`, `is_draft`, `active`) (migration `o5a6b7c8d9e0`). Seeded v1 of each as DRAFT placeholders | One INSERT per version when an admin saves a template in Driver Overview > Checklist settings (the previous version is flagged inactive in the same transaction). Read by the driver app's templates call and by validation of every acknowledge / check-out |
+| `form_template_items` | The fields of a template version (`key`, `label`, `item_type`, `required`, `options`, `prefill`, `show_when`, `position`) | Inserted together with their `form_templates` row only; never edited in place |
+| `trips` | One row per assignment batch (`batch_id` unique): status `pending/on_trip/returned/handover_submitted/closed`, start/end times + GPS, end distance | Created lazily by the first crew action on a batch; updated by start, end, and when the handover is closed. One write per crew action |
+| `so_acknowledgements` | One row per SO per trip: the checklist answers, template version, who/when/GPS | One INSERT per "Acknowledge" (idempotent: unique `(trip_id, so_id)`) |
+| `trip_stops` | One row per SO of a trip, frozen in delivery order when the trip starts: check-in (time, GPS, distance, `far` flag) and check-out (time, GPS, outcome, reason, form answers + template version) | INSERTed for every stop when the trip starts; UPDATEd by check-in and by check-out |
+| `trip_events` | Append-only audit log of every trip action (type, user, role, client time + server time, GPS) and the **idempotency ledger** (`idempotency_key` unique, stored `result`) | Exactly one INSERT per action, in the same transaction as the state change. Also read to detect replays and to build timelines / Driver Overview |
+| `trip_photos` | Metadata of uploaded photos and signatures (`storage_key`, content type, size, uploader, `upload_key`); the image bytes live in Cloudflare R2, never in Neon | One INSERT per upload (`POST /api/driver/uploads`, retry-safe by `upload_key`) |
+| `invoice_handovers` | The driver's invoice hand-over to a logistics officer (one per trip): status `pending/acknowledged/closed`, who/when/GPS, chosen officer | One INSERT when the crew submits the handover; UPDATEd when the officer validates (and closed when every invoice is received) |
+| `invoice_handover_items` | One row per invoice (SO) in a handover: crew `handed_over` + note, officer `received/missing/discrepancy` + note + checked time | INSERTed with the handover; UPDATEd by officer validation and by "resolve" of a missing/discrepancy/pending invoice |
 | `alembic_version` | Migration marker | Alembic only; never truncate manually |
 
 ## Driver portal (migration `n4f5a6b7c8d9`, approved 2026-10-12)
@@ -40,6 +50,56 @@ the only date-filtered Neon reads.
 - **Not persisted (deliberately):** stop order and departure time. The driver app lists orders in assignment order and shows "stop order not set".
 - **Login throttle** is in memory (`services/login_rate_limiter.py`): 5 failures / 15 min per typed identifier, per account and per IP. It resets on restart and is not shared between workers (single instance today).
 - **Disabling a login:** the admin status endpoint invalidates the 10-minute user cache, so it applies to the next request on that instance. If `users.status` is changed directly in the database, the user is cut off when their cache entry expires - at most 10 minutes - even though a driver JWT lives 30 days.
+
+## Driver / helper trip workflow, officer validation, Driver Overview (migration `o5a6b7c8d9e0`, approved 2026-10-12)
+
+Contract: `docs/TRIP_WORKFLOW.md`. No endpoint here calls Zoho or writes to Zoho. The nine tables are the ones listed above
+(`form_templates`, `form_template_items`, `trips`, `so_acknowledgements`, `trip_stops`, `trip_events`, `trip_photos`,
+`invoice_handovers`, `invoice_handover_items`); the migration only CREATES them (nothing existing is touched) and seeds two
+DRAFT templates (ids 1 and 2, flagged `is_draft`; the Zoho form behind the check-out template is not publicly readable, so its
+field list is a placeholder to be replaced in Admin).
+
+- **Writes:** every crew action (`acknowledge`, `start`, `check-in`, `check-out`, `end`, `handover`) and every officer action
+  (`validate`, `resolve`) is ONE transaction: the state change plus its `trip_events` row, committed once
+  (`services/trip_workflow.py`, `services/handover.py`, `services/trip_events.py`). A repeated action (same idempotency key, or
+  already done by the other crew member) writes nothing. Nothing writes in the background and nothing polls.
+- **Photos / signatures:** the image goes to Cloudflare R2 (env `R2_*`, see `docs/TRIP_WORKFLOW.md` section 9); Neon stores only
+  the `trip_photos` metadata row. R2 is an external write, not Postgres. Without R2 configured, upload returns 503 and the app hides
+  photo/signature fields.
+- **Reads:** crew screens read `trips`, `trip_stops`, `so_acknowledgements`, `invoice_handovers` through the driver "Today" cache
+  (`services/driver_assignments.py`: in memory per driver, re-read when the assignment state or `trip_events.generation()` changes,
+  or after 5 minutes). Driver Overview endpoints (`services/overview.py`) cache each result for 15 s per (params, generation), so a
+  dashboard polled by several users costs at most one set of queries per generation per 15 s. The officer queue / outstanding /
+  history read `invoice_handovers` + items directly (no cache). Templates are read per validation and by `GET /api/driver/templates`.
+- **Not in Neon:** staff and drivers (n8n), live GPS, Sales Order content (live from Zoho / memory).
+- **Rollback:** `downgrade()` drops the nine tables (destructive: it deletes trip history).
+
+## Admin-editable settings (`app_settings`, migration `p6b7c8d9e0f1`, approved 2026-10-12)
+
+`app_settings(key text PK, value text, updated_by text, updated_at timestamptz)`. Only four non-secret keys can ever be stored
+(`services/app_settings.py` whitelist; anything else is refused with 404 and nothing is written):
+
+| Key | Meaning | Rules | Fallback (when no row) |
+|---|---|---|---|
+| `DISPATCH_PHONE` | Number the driver app's "Call dispatch" dials; empty hides the button | digits, `+ - ( )` and spaces, max 32 | env `DISPATCH_PHONE`, else empty |
+| `DRIVER_STALE_MINUTES` | Driver Overview "stale" threshold | whole number 1-1440 | env, else 15 |
+| `ZOHO_DAILY_BUDGET` | Platform soft budget of Zoho calls/day (80% pauses non-essential calls) | whole number 100 to `ZOHO_ORG_DAILY_LIMIT` | env, else 4500 |
+| `ZOHO_FAILSAFE_SO_DETAIL_CAP` | SO-detail calls allowed while today's usage total could not be restored from Neon | whole number 0-1000 | env, else 50 |
+
+Resolution order: admin override > environment variable > built-in default. **Read path:** one `SELECT` of the table at startup
+(before the Zoho counter starts); afterwards every lookup is a memory read, so the per-call Zoho budget guard never touches Neon.
+**Write path:** Admin > Settings (`PUT/DELETE /api/admin/settings/{key}`, admin only) writes ONE row per Save, or deletes it on
+"Reset to default", then updates memory; nothing else writes. A change is audited in the in-memory audit log (who, from, to). If
+the startup read fails the environment values stay in force. **Secrets are never stored here** (R2, Zoho, Gmail, JWT, Cartrack
+and database credentials stay in environment variables). Single worker: a saved value applies at once to this instance.
+
+## Other write paths added with the driver portal (all through existing tables)
+
+- **Admin creates a login** (`POST /api/admin/users`): one INSERT into `users` with a password hash (optionally the initial password
+  is emailed to the user, never stored in plain text); `.../invite-link` and `.../send-invite` INSERT into `user_invites`; `.../status`
+  UPDATEs `users.status`.
+- **Set password** (`POST /auth/set-password`, `POST /auth/change-password`): UPDATE of `users.password_hash` (+ `must_change_password`),
+  and `user_invites.used_at` when a link is redeemed.
 
 ## Assignment email status (migrations `l2d3e4f5a6b7`, `m3e4f5a6b7c8`, approved 2026-10-09)
 
@@ -82,8 +142,11 @@ assignment email status; it is never silent.
 non-zero (idle = zero writes), and on shutdown/SIGTERM. A failed flush keeps the delta for the next cycle. At startup the
 day's rows are loaded into memory before the first Zoho call; if that load fails the budget guard allows essential calls
 only until it succeeds. `token_refresh` rows are stored but excluded from the total/budget. Day boundary: `ZOHO_USAGE_TZ`
-(default Asia/Manila). Env: `ZOHO_DAILY_BUDGET` (platform soft budget, default 4000, 80% blocks non-essential calls),
-`ZOHO_ORG_DAILY_LIMIT` (display only, default 10000), `ZOHO_FAILSAFE_SO_DETAIL_CAP` (default 50; applies only while the startup restore has failed - caps SO detail calls until it succeeds). The old `zoho_usage_state.json` file is no longer used.
+(default Asia/Manila). `ZOHO_DAILY_BUDGET` (platform soft budget, default 4500, 80% blocks non-essential calls) and
+`ZOHO_FAILSAFE_SO_DETAIL_CAP` (default 50; applies only while the startup restore has failed - caps SO detail calls until it
+succeeds) are now **editable in Admin > Settings** (see "Admin-editable settings"); the env vars are only the fallback.
+`ZOHO_ORG_DAILY_LIMIT` (display and the upper bound for the budget, default 10000) stays env-only. `lock_status` (the separate
+lock credential), `lock_webhook` and `rate_limited` (429) calls are recorded but excluded from the total/budget. The old `zoho_usage_state.json` file is no longer used.
 
 ## Sales Order history
 
