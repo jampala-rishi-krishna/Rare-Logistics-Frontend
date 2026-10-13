@@ -104,6 +104,11 @@ New:
 "crew": [{"id": 9, "name": "Emert", "role": "driver", "phone": "0948..."}, {"id": 17, "name": "Raymond", "role": "helper", "phone": "..."}]
 ```
 `stop_order_set` becomes true when an optimized sequence exists or the trip started. `helpers` stays (helpers only, phone for tap-to-call).
+Phase 0 additions (2026-10-13): `total_kg`, `total_packs`, `so_count` and every progress number come from ONE read model, `services/day_model.py`
+(also used by Driver Overview and the reconciliation check). `total_packs` is **null** (shown "-") when no line of the batch is counted in packs
+(unit `pck`/`pack`/`packs`; see `services/pack_units.py`), never 0; `kg_complete` is false while any line has no known weight; `progress` =
+`{acknowledged, stops_done, delivered, partial, failed}`; `trip_number` / `trips_on_date` number the batches of one delivery date by assignment time
+("Trip 1", "Trip 2" - two Assign clicks to the same truck are two real trips and are never merged); `assigned_at`.
 `BatchDetail` = Batch + `orders[]`, each existing order field plus:
 ```json
 "workflow": {"ack": null | {"at","by": {"user_id","name","role"},"template_version"},
@@ -138,8 +143,11 @@ All dates are Manila dates (`YYYY-MM-DD`); default today. `warehouse` = METS|GLA
   - drivers (primary drivers only, helpers excluded): `active` = has >= 1 batch in range; `on_trip` = >= 1 trip `on_trip`; `returned` = active, none on_trip/pending-start, all their trips returned/handover_submitted/closed; `idle` = staff drivers (role DRIVER, active, in filter) with no batch in range.
   - sos: `assigned` = SOs in batches; `acknowledged` = SOs with an acknowledgement; `delivered`/`partial`/`failed` = checked-out SOs by outcome (Delivered / Partially delivered / Failed / Returned).
   - `trips_pending_handover` = trips with status `returned` or `handover_submitted`; `invoices_outstanding` = handover items not `received` (all dates, unaffected by the range) .
+- `GET /reconcile?date=&source=auto|memory|neon` (**admin only**, never cached, no Zoho) -> for one date, per person (driver or helper): SOs / kg / packs / batches as seen by Load Planning
+  Confirmed SO (`routers/load_planning._summary`; in-memory assigned records when warm, else the Neon rows the screen reads for past dates), the Driver App (`driver_assignments.build_batches`)
+  and Driver Overview (`overview.board`), plus `mismatches` per person, `lp_missing` (assigned SOs whose data is not in memory), and `ok`. `tests/test_day_model.py` enforces it.
 - `GET /board?date=&warehouse=&status=&driver_id=&stale_minutes=15` -> `{"stale_minutes","rows":[{"staff_id","name","role":"driver|helper","warehouse","state":"idle|to_acknowledge|ready|on_trip|returned|handover_pending|closed","vehicle","batch_id","current_stop":"customer name"|null,"progress":{"done":3,"total":5},"last_action":{"type","at","label"},"last_gps_at","stale":bool}]}`;
-  `stale` = on_trip and no event for `stale_minutes` (default env `DRIVER_STALE_MINUTES`, UI-adjustable). A person on several batches shows the most active one (on_trip > ready > to_acknowledge > returned > handover_pending > closed).
+  **One row per person; progress is the SUM over all of the person's batches that day** (`progress {done,total}`, `acknowledged`, `batch_count`, `kg`, `packs`) and `trips[]` lists each batch ("Trip 1", "Trip 2"), so it always equals the person's own app. `stale` = on_trip and no event for `stale_minutes` (default env `DRIVER_STALE_MINUTES`, UI-adjustable). A person on several batches shows the most active one (on_trip > ready > to_acknowledge > returned > handover_pending > closed).
 - `GET /drivers/{staff_id}?from=&to=` -> `{"person":{...},"batches":[Batch + trip summary],"totals":{...}}`; `GET /trips/{batch_id}` -> Timeline.
 - `GET /map?date=|from=&to=&driver_id=&warehouse=` -> `{"warehouses":[{"id","name","lat","lng"}],"points":[{"type":"start|checkin|checkout|end","lat","lng","at","so_number","customer_name","batch_id","driver_name","accuracy_m","outcome"}]}` (only points that have GPS).
 - `GET /export.csv?from=&to=&warehouse=&driver_id=` one row per SO: date, batch, driver, helpers, vehicle, so_number, customer, acknowledged_at/by, checkin_at, distance_m, checkout_at, outcome, reason, minutes_at_stop, trip_started, trip_ended, handover status, invoice status, officer, validated_at.

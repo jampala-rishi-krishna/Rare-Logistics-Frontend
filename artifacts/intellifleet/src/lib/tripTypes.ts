@@ -65,7 +65,12 @@ export interface Batch {
   vehicle: string;
   so_count: number;
   total_kg: number;
-  total_packs: number;
+  kg_complete?: boolean;
+  total_packs: number | null; // null = no pack-unit line (unknown), shown as a dash
+  trip_number?: number;
+  trips_on_date?: number;
+  assigned_at?: string | null;
+  progress?: { acknowledged: number; stops_done: number; delivered: number; partial: number; failed: number };
   first_area: string | null;
   last_area: string | null;
   departure_time: string | null;
@@ -83,7 +88,7 @@ export interface OrderLine {
   name: string;
   quantity: number;
   unit: string | null;
-  packs: number;
+  packs: number | null;
   kg: number | null;
 }
 
@@ -129,7 +134,8 @@ export interface DriverOrder {
   shipment_date: string | null;
   lines: OrderLine[];
   total_kg: number;
-  total_packs: number;
+  kg_complete?: boolean;
+  total_packs: number | null;
   notes: string | null;
   order_status?: string | null;
   shipment_status?: string | null;

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { ChevronRight, Phone } from "lucide-react";
-import { browserPollDeps, formatKg, formatLongDate, greeting, startVisibilityPolling, telHref, withDriverParams } from "@/lib/driver";
+import { browserPollDeps, formatKg, formatLongDate, formatQty, greeting, startVisibilityPolling, telHref, withDriverParams } from "@/lib/driver";
 import { useOfflineQueue } from "@/lib/offlineRuntime";
 import type { Batch } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
@@ -45,7 +45,7 @@ function BatchCard({ batch, adminDriverId, pendingCount }: { batch: Batch; admin
         <div className="mt-4 grid grid-cols-3 gap-3 border-y border-[#efeeeb] py-3">
           <Stat label="Orders" value={batch.so_count} />
           <Stat label="Total" value={formatKg(batch.total_kg)} />
-          <Stat label="Packs" value={batch.total_packs.toLocaleString("en-US")} />
+          <Stat label="Packs" value={formatQty(batch.total_packs)} />
         </div>
         <div className="mt-3">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Route</div>

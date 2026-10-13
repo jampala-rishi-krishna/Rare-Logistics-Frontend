@@ -200,7 +200,7 @@ function OrderCard({
       {(order.lines.length > 0 || order.details_loading) && (
         <details className="mt-3 border-t border-[#efeeeb] pt-2">
           <summary className="min-h-[44px] cursor-pointer py-2 text-sm font-semibold">
-            Items ({formatQty(order.total_packs)} packs, {formatKg(order.total_kg)})
+            Items ({order.total_packs === null ? "no pack count" : `${formatQty(order.total_packs)} packs`}, {formatKg(order.total_kg)})
           </summary>
           {order.details_loading && <div className="text-xs font-semibold text-[#6b4a00]">Details loading&hellip;</div>}
           <ul className="divide-y divide-[#efeeeb]">
@@ -212,7 +212,7 @@ function OrderCard({
                     Qty {formatQty(line.quantity)}
                     {line.unit ? ` ${line.unit}` : ""}
                   </span>
-                  <span>{formatQty(line.packs)} packs</span>
+                  {line.packs !== null && <span>{formatQty(line.packs)} packs</span>}
                   {line.kg !== null && line.kg !== undefined && <span>{formatKg(line.kg)}</span>}
                 </div>
               </li>
