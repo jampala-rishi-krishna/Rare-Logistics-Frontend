@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, RotateCcw } from "lucide-react";
 import * as adminApi from "@/services/api/admin";
+import DriverFormsSettings from "./DriverFormsSettings";
 import { formatFallback, isDirty, sourceLabel, validateSettingInput, type AdminSetting } from "@/lib/settingsForm";
 
 function fmtWhen(value: string | null): string {
@@ -119,6 +120,13 @@ export default function AdminSettings() {
         </div>
       )}
       {query.data?.settings.map((setting) => <SettingRow key={setting.key} setting={setting} />)}
+      <section aria-label="Driver app forms" className="space-y-3 pt-4" data-testid="admin-driver-forms">
+        <h2 className="text-lg font-bold">Driver app forms</h2>
+        <p className="max-w-prose text-xs text-[#55565a]">
+          The acknowledgement checklist and the Delivery time log the driver app asks for. Saving creates a new version; the driver app uses the active one and every answer already recorded stays readable.
+        </p>
+        <DriverFormsSettings />
+      </section>
     </div>
   );
 }

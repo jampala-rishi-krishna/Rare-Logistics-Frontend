@@ -197,3 +197,20 @@ test("Invoice / DR number: digits only, kept as text, suggestion prefilled but e
   assert.deepEqual(validateCheckout(items, { [INVOICE_KEY]: "000123", outcome: "Delivered" }), {});
   assert.equal(buildCheckoutAnswers(items, { [INVOICE_KEY]: " 000123 ", outcome: "Delivered" }, () => "k").answers[INVOICE_KEY], "000123"); // string, zeros kept
 });
+
+import { blockedPhotoItems, submitLabelFor } from "./tripForms.ts";
+
+test("proof of delivery: a missing photo is explained, never silently hidden; the button names the outcome", () => {
+  const pod = { id: 20, key: "delivery_photo", label: "Proof of delivery photo", item_type: "photo", required: true, options: null, prefill: null, show_when: { key: "outcome", in: ["Delivered", "Partially delivered"] }, position: 4 };
+  const outcome = { id: 21, key: "outcome", label: "Outcome", item_type: "radio", required: true, options: ["Delivered", "Failed"], prefill: null, show_when: null, position: 2 };
+  const items = [outcome, pod] as never;
+  assert.deepEqual(blockedPhotoItems(items, false, { outcome: "Delivered" }).map((i) => i.key), ["delivery_photo"]);
+  assert.deepEqual(blockedPhotoItems(items, false, { outcome: "Failed" }), []); // not asked for a failed delivery
+  assert.deepEqual(blockedPhotoItems(items, true, { outcome: "Delivered" }), []); // storage is configured: the field is simply shown
+  assert.equal(validateCheckout(items, { outcome: "Delivered" })["delivery_photo"], "Take a photo first (proof of delivery is required)");
+  assert.deepEqual(validateCheckout(items, { outcome: "Failed" }), {});
+  assert.equal(submitLabelFor("Delivered"), "Mark as delivered");
+  assert.equal(submitLabelFor("Partially delivered"), "Mark as partially delivered");
+  assert.equal(submitLabelFor("Failed"), "Save departure");
+  assert.equal(submitLabelFor(undefined), "Save departure");
+});

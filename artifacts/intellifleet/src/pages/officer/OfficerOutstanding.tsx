@@ -34,7 +34,7 @@ function OutstandingCard({ item, canAct }: { item: officerApi.OutstandingItem; c
     <article className="border border-[#e4e3df] bg-white p-4" data-testid={`outstanding-${item.item_id}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-mono text-base font-bold">{item.so_number}</div>
+          <div className="font-mono text-base font-bold">{item.so_number}<span className="ml-2 text-sm font-semibold text-[#55565a]">Invoice/DR {item.invoice_no ?? "—"}</span></div>
           <div className="break-words text-sm text-[#55565a]">{item.customer_name ?? "-"}</div>
         </div>
         <div className="flex items-center gap-2">

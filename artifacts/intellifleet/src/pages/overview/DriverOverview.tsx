@@ -9,18 +9,16 @@ import ExportTab from "./ExportTab";
 import HandoverTab from "./HandoverTab";
 import IssuesTab from "./IssuesTab";
 import LiveTab from "./LiveTab";
-import SettingsTab from "./SettingsTab";
 import TripsTab from "./TripsTab";
 import type { TopFilter } from "./LiveTab";
 import { ErrorNote, Skeleton, inputClass } from "./shared";
 
-type Tab = "live" | "trips" | "handover" | "issues" | "settings" | "export";
+type Tab = "live" | "trips" | "handover" | "issues" | "export";
 const TABS: Array<[Tab, string]> = [
   ["live", "Live"],
   ["trips", "Trips"],
   ["handover", "Invoices & handover"],
   ["issues", "Issues"],
-  ["settings", "Settings"],
   ["export", "Export CSV"],
 ];
 
@@ -140,7 +138,6 @@ export default function DriverOverview() {
       {tab === "trips" && <TripsTab filter={filter} />}
       {tab === "handover" && <HandoverTab filter={filter} />}
       {tab === "issues" && <IssuesTab filter={filter} />}
-      {tab === "settings" && <SettingsTab />}
       {tab === "export" && <ExportTab filter={filter} />}
     </div>
   );

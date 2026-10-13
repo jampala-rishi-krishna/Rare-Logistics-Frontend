@@ -15,7 +15,7 @@ import {
   validateTemplate,
 } from "@/lib/overview";
 import type { EditorItem, TemplateKindId } from "@/lib/overview";
-import { Chip, ErrorNote, Skeleton, buttonClass, fmtDateTime, inputClass, primaryButtonClass, useSessionRole } from "./shared";
+import { Chip, ErrorNote, Skeleton, buttonClass, fmtDateTime, inputClass, primaryButtonClass, useSessionRole } from "../overview/shared";
 
 const COPY: Record<TemplateKindId, { title: string; blurb: string }> = {
   acknowledge_checklist: {
@@ -224,13 +224,13 @@ function TemplateEditor({ kind, data, canEdit }: { kind: TemplateKindId; data: o
   );
 }
 
-export default function SettingsTab() {
+export default function DriverFormsSettings() {
   const { isAdmin, loaded } = useSessionRole();
   const templates = useQuery({ queryKey: ["overview-templates"], queryFn: () => overviewApi.getTemplates() });
   if (templates.isLoading || !loaded) return <Skeleton className="h-48" />;
   if (templates.isError || !templates.data) return <ErrorNote error={templates.error} onRetry={() => void templates.refetch()} />;
   return (
-    <div className="grid gap-4" data-testid="settings-tab">
+    <div className="grid gap-4" data-testid="driver-forms-settings">
       <TemplateEditor key={`a-${templates.data.acknowledge_checklist.active.version}`} kind="acknowledge_checklist" data={templates.data.acknowledge_checklist} canEdit={isAdmin} />
       <TemplateEditor key={`d-${templates.data.delivery_checkout.active.version}`} kind="delivery_checkout" data={templates.data.delivery_checkout} canEdit={isAdmin} />
     </div>

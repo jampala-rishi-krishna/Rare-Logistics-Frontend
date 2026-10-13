@@ -25,6 +25,22 @@ export function usableItems(items: TemplateItem[], photoStorageEnabled: boolean)
     .sort((a, b) => a.position - b.position);
 }
 
+export const isFileType = (itemType: string): boolean => FILE_TYPES.has(itemType);
+
+// Photo items the crew WOULD be asked for right now (visible for the chosen outcome) but cannot get because photo storage (R2) is not set up.
+// The screen says so explicitly instead of silently hiding the field.
+export function blockedPhotoItems(items: TemplateItem[], photoStorageEnabled: boolean, values: FormValues): TemplateItem[] {
+  if (photoStorageEnabled) return [];
+  return items.filter((i) => FILE_TYPES.has(i.item_type) && i.item_type === "photo" && isItemVisible(i, items, values));
+}
+
+export function submitLabelFor(outcome: unknown): string {
+  const o = typeof outcome === "string" ? outcome.trim().toLowerCase() : "";
+  if (o === "delivered") return "Mark as delivered";
+  if (o.startsWith("partial")) return "Mark as partially delivered";
+  return "Save departure";
+}
+
 export function isEmpty(item: TemplateItem, value: FormValue): boolean {
   if (value === null || value === undefined) return true;
   if (item.item_type === "checkbox") return value !== true;
@@ -153,7 +169,7 @@ export function validateCheckout(items: TemplateItem[], values: FormValues): Fie
   for (const item of items) {
     if (!isItemVisible(item, items, values)) continue;
     if (isItemRequired(item, items, values) && isEmpty(item, values[item.key])) {
-      errors[item.key] = item.item_type === "checkbox" ? "This must be ticked" : item.key === "reason" ? "Give a reason" : "Required";
+      errors[item.key] = item.item_type === "checkbox" ? "This must be ticked" : item.key === "reason" ? "Give a reason" : item.item_type === "photo" ? "Take a photo first (proof of delivery is required)" : "Required";
       continue;
     }
     const bad = validateItemValue(item, values[item.key]);

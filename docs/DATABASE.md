@@ -1,6 +1,6 @@
 # IntelliFleet Neon database
 
-Updated 2026-10-13. Alembic head: `q7c8d9e0f1a2` (driver app rebuild: `driver_issues`, `driver_alert_reads`, 2 columns, time-log template). Earlier heads: `p6b7c8d9e0f1` (`app_settings`), `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
+Updated 2026-10-13. Alembic head: `r8d9e0f1a2b3` (proof of delivery required: a new version of the Delivery time log template, data only). Earlier heads: `q7c8d9e0f1a2` (driver app rebuild: `driver_issues`, `driver_alert_reads`, 2 columns, time-log template), `p6b7c8d9e0f1` (`app_settings`), `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
 
 Neon stores durable business history and configuration only. Current/future Sales
 Orders, Fleet telemetry, staff directory data, alerts, routes, optimization runs,
@@ -86,6 +86,13 @@ Additive only: no table or column is dropped and no existing row is rewritten.
 - **Delivery time log**: the migration inserts ONE new `form_templates` row (kind `delivery_checkout`, the next version, name "Delivery time log", not a draft, active) with 5 items, and flags the old 14-field DRAFT checkout template(s) inactive. Nothing is deleted: every stop filled with the old template keeps its template id / version / answers and stays readable. The template mirrors the Zoho form "B2B Logistics Delivery" (Name = the logged-in crew member, Sales Order Number, Invoice or DR Number, Time Logs "Arrived at Site" = check-in / "Departed from Site" = check-out, plus GPS). The Zoho form is NOT called; see `docs/TRIP_WORKFLOW.md` section 11.
 - **Read paths added**: `GET /api/driver/issues|alerts` (own rows by user id), `GET /api/driver/history?status=&page=&page_size=` (server-side paging over `sales_orders` + trip tables, only the requested page's lines are loaded), `GET /api/driver-overview/issues`. None calls Zoho. **Write paths added**: `POST /api/driver/issues`, `POST /api/driver/alerts/read`, `POST /api/driver-overview/issues/{id}/respond`.
 - **Rollback** (`downgrade()`): drops the two new tables and two new columns and removes the time-log template unless a stop was filled with it (then it stays, inactive logic restored to the newest older version). Destructive for issues / read markers.
+
+### Proof of delivery (migration `r8d9e0f1a2b3`, 2026-10-13)
+
+Data only (no schema change). Copies the active "Delivery time log" into the next version and flags the previous version inactive (nothing deleted; stops already filled keep their template version):
+`delivery_photo` "Proof of delivery photo" is REQUIRED and shown only when the outcome is Delivered or Partially delivered; a new optional `failure_photo` is shown for Failed (a reason is required for Partially delivered / Failed).
+Skipped when the active template is no longer the seeded one (an admin saved their own). Photo bytes still live in R2; without `R2_*` the server cannot require a photo, so the app shows "Photo upload is not configured, contact admin" and still lets the crew save the departure.
+Editing the templates moved from Driver Overview to **Admin > Settings > Driver app forms** (admin only); it writes the same `form_templates` / `form_template_items` rows as before.
 
 ## Admin-editable settings (`app_settings`, migration `p6b7c8d9e0f1`, approved 2026-10-12)
 

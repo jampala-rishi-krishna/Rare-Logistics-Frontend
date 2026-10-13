@@ -36,6 +36,7 @@ export interface HandoverItem {
   item_id: number | string;
   so_id: string;
   so_number: string;
+  invoice_no?: string | null;
   customer_name: string | null;
   handed_over: boolean | null;
   crew_note: string | null;
@@ -64,6 +65,7 @@ export interface OutstandingItem {
   handover_id: number | string;
   batch_id: string;
   so_number: string;
+  invoice_no?: string | null;
   customer_name: string | null;
   officer_status: OfficerStatus | null;
   officer_note: string | null;

@@ -2,11 +2,10 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as overviewApi from "@/services/api/overview";
 import { progressLabel, progressPct, stateTone, staleLabel, timeAgo } from "@/lib/overview";
-import { matchesSearch, plateKey } from "@/lib/overviewView";
+import { matchesSearch } from "@/lib/overviewView";
 import { formatKgPartial } from "@/lib/kgDisplay";
 import { Chip, Empty, ErrorNote, Skeleton } from "./shared";
 import DriverPanel from "./DriverPanel";
-import LiveMap from "./LiveMap";
 
 export interface TopFilter {
   date: string;
@@ -62,20 +61,11 @@ export default function LiveTab({ filter }: { filter: TopFilter }) {
   const [selected, setSelected] = useState<string | null>(null);
   const base = { date: filter.date, warehouse: filter.warehouse || undefined };
   const board = useQuery({ queryKey: ["overview-board", filter.date, filter.warehouse, filter.status], queryFn: () => overviewApi.getBoard({ ...base, status: filter.status || undefined }), ...POLL });
-  const live = useQuery({ queryKey: ["overview-live", filter.date, filter.warehouse], queryFn: () => overviewApi.getLive(base), ...POLL });
-  const map = useQuery({ queryKey: ["overview-map", filter.date, filter.warehouse], queryFn: () => overviewApi.getMap(base), ...POLL });
-
   const rows = useMemo(() => (board.data?.rows ?? []).filter((r) => matchesSearch({ name: r.name, vehicle: r.vehicle, so_numbers: r.so_numbers }, filter.search)), [board.data, filter.search]);
   const chosen = rows.find((r) => String(r.staff_id) === selected) ?? null;
-  const selectedPlates = useMemo(() => new Set((chosen?.vehicle ?? "").split(",").map((v) => plateKey(v)).filter(Boolean)), [chosen]);
-  const selectedBatches = useMemo(() => new Set((chosen?.trips ?? []).map((t) => t.batch_id)), [chosen]);
-  const selectPlate = (plate: string) => {
-    const owner = rows.find((r) => (r.vehicle ?? "").split(",").some((v) => plateKey(v) === plate));
-    if (owner) setSelected(String(owner.staff_id));
-  };
 
   return (
-    <div className="grid min-w-0 gap-3 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_400px]" data-testid="live-tab">
+    <div className="grid min-w-0 gap-3 lg:grid-cols-[360px_minmax(0,1fr)]" data-testid="live-tab">
       <section className="flex min-w-0 flex-col gap-2 lg:max-h-[calc(100vh-290px)] lg:overflow-y-auto" aria-label="Drivers">
         <h2 className="text-xs font-bold uppercase text-[#77787b]">Drivers ({rows.length})</h2>
         {board.isLoading ? (
@@ -93,25 +83,12 @@ export default function LiveTab({ filter }: { filter: TopFilter }) {
         )}
       </section>
 
-      <section className="flex min-h-[380px] min-w-0 flex-col gap-2" aria-label="Live map">
-        <h2 className="text-xs font-bold uppercase text-[#77787b]">Live map</h2>
-        {live.isError && <ErrorNote error={live.error} onRetry={() => void live.refetch()} />}
-        <LiveMap trucks={live.data?.trucks ?? []} map={map.data} selectedPlates={selectedPlates} selectedBatchIds={selectedBatches} onSelectPlate={selectPlate} />
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#55565a]" aria-label="Map legend">
-          <li>Truck</li>
-          <li>{"◇"} Planned stop</li>
-          <li>{"●"} Arrived</li>
-          <li>{"■"} Departed (green delivered, amber partial, red failed)</li>
-          <li>W Warehouse</li>
-        </ul>
-      </section>
-
-      <section className="min-w-0 border border-[#e4e3df] bg-[#fafaf8] p-3 lg:col-span-2 xl:col-span-1 xl:max-h-[calc(100vh-290px)] xl:overflow-y-auto" aria-label="Selected driver">
+      <section className="min-w-0 border border-[#e4e3df] bg-[#fafaf8] p-3 lg:max-h-[calc(100vh-290px)] lg:overflow-y-auto" aria-label="Selected driver">
         {chosen ? (
           <DriverPanel key={String(chosen.staff_id)} staffId={chosen.staff_id} date={filter.date} onClose={() => setSelected(null)} />
         ) : (
           <p className="p-4 text-center text-sm text-[#55565a]" data-testid="panel-empty">
-            Select a driver (or a truck on the map) to see their trips, checklist answers, arrival and departure times, GPS, invoice numbers and handover.
+            Select a driver or truck to see their trips, checklist answers, arrival and departure times, GPS, invoice numbers and handover.
           </p>
         )}
       </section>

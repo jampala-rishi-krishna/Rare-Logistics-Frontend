@@ -135,8 +135,9 @@ export const templates = {
       { id: 10, key: "invoice_dr_number", label: "Invoice or DR Number", item_type: "numeric_text", required: true, options: null, prefill: null, show_when: null, position: 1, app_only: false },
       { id: 11, key: "outcome", label: "Delivery outcome", item_type: "radio", required: true, options: ["Delivered", "Partially delivered", "Failed"], prefill: null, show_when: null, position: 2, app_only: true },
       { id: 12, key: "reason", label: "Reason (what was not delivered, or why it failed)", item_type: "textarea", required: true, options: null, prefill: null, show_when: { key: "outcome", in: ["Partially delivered", "Failed"] }, position: 3, app_only: true },
-      { id: 13, key: "delivery_photo", label: "Photo (optional)", item_type: "photo", required: false, options: null, prefill: null, show_when: null, position: 4, app_only: true },
-      { id: 14, key: "notes", label: "Notes (optional)", item_type: "textarea", required: false, options: null, prefill: null, show_when: null, position: 5, app_only: true },
+      { id: 13, key: "delivery_photo", label: "Proof of delivery photo", item_type: "photo", required: true, options: null, prefill: null, show_when: { key: "outcome", in: ["Delivered", "Partially delivered"] }, position: 4, app_only: true },
+      { id: 15, key: "failure_photo", label: "Photo (optional)", item_type: "photo", required: false, options: null, prefill: null, show_when: { key: "outcome", in: ["Failed"] }, position: 5, app_only: true },
+      { id: 14, key: "notes", label: "Notes (optional)", item_type: "textarea", required: false, options: null, prefill: null, show_when: null, position: 6, app_only: true },
     ],
   },
 };

@@ -67,6 +67,8 @@ export async function installMocks(page: Page, scenario: Scenario = {}): Promise
       return scenario.session === null ? json(route, { detail: "Not authenticated" }, 401) : json(route, scenario.session ?? fallback);
     }
     // the app shell of the /app pages asks for the mailbox connection once
+    if (path === "/api/admin/settings") return json(route, { settings: [] });
+    if (/^\/api\/media\/\d+$/.test(path)) return route.fulfill({ status: 200, contentType: "image/png", headers: CORS, body: BLANK_PNG });
     if (path === "/api/gmail/auth-status") return json(route, { connected: true, authorized: true, status: "connected" });
     // ---- Driver Overview (admin / dispatcher) ----
     if (path.startsWith("/api/driver-overview/")) {

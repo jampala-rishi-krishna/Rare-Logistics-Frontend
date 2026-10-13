@@ -190,7 +190,10 @@ Entries stay in our database only. Pushing them into the Zoho form later: see th
 `GET /api/driver/today` now carries `summary {assigned, completed, remaining, needs_attention, open_issues, trips}`, `GET /api/driver/me` carries `staff_id, email, vehicles_today, crew_today`, `GET /auth/support` (public: dispatch phone for "Forgot password").
 Uploads: `field_key = issue_photo` with `batch_id = profile` attaches a photo to an issue that is not tied to a trip.
 
-**Driver Overview endpoints added** (admin + dispatcher): `GET /live` (last known fix per truck, process memory only), `GET /trips` (one row per batch in a range), `GET /hardcopies` (every invoice copy not yet validated, who holds it and since when),
+**Driver Overview endpoints added** (admin + dispatcher): `GET /trips` (one row per batch in a range), `GET /hardcopies` (every invoice copy not yet validated, who holds it and since when),
 `GET /issues`, `POST /issues/{id}/respond` `{status, response}`, `GET /reconcile` (admin). `GET /board` rows also carry `so_numbers` (search), `trips[]`, `state_label`; `GET /map` adds `stop` points (planned stops);
 the timeline carries `checkout.invoice_no`, `address_gps`, `assigned_at`; the CSV has `arrived_at, departed_at, invoice_dr_number`.
-The Overview refreshes every 15 s while its tab is visible (react-query polling; no WebSocket for business data). Truck movement uses the existing Cartrack WebSocket feed (shared socket) and glides with `MarkerAnimator`.
+The Overview refreshes every 15 s while its tab is visible (react-query polling; no WebSocket for business data). The Overview has no map (KPI strip + driver list + the full driver detail panel). Photos in the timeline are thumbnails that open full size on tap.
+
+**Proof of delivery (migration `r8d9e0f1a2b3`)**: check-out with outcome Delivered or Partially delivered requires a photo (`delivery_photo`, 422 `delivery_photo` otherwise); Failed requires a reason and the photo is optional (`failure_photo`). Without R2 the server cannot demand a photo (see DATABASE.md).
+Load Planning's list endpoints never wait on a cold Zoho fetch: a cache miss answers `503 {code: "warming"}` + `Retry-After: 5` (with CORS headers) while ONE background fill runs; the frontend retries every 3 s. Every uncaught backend error is answered as a JSON 500 that keeps its CORS headers (`services/safe_errors.py`).

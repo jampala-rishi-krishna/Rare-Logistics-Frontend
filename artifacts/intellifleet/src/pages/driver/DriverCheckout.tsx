@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import * as driverApi from "@/services/api/driver";
 import { formatClock, personName } from "@/lib/driver";
-import { buildCheckoutAnswers, initialCheckoutForm, isItemRequired, isItemVisible, mapServerErrors, usableItems, validateCheckout } from "@/lib/tripForms";
+import { blockedPhotoItems, buildCheckoutAnswers, initialCheckoutForm, isItemRequired, isItemVisible, mapServerErrors, submitLabelFor, usableItems, validateCheckout } from "@/lib/tripForms";
 import type { FieldErrors, FormValue, FormValues } from "@/lib/tripForms";
 import { browserDraftStore, clearDraft, draftKey, loadDraft, mergeValues, readFormDraft, saveDraft, serializeValues } from "@/lib/tripDrafts";
 import { newIdempotencyKey } from "@/lib/tripActions";
@@ -36,6 +36,7 @@ function CheckoutBody({ scope, batchId, eff, templates, canSubmit }: { scope: Dr
 
   const disabled = !canSubmit || actions.busy;
   const visible = items.filter((i) => isItemVisible(i, items, values));
+  const blockedPhotos = blockedPhotoItems(template.items, templates.photo_storage_enabled, values);
   const set = (k: string, v: FormValue) => {
     setValues((prev) => ({ ...prev, [k]: v }));
     setErrors((prev) => {
@@ -100,6 +101,11 @@ function CheckoutBody({ scope, batchId, eff, templates, canSubmit }: { scope: Dr
       ))}
       {Object.keys(errors).length > 0 && !serverError && <InlineAlert>Complete the highlighted fields to continue.</InlineAlert>}
 
+      {blockedPhotos.length > 0 && (
+        <InlineAlert tone="warn">
+          <span data-testid="driver-photo-not-configured">Photo upload is not configured, so {blockedPhotos.map((i) => i.label.toLowerCase()).join(" and ")} cannot be attached. Contact the admin to set up photo storage. You can still save the departure.</span>
+        </InlineAlert>
+      )}
       {visible.map((item) => (
         <CheckoutField
           key={item.key}
@@ -117,7 +123,7 @@ function CheckoutBody({ scope, batchId, eff, templates, canSubmit }: { scope: Dr
         <StickyBar>
           {!canSubmit && <BlockerNote text={eff.blocker ?? "This order cannot be checked out right now."} />}
           <button type="button" disabled={disabled || !actions.ready} onClick={() => void submit()} data-testid="driver-checkout-submit" className={btnPrimary}>
-            {actions.busy ? "Saving..." : "Save departure"}
+            {actions.busy ? "Saving..." : submitLabelFor(values.outcome)}
           </button>
         </StickyBar>
       )}

@@ -41,7 +41,7 @@ const OVERVIEW = "/app/driver-overview";
 const READY = "[data-testid=kpi-strip]";
 
 describe("Driver Overview at 1440", () => {
-  it("Live: KPI strip, driver list, live map, empty detail panel", async () => {
+  it("Live: KPI strip, driver list, empty detail panel (no map)", async () => {
     const { page, close } = await open(OVERVIEW, "[data-testid=live-list]");
     await shot(page, "overview-1-live");
     const kpi = async (id: string) => (await page.textContent(`[data-testid=kpi-${id}]`))?.trim().match(/^\d+/)?.[0];
@@ -57,7 +57,11 @@ describe("Driver Overview at 1440", () => {
     assert.match(strip, /2,264 kg\+/); // a partial total is never shown as complete
     assert.match(strip, /1 line without weight/);
     assert.equal(await page.locator("[data-testid=live-list] li").count(), 5);
-    assert.ok((await page.locator(".leaflet-marker-icon").count()) >= 12, "warehouses, planned stops, check-in/out points and trucks are drawn");
+    assert.equal(await page.locator(".leaflet-container, [data-testid=live-map]").count(), 0, "the Overview has no map");
+    assert.doesNotMatch((await page.textContent("[data-testid=driver-overview]")) ?? "", /Live map/);
+    assert.equal(await page.locator("[data-testid=tab-settings], [data-testid=tab-map]").count(), 0, "no Settings or Map tab in the Overview");
+    const tabs = (await page.locator("[role=tab]").allTextContents()).map((t) => t.replace(/\d+$/, "").trim());
+    assert.deepEqual(tabs, ["Live", "Trips", "Invoices & handover", "Issues", "Export CSV"]);
     assert.equal(await page.locator("[data-testid=panel-empty]").count(), 1);
     assert.equal(await horizontalOverflow(page), 0);
     assert.deepEqual(await invisibleText(page), []);
@@ -97,6 +101,14 @@ describe("Driver Overview at 1440", () => {
     assert.match(panel, /Time at site: 20 min/);
     assert.match(panel, /Trip length/);
     assert.equal(await page.locator("[data-testid=panel-issues]").count(), 1); // Casey's open issue
+    await page.waitForSelector("[data-testid=timeline-photo]");
+    assert.ok((await page.locator("[data-testid=timeline-photo] img").count()) >= 1, "the proof-of-delivery photo is a thumbnail");
+    await page.locator("[data-testid=timeline-photo]").first().click();
+    await page.waitForSelector("[data-testid=photo-lightbox]");
+    await shot(page, "overview-2b-photo-enlarged");
+    await page.click("[data-testid=photo-lightbox] button");
+    assert.equal(await page.locator("[data-testid=photo-lightbox]").count(), 0);
+    assert.match(panel, /Trip started: .* by Casey Runner/);
     await page.click("[data-testid=panel-history]");
     await page.waitForSelector("[data-testid=panel-trip-b-3]");
     await shot(page, "overview-3-driver-panel-history");
@@ -160,16 +172,14 @@ describe("Driver Overview at 1440", () => {
     await close();
   });
 
-  it("Settings: both templates, versioned; app-only fields marked; admin saves a new version with the app_only flags", async () => {
-    const { page, recorder, close } = await open(OVERVIEW, READY);
-    await page.click("[data-testid=tab-settings]");
-    await page.waitForSelector("[data-testid=settings-delivery_checkout]");
-    const text = (await page.textContent("[data-testid=settings-delivery_checkout]")) ?? "";
+  it("Template settings live in Admin > Settings (admin only), not in Driver Overview", async () => {
+    const { page, recorder, close } = await open("/admin/settings", "[data-testid=driver-forms-settings]");
+    const text = (await page.textContent("[data-testid=driver-forms-settings]")) ?? "";
     assert.match(text, /Delivery time log/);
     assert.match(text, /Added in app, not in Zoho form/);
     assert.match(text, /In the Zoho form/);
     assert.match((await page.textContent("[data-testid=settings-acknowledge_checklist]")) ?? "", /DRAFT/);
-    await shot(page, "overview-7-settings");
+    await shot(page, "admin-settings-driver-forms");
     await page.locator("[data-testid=setting-item-notes] input[type=checkbox]").nth(1).uncheck(); // switch the optional notes question off
     await page.click("[data-testid=save-delivery_checkout]");
     await page.waitForTimeout(600);
@@ -178,16 +188,7 @@ describe("Driver Overview at 1440", () => {
     const items = (saved.body as { items: Array<{ key: string; active: boolean; app_only: boolean }> }).items;
     assert.equal(items.find((i) => i.key === "notes")?.active, false);
     assert.equal(items.find((i) => i.key === "outcome")?.app_only, true);
-    assert.equal(items.find((i) => i.key === "invoice_dr_number")?.app_only, false);
-    await close();
-  });
-
-  it("Settings is read-only for a dispatcher", async () => {
-    const { page, close } = await open(OVERVIEW, READY, { role: "dispatcher" });
-    await page.click("[data-testid=tab-settings]");
-    await page.waitForSelector("[data-testid=settings-delivery_checkout]");
-    assert.match((await page.textContent("[data-testid=settings-tab]")) ?? "", /Only an admin can change templates/);
-    assert.equal(await page.locator("[data-testid=save-delivery_checkout]").count(), 0);
+    assert.equal(items.find((i) => i.key === "delivery_photo")?.app_only, true);
     await close();
   });
 

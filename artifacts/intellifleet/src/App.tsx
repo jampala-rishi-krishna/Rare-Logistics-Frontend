@@ -7129,9 +7129,23 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   );
 }
 
+// A 503 {code: "warming"} means the server is filling its Zoho cache in the background: keep retrying quietly (every 3 s, up to ~1 minute).
+function isWarming(error: unknown): boolean {
+  const body = (error as { status?: number; body?: { code?: string } } | null) ?? null;
+  return body?.status === 503 && body?.body?.code === "warming";
+}
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => (isWarming(error) ? failureCount < 20 : failureCount < 3),
+      retryDelay: (failureCount, error) => (isWarming(error) ? 3000 : Math.min(1000 * 2 ** failureCount, 30000)),
+    },
+  },
+});
+
 function App() {
   return (
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <FleetSocketProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>

@@ -23,18 +23,27 @@ function Gps({ gps }: { gps: (overviewApi.Gps & { lat?: number; lng?: number; ac
   return <span className="text-[#8a5a00]">No GPS{reason ? `: ${reason}` : ""}</span>;
 }
 
+// Proof-of-delivery / checklist photos: the thumbnail loads by itself, tap to enlarge. Images are fetched with the bearer token (never in a URL).
 function Photo({ id }: { id: number | string }) {
-  const [wanted, setWanted] = useState(false);
-  const photo = useQuery({ queryKey: ["overview-photo", String(id)], queryFn: () => overviewApi.fetchMediaObjectUrl(id), enabled: wanted, staleTime: 8 * 60_000, retry: 1 });
-  if (!wanted)
-    return (
-      <button type="button" onClick={() => setWanted(true)} className="inline-flex min-h-[32px] items-center gap-1 border border-[#d8d7d2] bg-white px-2 text-xs font-semibold">
-        <Camera size={13} /> Show photo
-      </button>
-    );
+  const [big, setBig] = useState(false);
+  const photo = useQuery({ queryKey: ["overview-photo", String(id)], queryFn: () => overviewApi.fetchMediaObjectUrl(id), staleTime: 8 * 60_000, retry: 1 });
   if (photo.isError) return <span className="text-xs text-[#86000B]">Photo could not be loaded.</span>;
-  if (!photo.data) return <span className="text-xs text-[#77787b]">Loading photo...</span>;
-  return <img src={photo.data} alt="Photo from the driver" className="max-h-48 border border-[#e4e3df] object-contain" />;
+  if (!photo.data) return <span className="inline-flex h-20 w-20 animate-pulse items-center justify-center bg-[#e4e3df] text-[10px] text-[#77787b]">Loading</span>;
+  return (
+    <>
+      <button type="button" onClick={() => setBig(true)} aria-label="Enlarge photo" data-testid="timeline-photo" className="block h-20 w-20 overflow-hidden border border-[#d8d7d2]">
+        <img src={photo.data} alt="Proof of delivery" className="h-full w-full object-cover" />
+      </button>
+      {big && (
+        <div role="dialog" aria-modal="true" aria-label="Photo" data-testid="photo-lightbox" onClick={() => setBig(false)} className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-4">
+          <img src={photo.data} alt="Proof of delivery, enlarged" className="max-h-full max-w-full object-contain" />
+          <button type="button" aria-label="Close photo" onClick={() => setBig(false)} className="absolute right-3 top-3 min-h-[44px] min-w-[44px] bg-white px-3 text-sm font-bold">
+            Close
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
 
 function Row({ time, title, children }: { time: string | null | undefined; title: string; children?: React.ReactNode }) {
@@ -167,7 +176,10 @@ export default function TripTimeline({ batchId }: { batchId: string }) {
           <div>Crew: {t.crew.map((c) => `${c.name} (${c.role})`).join(", ") || "-"}</div>
           <div>Trip length: {formatDuration(trip.duration_minutes ?? null)}</div>
           <div>Assigned: {fmtDateTime(assigned)}</div>
-          <div>Trip started: {fmtDateTime(trip.started_at)}</div>
+          <div>
+            Trip started: {fmtDateTime(trip.started_at)}
+            {personName((trip as { started_by?: unknown }).started_by) ? ` by ${personName((trip as { started_by?: unknown }).started_by)}` : ""}
+          </div>
           <div>Trip ended: {fmtDateTime(trip.ended_at)}</div>
           <div>Back at warehouse: {typeof trip.end_distance_m === "number" ? `${formatMeters(trip.end_distance_m as number)} from the warehouse` : "-"}</div>
         </div>

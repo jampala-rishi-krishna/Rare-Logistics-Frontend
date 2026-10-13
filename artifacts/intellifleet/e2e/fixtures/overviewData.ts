@@ -79,7 +79,7 @@ function orderTl(n: number, seq: number, done: boolean, outcome: string | null, 
       ? {
           sequence: seq, status: "checked_out", address_gps: { lat: 14.6, lng: 121.03 },
           checkin: { at: `2026-10-13T0${7 + seq}:00:00+08:00`, by, gps: { lat: 14.6003, lng: 121.0301, accuracy_m: 9 }, distance_m: n === 3 ? 640 : 85, far: n === 3 },
-          checkout: { at: `2026-10-13T0${7 + seq}:20:00+08:00`, by, gps: { lat: 14.6003, lng: 121.0301, accuracy_m: 8 }, outcome, reason: outcome === "Delivered" ? null : "Store closed", invoice_no: invoice, answers: [{ key: "invoice_dr_number", label: "Invoice or DR Number", value: invoice }, { key: "outcome", label: "Delivery outcome", value: outcome }, { key: "notes", label: "Notes (optional)", value: "Left with the guard" }], template_version: 2 },
+          checkout: { at: `2026-10-13T0${7 + seq}:20:00+08:00`, by, gps: { lat: 14.6003, lng: 121.0301, accuracy_m: 8 }, outcome, reason: outcome === "Delivered" ? null : "Store closed", invoice_no: invoice, answers: [{ key: "invoice_dr_number", label: "Invoice or DR Number", value: invoice }, { key: "outcome", label: "Delivery outcome", value: outcome }, ...(outcome !== "Failed" ? [{ key: "delivery_photo", label: "Proof of delivery photo", value: 12 + n, photo_url: `/api/media/${12 + n}` }] : []), { key: "notes", label: "Notes (optional)", value: "Left with the guard" }], template_version: 2 },
           minutes_at_stop: 20,
         }
       : { sequence: seq, status: "pending", checkin: null, checkout: null, minutes_at_stop: null },
@@ -89,7 +89,7 @@ function orderTl(n: number, seq: number, done: boolean, outcome: string | null, 
 
 export const tripTimeline = {
   batch: { batch_id: "b-3", delivery_date: "2026-10-13", vehicle: "TRK-2002", so_count: 5, warehouse: "METS", assigned_at: "2026-10-12T14:31:00+08:00" },
-  trip: { status: "on_trip", chip: "on_trip", chip_label: "On trip · stop 4 of 5", started_at: "2026-10-13T07:10:00+08:00", ended_at: null, duration_minutes: null, handover_status: null, end_distance_m: null },
+  trip: { status: "on_trip", chip: "on_trip", chip_label: "On trip · stop 4 of 5", started_at: "2026-10-13T07:10:00+08:00", started_by: { name: "Casey Runner", role: "driver" }, ended_at: null, duration_minutes: null, handover_status: null, end_distance_m: null },
   crew: [{ id: 103, name: "Casey Runner", role: "driver" }, { id: 102, name: "Sam Helper", role: "helper" }],
   orders: [orderTl(1, 1, true, "Delivered", "000456"), orderTl(2, 2, true, "Partially delivered", "000457"), orderTl(3, 3, true, "Failed", "000458"), orderTl(4, 4, false, null, null), orderTl(5, 5, false, null, null)],
   handover: null,
