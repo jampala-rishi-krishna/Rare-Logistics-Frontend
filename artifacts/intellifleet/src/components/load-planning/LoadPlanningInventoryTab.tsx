@@ -25,7 +25,7 @@ import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFro
 import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
 import type { QueryClient } from "@tanstack/react-query";
 import { OrderTypeBadge } from "./OrderTypeBadge";
-import { OrderTypeSwitch, TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
+import { TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
 import TransferOrdersTab, { TRANSFER_ORDERS_KEY } from "./TransferOrdersTab";
 import ConfirmedEmailDialog from "./ConfirmedEmailDialog";
 import { describeCounts, orderTypesParam, countByType, type TypeFilter } from "@/lib/orderMerge";
@@ -319,17 +319,13 @@ type FlatRow = {
 /** Inventory tab: SO | PO (coming soon) | TO switch. Confirmed Orders (assignmentScope) has no switch. */
 export default function LoadPlanningInventoryTab({
   assignmentScope,
+  orderKind = "SO",
 }: {
   assignmentScope?: "assigned";
+  orderKind?: InventoryOrderKind;
 }) {
-  const [kind, setKind] = useState<InventoryOrderKind>("SO");
   if (assignmentScope) return <SalesOrdersView assignmentScope={assignmentScope} />;
-  return (
-    <div className="grid gap-3">
-      <OrderTypeSwitch value={kind} onChange={setKind} />
-      {kind === "TO" ? <TransferOrdersTab /> : <SalesOrdersView />}
-    </div>
-  );
+  return orderKind === "TO" ? <TransferOrdersTab /> : <SalesOrdersView />;
 }
 
 function SalesOrdersView({
@@ -636,10 +632,18 @@ function SalesOrdersView({
         title={assignmentScope ? "Confirmed Orders" : "Sales Orders"}
         count={orderCount}
         selectedCount={selectedOrderIds.length}
+        headerActions={
+          assignmentScope ? undefined : (
+            <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass} data-testid="acknowledge-selected">
+              {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
+              {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
+            </button>
+          )
+        }
         toggle={assignmentScope ? <ViewModeToggle mode={viewMode} onChange={setViewMode} /> : undefined}
         filters={
           <>
-            <FilterField label="Search">
+            <FilterField label="Search" className="@[1000px]:w-[250px]">
               <div className="relative min-w-0">
                 <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
                 <input
@@ -651,13 +655,13 @@ function SalesOrdersView({
                 />
               </div>
             </FilterField>
-            <FilterField label="From">
+            <FilterField label="From" className="@[1000px]:w-[150px]">
               <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
-            <FilterField label="To">
+            <FilterField label="To" className="@[1000px]:w-[150px]">
               <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
-            <FilterField label="Order status">
+            <FilterField label="Order status" className="@[1000px]:w-[150px]">
               <select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} className={`${inputClass} w-full`}>
                 <option>All</option>
                 <option>Draft</option>
@@ -706,10 +710,6 @@ function SalesOrdersView({
             <>
               <button onClick={refresh} disabled={syncing} className={buttonClass} data-testid="inventory-refresh">
                 {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
-              </button>
-              <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass} data-testid="acknowledge-selected">
-                {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
-                {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
               </button>
             </>
           )

@@ -29,7 +29,7 @@ export function FilterField({ label, className = "", children }: { label: string
  * the left, actions on the right, bottom-aligned. At <1200px the actions drop below the filters (right-aligned) when the card is narrower than 1240px;
  * at <640px every control goes full width.
  */
-export function Toolbar({ count, noun = "orders", meta, toggle, filters, secondary, actions, singleRow = false, title, selectedCount = 0 }: { count: number; noun?: string; meta?: ReactNode; toggle?: ReactNode; filters: ReactNode; secondary?: ReactNode; actions: ReactNode; singleRow?: boolean; title?: string; selectedCount?: number }) {
+export function Toolbar({ count, noun = "orders", meta, toggle, filters, secondary, actions, singleRow = false, title, selectedCount = 0, headerActions }: { count: number; noun?: string; meta?: ReactNode; toggle?: ReactNode; filters: ReactNode; secondary?: ReactNode; actions?: ReactNode; singleRow?: boolean; title?: string; selectedCount?: number; headerActions?: ReactNode }) {
   if (title) {
     // Panel layout: header row (title, count, selection), row 1 = primary filters in a grid, row 2 = secondary filters left + action group right.
     return (
@@ -47,15 +47,22 @@ export function Toolbar({ count, noun = "orders", meta, toggle, filters, seconda
             )}
             {meta}
           </div>
-          {toggle}
-        </div>
-        <div className="grid min-w-0 gap-3 p-3 sm:p-4">
-          <div className="grid min-w-0 grid-cols-1 items-end gap-3 @[520px]:grid-cols-2 @[900px]:grid-cols-[minmax(220px,1fr)_150px_150px_160px]">{filters}</div>
-          <div className="flex min-w-0 flex-col gap-3 @[640px]:flex-row @[640px]:items-end @[640px]:justify-between">
-            <div className="flex min-w-0 flex-col items-stretch gap-3 @[520px]:flex-row @[520px]:flex-wrap @[520px]:items-end [&>*]:w-full @[520px]:[&>*]:w-auto">{secondary}</div>
-            <div className="flex min-w-0 flex-col items-stretch gap-2 @[520px]:flex-row @[520px]:flex-wrap @[520px]:items-center @[640px]:justify-end [&>*]:w-full @[520px]:[&>*]:w-auto" data-testid="lp-actions">
-              {actions}
+          {(toggle || headerActions) && (
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2" data-testid="lp-header-actions">
+              {toggle}
+              {headerActions}
             </div>
+          )}
+        </div>
+        <div className="min-w-0 p-3 sm:p-4">
+          <div className="grid min-w-0 grid-cols-1 items-end gap-3 @[520px]:grid-cols-2 @[1000px]:flex @[1000px]:flex-wrap" data-testid="lp-filters">
+            {filters}
+            {secondary}
+            {actions && (
+              <div className="flex min-w-0 flex-col items-stretch gap-2 @[520px]:col-span-2 @[520px]:flex-row @[520px]:flex-wrap @[520px]:items-center @[520px]:justify-end @[1000px]:ml-auto [&>*]:w-full @[520px]:[&>*]:w-auto" data-testid="lp-actions">
+                {actions}
+              </div>
+            )}
           </div>
         </div>
       </div>

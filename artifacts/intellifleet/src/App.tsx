@@ -71,6 +71,7 @@ import { GooglePlaceInput } from "@/components/maps/GooglePlaceInput";
 import LoadPlanningInventoryTab, {
   AssignmentEmailPreviewModal,
 } from "@/components/load-planning/LoadPlanningInventoryTab";
+import { OrderTypeSwitch, type InventoryOrderKind } from "@/components/load-planning/OrderTypeControls";
 import LoadPlanningAssignmentTab from "@/components/load-planning/LoadPlanningAssignmentTab";
 import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { orderTypeColor, orderTypeOfRow, normalizeOrderType } from "@/lib/orderType";
@@ -802,7 +803,7 @@ function PageIntro({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-5 entrance">
+    <div className="mb-7 flex flex-wrap items-end justify-between gap-x-5 gap-y-4 entrance">
       <div>
         <div className="micro mb-3 text-[#77787b]">{eyebrow}</div>
         <h1 className="display-face max-w-3xl text-4xl font-bold leading-[.98] md:text-5xl">
@@ -3497,6 +3498,8 @@ function DataTablePage({
     return () => window.clearInterval(timer);
   }, [kind, refetchOrders, orderFrom, orderTo]);
   const filtered = ordersData;
+  const [lpTab, setLpTab] = useState<LoadPlanningTab>("inventory");
+  const [lpOrderKind, setLpOrderKind] = useState<InventoryOrderKind>("SO");
   const labels: Record<string, [string, string]> = {
     fleet: ["Fleet", "Every vehicle, driver, and signal in the network."],
     routes: [
@@ -3546,6 +3549,11 @@ function DataTablePage({
           eyebrow={`Workspace / ${title}`}
           title={title}
           body={body}
+          action={
+            kind === "loads" && lpTab === "inventory" ? (
+              <OrderTypeSwitch value={lpOrderKind} onChange={setLpOrderKind} />
+            ) : undefined
+          }
         />
       )}
       {notice && (
@@ -3611,7 +3619,12 @@ function DataTablePage({
         </div>
       )}
       {kind === "loads" ? (
-        <LoadPlanningWorkspace onNotice={setNotice} />
+        <LoadPlanningWorkspace
+          onNotice={setNotice}
+          tab={lpTab}
+          onTabChange={setLpTab}
+          orderKind={lpOrderKind}
+        />
       ) : kind === "reports" ? (
         <Reports />
       ) : (
@@ -7343,14 +7356,18 @@ function App() {
 
 export default App;
 
+type LoadPlanningTab = "inventory" | "planning" | "confirmed";
+
 function LoadPlanningWorkspace({
-  onNotice,
+  tab,
+  onTabChange: setTab,
+  orderKind,
 }: {
   onNotice: (s: string) => void;
+  tab: LoadPlanningTab;
+  onTabChange: (tab: LoadPlanningTab) => void;
+  orderKind: InventoryOrderKind;
 }) {
-  const [tab, setTab] = useState<"inventory" | "planning" | "confirmed">(
-    "inventory",
-  );
   return (
     <div>
       <div className="load-planning-tabs mb-5 flex gap-1 overflow-x-auto border-b border-[#e4e3df]">
@@ -7389,7 +7406,7 @@ function LoadPlanningWorkspace({
         </button>
       </div>
       {tab === "inventory" ? (
-        <LoadPlanningInventoryTab />
+        <LoadPlanningInventoryTab orderKind={orderKind} />
       ) : tab === "confirmed" ? (
         <LoadPlanningInventoryTab assignmentScope="assigned" />
       ) : (

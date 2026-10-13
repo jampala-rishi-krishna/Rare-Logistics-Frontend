@@ -95,21 +95,21 @@ export default function TransferOrdersTab() {
         }
         filters={
           <>
-            <FilterField label="Search">
+            <FilterField label="Search" className="@[1000px]:w-[250px]">
               <div className="relative min-w-0">
                 <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search transfer orders" aria-label="Search transfer orders" className={`${inputClass} w-full pl-9 pr-3`} />
               </div>
             </FilterField>
-            <FilterField label="From">
+            <FilterField label="From" className="@[1000px]:w-[150px]">
               <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
-            <FilterField label="To">
+            <FilterField label="To" className="@[1000px]:w-[150px]">
               <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
           </>
         }
-        actions={
+        headerActions={
           <>
             {refreshedAt && (
               <span data-testid="to-last-refreshed" className="text-xs text-[#77787b]">
@@ -121,6 +121,7 @@ export default function TransferOrdersTab() {
             </button>
           </>
         }
+        actions={null}
       />
       {message && <div className="border-b border-[#cddfd2] bg-[#edf6f0] px-4 py-2 text-xs text-[#1e7b44]">{message}</div>}
       {orders.isError ? (
