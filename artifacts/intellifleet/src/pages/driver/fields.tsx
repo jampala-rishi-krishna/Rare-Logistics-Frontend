@@ -192,6 +192,9 @@ export function CheckoutField({
         </div>
       );
       break;
+    case "numeric_text":
+      control = <input type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" value={text} readOnly={locked} onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ""))} className={`${inputClass} font-mono text-lg`} />;
+      break;
     case "number":
       control = <input type="text" inputMode="decimal" value={text} readOnly={locked} onChange={(e) => onChange(e.target.value)} className={inputClass} />;
       break;

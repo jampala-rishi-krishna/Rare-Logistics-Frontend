@@ -66,7 +66,7 @@ function HandoverForm({ scope, batchId, state, officers, canSubmit }: { scope: D
 
   return (
     <div className="grid gap-4">
-      <p className="text-sm text-[#55565a]">Choose who you handed each invoice to. If an invoice was not handed over, add a note.</p>
+      <p className="text-sm text-[#55565a]">One line per signed carbon-copy invoice (SO number and the Invoice/DR number you entered when you left the site). Mark each one handed over to the officer; if one was not handed over, add a note.</p>
       <button
         type="button"
         disabled={disabled}
@@ -82,7 +82,10 @@ function HandoverForm({ scope, batchId, state, officers, canSubmit }: { scope: D
           const err = errors.rows[o.so_id];
           return (
             <li key={o.so_id} className={`border bg-white p-4 ${err ? "border-[#86000B]" : "border-[#e4e3df]"}`} data-testid={`driver-handover-row-${o.so_id}`}>
-              <div className="font-mono text-xs font-semibold text-[#77787b]">{o.order.so_number}</div>
+              <div className="font-mono text-xs font-semibold text-[#77787b]">
+                {o.order.so_number}
+                <span data-testid={`driver-handover-invoice-${o.order.so_number}`}>{o.order.workflow?.stop?.invoice_no ? ` \u00b7 Invoice/DR ${o.order.workflow.stop.invoice_no}` : " \u00b7 Invoice/DR not recorded"}</span>
+              </div>
               <div className="break-words text-base font-bold leading-snug">{o.order.customer_name}</div>
               <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label={`Invoice ${o.order.so_number} handed over`}>
                 <button
@@ -91,7 +94,7 @@ function HandoverForm({ scope, batchId, state, officers, canSubmit }: { scope: D
                   aria-checked={row.handed_over === true}
                   disabled={disabled}
                   onClick={() => patch(o.so_id, { handed_over: true, note: "" })}
-                  className={`min-h-[56px] border px-3 text-base font-bold ${row.handed_over === true ? "border-black bg-black text-white" : "border-[#d8d7d2] bg-white"}`}
+                  className={`min-h-[56px] border px-3 text-base font-bold ${row.handed_over === true ? "border-black bg-black !text-white" : "border-[#d8d7d2] bg-white"}`}
                 >
                   Handed over
                 </button>

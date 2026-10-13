@@ -72,7 +72,7 @@ function AckItem({
       {control}
       {allowNote && (
         <details className="text-sm" open={Boolean(form.notes[item.key])}>
-          <summary className="min-h-[44px] cursor-pointer py-2.5 font-semibold text-[#55565a]">Add a note</summary>
+          <summary className="min-h-[48px] cursor-pointer py-2.5 font-semibold text-[#55565a]">Add a note</summary>
           <input type="text" value={form.notes[item.key] ?? ""} disabled={disabled} onChange={(e) => onNote(e.target.value)} placeholder="e.g. short by 2 packs" className={inputClass} />
         </details>
       )}

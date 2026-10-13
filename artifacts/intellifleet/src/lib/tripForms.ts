@@ -105,11 +105,17 @@ export interface InitialForm {
   locked: Set<string>;
 }
 
-export function initialCheckoutForm(items: TemplateItem[], order: Pick<DriverOrder, "checkout_prefill"> | null): InitialForm {
+export const INVOICE_KEY = "invoice_dr_number";
+
+export function initialCheckoutForm(items: TemplateItem[], order: Pick<DriverOrder, "checkout_prefill" | "invoice_hint"> | null): InitialForm {
   const values: FormValues = {};
   const locked = new Set<string>();
   for (const item of items) {
     const pre = prefillValueFor(item, order?.checkout_prefill);
+    if (pre === null && item.key === INVOICE_KEY && order?.invoice_hint) {
+      values[item.key] = order.invoice_hint; // a suggestion from the SO already in memory: editable, the crew confirms it
+      continue;
+    }
     if (pre !== null && !FILE_TYPES.has(item.item_type)) {
       values[item.key] = item.item_type === "checkbox" ? pre === "true" : pre;
       locked.add(item.key);
@@ -127,6 +133,8 @@ function validateItemValue(item: TemplateItem, value: FormValue): string | null 
   switch (item.item_type) {
     case "number":
       return typeof value === "string" && parseNumber(value) === null ? "Enter a number" : null;
+    case "numeric_text":
+      return typeof value === "string" && /^\d{1,30}$/.test(value.trim()) ? null : "Digits only (0-9)";
     case "dropdown":
     case "radio":
       if (item.options && item.options.length > 0 && !item.options.includes(String(value))) return "Choose one of the options";

@@ -18,7 +18,7 @@ function StopCard({ row, scope, batchId, canAct, busy, onArrived }: { row: StopR
   return (
     <li className={`border bg-white p-4 ${done ? "border-[#33673B]/40" : "border-[#e4e3df]"}`} data-testid={`driver-stop-${row.so_number}`}>
       <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-black text-sm font-bold text-white">{row.sequence}</span>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-black text-sm font-bold !text-white">{row.sequence}</span>
         <div className="min-w-0 flex-1">
           <div className="font-mono text-xs font-semibold text-[#77787b]">{row.so_number}</div>
           <div className="break-words text-base font-bold leading-snug">{row.customer_name}</div>
@@ -36,7 +36,8 @@ function StopCard({ row, scope, batchId, canAct, busy, onArrived }: { row: StopR
           )}
           {stop?.checkout_at && (
             <div className="text-xs text-[#55565a]">
-              Checked out {formatClock(stop.checkout_at)} by {personName(stop.checkout_by) || "crew"}
+              Departed {formatClock(stop.checkout_at)} by {personName(stop.checkout_by) || "crew"}
+              {stop.invoice_no ? ` \u00b7 Invoice/DR ${stop.invoice_no}` : ""}
               {stop.reason ? ` - ${stop.reason}` : ""}
             </div>
           )}
@@ -60,12 +61,12 @@ function StopCard({ row, scope, batchId, canAct, busy, onArrived }: { row: StopR
       <div className="mt-3 grid gap-2">
         {canAct && eff?.canCheckIn && (
           <button type="button" disabled={busy} onClick={() => onArrived(row)} data-testid={`driver-arrived-${row.so_number}`} className={btnPrimary}>
-            {busy ? "Getting location..." : "Arrived"}
+            {busy ? "Getting location..." : "Arrived at site"}
           </button>
         )}
         {canAct && eff?.canCheckOut && (
           <Link href={checkoutPath(batchId, row.so_id, scope.adminDriverId)} data-testid={`driver-checkout-${row.so_number}`} className={btnPrimary}>
-            Deliver / Check out
+            Departed from site
           </Link>
         )}
         {canAct && eff && !eff.canCheckIn && !eff.canCheckOut && eff.blocker && <BlockerNote text={eff.blocker} />}

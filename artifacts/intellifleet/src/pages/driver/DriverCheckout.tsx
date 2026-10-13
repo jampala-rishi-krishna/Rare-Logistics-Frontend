@@ -60,11 +60,11 @@ function CheckoutBody({ scope, batchId, eff, templates, canSubmit }: { scope: Dr
     const outcome = await actions.run({
       kind: "check_out",
       so_id: eff.so_id,
-      label: `Check out ${eff.order.so_number}`,
+      label: `Departed from ${eff.order.so_number}`,
       path: driverApi.paths.checkOut(batchId, eff.so_id),
       extra: { template_id: template.id, answers: built.answers },
       blobs: built.blobs,
-      doneMessage: `${eff.order.so_number} checked out`,
+      doneMessage: `${eff.order.so_number}: departure saved`,
     });
     if (!outcome) return;
     if (outcome.status === "done" || outcome.status === "queued") {
@@ -117,7 +117,7 @@ function CheckoutBody({ scope, batchId, eff, templates, canSubmit }: { scope: Dr
         <StickyBar>
           {!canSubmit && <BlockerNote text={eff.blocker ?? "This order cannot be checked out right now."} />}
           <button type="button" disabled={disabled || !actions.ready} onClick={() => void submit()} data-testid="driver-checkout-submit" className={btnPrimary}>
-            {actions.busy ? "Saving..." : "Submit delivery"}
+            {actions.busy ? "Saving..." : "Save departure"}
           </button>
         </StickyBar>
       )}
@@ -132,7 +132,7 @@ export default function DriverCheckout() {
   const trip = useTripActions(ctx.scope, batchId ?? "");
   const backHref = assignmentPath(batchId, ctx.scope.adminDriverId);
   return (
-    <BatchFrame ctx={ctx} backHref={backHref} backLabel="Back to assignment" title="Delivery check-out" fullScreen>
+    <BatchFrame ctx={ctx} backHref={backHref} backLabel="Back to assignment" title="Departed from site" fullScreen>
       {(batch, state) => {
         const eff = state.orders.find((o) => o.so_id === soId);
         if (!eff) return <InlineAlert tone="warn">This order is not part of this assignment.</InlineAlert>;
@@ -142,7 +142,7 @@ export default function DriverCheckout() {
           return (
             <div className="grid gap-3" data-testid="driver-checkout-done">
               <p className="border border-[#e4e3df] bg-white p-4 text-sm font-semibold">
-                {eff.order.so_number} is checked out{eff.outcome ? ` (${eff.outcome})` : ""}
+                {eff.order.so_number}: departure saved{eff.outcome ? ` (${eff.outcome})` : ""}{stop?.invoice_no ? `, Invoice/DR ${stop.invoice_no}` : ""}
                 {stop?.checkout_at ? ` by ${personName(stop.checkout_by) || "the crew"} at ${formatClock(stop.checkout_at)}` : eff.stopPending ? " (waiting to sync)" : ""}.
               </p>
               <Link href={backHref} className={btnSecondary}>
@@ -156,7 +156,7 @@ export default function DriverCheckout() {
             <div className="grid gap-3">
               <BlockerNote text={eff.blocker ?? "Check in at this stop first."} />
               <button type="button" disabled={trip.busy} onClick={() => void trip.checkIn(eff.so_id, eff.order.so_number)} data-testid="driver-arrived-here" className={btnPrimary}>
-                {trip.capturing ? "Getting location..." : "Arrived"}
+                {trip.capturing ? "Getting location..." : "Arrived at site"}
               </button>
             </div>
           );

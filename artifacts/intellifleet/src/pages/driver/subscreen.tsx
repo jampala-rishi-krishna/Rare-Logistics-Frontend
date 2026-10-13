@@ -65,7 +65,7 @@ export function BatchFrame({
     );
   return (
     <DriverLayout scope={scope} name={me.data?.name ?? null} fullScreen={fullScreen}>
-      <Link href={backHref} data-testid="driver-sub-back" className="mb-3 inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold">
+      <Link href={backHref} data-testid="driver-sub-back" className="mb-3 inline-flex min-h-[48px] items-center gap-2 text-sm font-semibold">
         <ArrowLeft size={18} />
         {backLabel}
       </Link>
@@ -107,9 +107,9 @@ export function useTripActions(scope: DriverScope, batchId: string) {
     const out = await actions.run({
       kind: "check_in",
       so_id: soId,
-      label: `Arrived at ${soNumber}`,
+      label: `Arrived at site ${soNumber}`,
       path: driverApi.paths.checkIn(batchId, soId),
-      doneMessage: `Arrived at ${soNumber}`,
+      doneMessage: `Arrived at site: ${soNumber}`,
     });
     if (out?.status === "done") {
       const warning = farWarningFor(out.response.batch, soId);

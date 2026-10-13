@@ -28,7 +28,7 @@ export function MediaPhoto({ photoId, alt }: { photoId: number | string; alt: st
   }, [photoId, attempt]);
   if (failed)
     return (
-      <button type="button" onClick={() => setAttempt((n) => n + 1)} className="min-h-[44px] border border-[#d8d7d2] px-3 text-xs font-semibold text-[#86000B]">
+      <button type="button" onClick={() => setAttempt((n) => n + 1)} className="min-h-[48px] border border-[#d8d7d2] px-3 text-xs font-semibold text-[#86000B]">
         Photo unavailable. Tap to retry
       </button>
     );

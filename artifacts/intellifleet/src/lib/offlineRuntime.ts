@@ -37,7 +37,8 @@ export function subscribeResults(fn: (entry: QueueEntry, response: ActionRespons
 
 function goToLogin() {
   clearStoredSessionId();
-  if (window.location.pathname !== "/login") window.location.assign("/login");
+  const signInPath = window.location.pathname.startsWith("/driver") ? "/driver/login" : "/login";
+  if (window.location.pathname !== signInPath) window.location.assign(signInPath);
 }
 
 export function ensureRuntime(): Promise<Runtime> {

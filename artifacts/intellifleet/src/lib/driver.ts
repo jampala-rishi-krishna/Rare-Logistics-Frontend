@@ -194,3 +194,23 @@ export function alreadyDoneText(doneBy: { name?: string; at?: string } | null | 
   const at = formatClock(doneBy?.at);
   return `Already done${who}${at ? ` at ${at}` : ""}`;
 }
+
+// What the sign-in screen tells the user. Uses the status only (never echoes server internals); a 401 is deliberately the same
+// message for "no such account" and "wrong password".
+export function loginErrorText(status: number | null, serverMessage: string | null): string {
+  if (status === 401) return "Wrong phone number, email or password. Check it and try again.";
+  if (status === 429) return "Too many attempts. Wait a few minutes and try again.";
+  if (status === 403) return serverMessage && /disabled/i.test(serverMessage) ? "This account is disabled. Please contact dispatch." : "You do not have access. Contact dispatch.";
+  if (status === 400) return "Enter your phone number or email, and your password.";
+  if (status === null) return "Can't reach the server. Check your connection and try again.";
+  return "Something went wrong signing in. Try again.";
+}
+
+export const MIN_PASSWORD_LENGTH = 8;
+
+// Client-side check before sending; the server still enforces its own rules.
+export function validateNewPassword(password: string, confirm: string): string | null {
+  if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  if (password !== confirm) return "The two passwords do not match.";
+  return null;
+}

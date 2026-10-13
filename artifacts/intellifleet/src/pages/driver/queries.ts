@@ -137,3 +137,20 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
 }
 
 export { assignmentPath as assignmentHref, subpagePath as subpageHref } from "@/lib/tripNav";
+
+// Alerts + issues belong to the logged-in crew member only (no admin ?driver_id= view).
+export function useAlertsQuery(scope: DriverScope) {
+  const enabled = !scope.sessionLoading && !scope.isAdmin;
+  return useQuery({
+    queryKey: ["driver-alerts"],
+    queryFn: () => driverApi.getAlerts(),
+    enabled,
+    retry: 1,
+    refetchInterval: (query) => (document.visibilityState === "visible" && !query.state.error ? 60_000 : false),
+  });
+}
+
+export function useIssuesQuery(scope: DriverScope) {
+  const enabled = !scope.sessionLoading && !scope.isAdmin;
+  return useQuery({ queryKey: ["driver-issues"], queryFn: () => driverApi.getIssues(), enabled, retry: 1 });
+}

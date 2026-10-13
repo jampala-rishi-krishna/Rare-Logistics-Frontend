@@ -13,6 +13,10 @@ export interface DriverMe {
   dispatch_phone: string | null;
   now: string;
   today: string;
+  staff_id?: number | string;
+  email?: string | null;
+  vehicles_today?: string[];
+  crew_today?: CrewMember[];
 }
 
 export interface Helper {
@@ -66,6 +70,7 @@ export interface Batch {
   so_count: number;
   total_kg: number;
   kg_complete?: boolean;
+  kg_unknown_lines?: number;
   total_packs: number | null; // null = no pack-unit line (unknown), shown as a dash
   trip_number?: number;
   trips_on_date?: number;
@@ -117,6 +122,7 @@ export interface OrderWorkflow {
     checkout_by: WhoWhen | string | null;
     outcome: string | null;
     reason: string | null;
+    invoice_no?: string | null;
   } | null;
   can_acknowledge: boolean;
   can_check_in: boolean;
@@ -135,8 +141,10 @@ export interface DriverOrder {
   lines: OrderLine[];
   total_kg: number;
   kg_complete?: boolean;
+  kg_unknown_lines?: number;
   total_packs: number | null;
   notes: string | null;
+  invoice_hint?: string | null;
   order_status?: string | null;
   shipment_status?: string | null;
   delivery_status: string | null;
@@ -150,10 +158,73 @@ export interface BatchDetail extends Batch {
   orders: DriverOrder[];
 }
 
+export interface DaySummary {
+  assigned: number;
+  completed: number;
+  remaining: number;
+  needs_attention: number;
+  open_issues: number;
+  trips: number;
+}
+
 export interface DriverToday {
   date: string;
   driver: { id: number | string; name: string };
+  summary?: DaySummary;
   batches: Batch[];
+}
+
+export type HistoryFilter = "all" | "completed" | "failed";
+
+export interface DriverHistoryPage {
+  from: string;
+  to: string;
+  status: HistoryFilter;
+  page: number;
+  page_size: number;
+  total: number;
+  has_more: boolean;
+  batches: Batch[];
+}
+
+export interface IssueItem {
+  id: number;
+  reference: string;
+  category: string;
+  priority: "normal" | "high" | "urgent" | string;
+  status: string;
+  status_label: string;
+  description: string;
+  batch_id: string | null;
+  so_id: string | null;
+  so_number: string | null;
+  vehicle: string | null;
+  photo_ids: number[];
+  created_at: string | null;
+  response: string | null;
+  responded_at: string | null;
+}
+
+export interface IssueList {
+  issues: IssueItem[];
+  categories: string[];
+  priorities: string[];
+}
+
+export interface AlertItem {
+  key: string;
+  type: "assigned" | "changed" | "validated" | "issue" | string;
+  title: string;
+  body: string;
+  at: string | null;
+  link: string;
+  priority: string;
+  read: boolean;
+}
+
+export interface AlertList {
+  alerts: AlertItem[];
+  unread: number;
 }
 
 export interface DriverHistory {
@@ -172,6 +243,7 @@ export type CheckoutItemType =
   | "dropdown"
   | "radio"
   | "number"
+  | "numeric_text"
   | "date"
   | "datetime"
   | "photo"
@@ -193,6 +265,7 @@ export interface TemplateItem {
   prefill: string | null;
   show_when: ShowWhen | null;
   position: number;
+  app_only?: boolean;
 }
 
 export interface Template {

@@ -13,6 +13,7 @@ export function setStoredSessionId(token: string) {
 
 export function clearStoredSessionId() {
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem("if-last-role");
 }
 
 export class ApiError extends Error {
@@ -124,9 +125,12 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    if (res.status === 401 && window.location.pathname !== "/login") {
+    // An expired session sends the user to the sign-in of THEIR app (drivers: /driver/login). A failed sign-in attempt itself is a 401
+    // too, but it must show its error on the sign-in screen, never navigate away.
+    const signInPath = window.location.pathname.startsWith("/driver") ? "/driver/login" : "/login";
+    if (res.status === 401 && path !== "/auth/login" && window.location.pathname !== signInPath) {
       clearStoredSessionId();
-      window.location.assign("/login");
+      window.location.assign(signInPath);
     }
     throw new ApiError(res.status, extractErrorMessage(data, res), data);
   }

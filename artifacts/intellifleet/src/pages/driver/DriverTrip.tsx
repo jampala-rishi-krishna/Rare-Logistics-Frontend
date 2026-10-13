@@ -183,13 +183,13 @@ export default function DriverTrip() {
   const t = timeline.data?.data;
   return (
     <DriverLayout scope={scope} name={me.data?.name ?? null}>
-      <Link href={assignmentPath(batchId, scope.adminDriverId)} data-testid="driver-sub-back" className="mb-3 inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold">
+      <Link href={assignmentPath(batchId, scope.adminDriverId)} data-testid="driver-sub-back" className="mb-3 inline-flex min-h-[48px] items-center gap-2 text-sm font-semibold">
         <ArrowLeft size={18} />
         Back to assignment
       </Link>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold leading-tight">Trip timeline</h1>
-        <button type="button" onClick={() => void timeline.refetch()} disabled={timeline.isFetching} aria-label="Refresh" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center border border-[#d8d7d2] bg-white disabled:opacity-40">
+        <button type="button" onClick={() => void timeline.refetch()} disabled={timeline.isFetching} aria-label="Refresh" className="inline-flex min-h-[48px] min-w-[44px] items-center justify-center border border-[#d8d7d2] bg-white disabled:opacity-40">
           <RefreshCw size={16} className={timeline.isFetching ? "animate-spin" : ""} />
         </button>
       </div>

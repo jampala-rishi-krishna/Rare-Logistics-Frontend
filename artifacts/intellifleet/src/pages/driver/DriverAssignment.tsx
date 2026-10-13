@@ -1,7 +1,9 @@
 import { Link, useParams, useSearchParams } from "wouter";
-import { ArrowLeft, MapPin, Navigation } from "lucide-react";
+import { lazy, Suspense } from "react";
+import { AlertTriangle, ArrowLeft, MapPin, Navigation, Phone } from "lucide-react";
 import { formatClock, formatKg, formatLongDate, formatQty, mapsSearchUrl, personName, telHref, withDriverParams } from "@/lib/driver";
 import { useOfflineQueue } from "@/lib/offlineRuntime";
+import { routeText, tripLabel } from "@/lib/tripCards";
 import { deriveBatchState } from "@/lib/tripState";
 import type { EffectiveBatch, EffectiveOrder } from "@/lib/tripState";
 import { ackPath, acknowledgeLeft, actionsEnabled, checkinNotice, checkoutPath, handoverPath, nextToAcknowledge, routePath, timelinePath } from "@/lib/tripNav";
@@ -12,14 +14,14 @@ import { useTripActions } from "./subscreen";
 import {
   BlockerNote,
   ChipBadge,
-  CrewList,
   ErrorState,
+  KgValue,
   MissingDriverNotice,
+  NavRow,
   OfflineNote,
+  PacksValue,
   PhoneLink,
   Skeleton,
-  Stat,
-  StatusBadge,
   btnPrimary,
   btnSecondary,
   errorText,
@@ -28,13 +30,9 @@ import {
 } from "./shared";
 import type { DriverScope } from "./shared";
 
-const linkBtn = (primary: boolean) => (primary ? btnPrimary : btnSecondary);
+const RouteMap = lazy(() => import("./RouteMap"));
 
-function assignmentStatus(status: string | null | undefined, emailStatus: string | null | undefined) {
-  if (status && status !== "assigned") return status;
-  if (emailStatus && emailStatus !== "sent") return emailStatus;
-  return "Assigned";
-}
+const linkBtn = (primary: boolean) => (primary ? btnPrimary : btnSecondary);
 
 function orderStatusLabel(eff: EffectiveOrder) {
   const order = eff.order;
@@ -106,7 +104,8 @@ function OrderCard({
       )}
       {stop?.checkout_at && (
         <div className="text-xs text-[#55565a]">
-          Checked out {formatClock(stop.checkout_at)} by {personName(stop.checkout_by) || "crew"}
+          Departed {formatClock(stop.checkout_at)} by {personName(stop.checkout_by) || "crew"}
+          {stop.invoice_no ? ` \u00b7 Invoice/DR ${stop.invoice_no}` : ""}
           {stop.reason ? ` - ${stop.reason}` : ""}
         </div>
       )}
@@ -175,12 +174,12 @@ function OrderCard({
           )}
           {eff.canCheckIn && (
             <button type="button" disabled={busy} onClick={() => onCheckIn(eff)} data-testid={`driver-arrived-${order.so_number}`} className={btnPrimary}>
-              {busy ? "Getting location..." : "Arrived"}
+              {busy ? "Getting location..." : "Arrived at site"}
             </button>
           )}
           {eff.canCheckOut && (
             <Link href={checkoutPath(batchId, eff.so_id, scope.adminDriverId)} data-testid={`driver-checkout-${order.so_number}`} className={linkBtn(true)}>
-              Deliver / Check out
+              Departed from site
             </Link>
           )}
         </div>
@@ -189,6 +188,12 @@ function OrderCard({
         <div className="mt-3">
           <BlockerNote text={eff.blocker} />
         </div>
+      )}
+      {canAct && (
+        <Link href={`/driver/issues/new?batch=${encodeURIComponent(batchId)}&so=${encodeURIComponent(eff.so_id)}`} data-testid={`driver-report-${order.so_number}`} className={`${btnSecondary} mt-3`}>
+          <AlertTriangle size={18} />
+          Report an issue
+        </Link>
       )}
       {navigateUrl && (
         <a href={navigateUrl} target="_blank" rel="noopener noreferrer" className={`${btnSecondary} mt-3`} data-testid={`driver-navigate-${order.so_number}`}>
@@ -199,8 +204,8 @@ function OrderCard({
 
       {(order.lines.length > 0 || order.details_loading) && (
         <details className="mt-3 border-t border-[#efeeeb] pt-2">
-          <summary className="min-h-[44px] cursor-pointer py-2 text-sm font-semibold">
-            Items ({order.total_packs === null ? "no pack count" : `${formatQty(order.total_packs)} packs`}, {formatKg(order.total_kg)})
+          <summary className="min-h-[48px] cursor-pointer py-2 text-sm font-semibold">
+            Items ({order.total_packs === null ? "no pack count" : `${formatQty(order.total_packs)} packs`}, <KgValue kg={order.total_kg} unknownLines={order.kg_unknown_lines} className="inline" />)
           </summary>
           {order.details_loading && <div className="text-xs font-semibold text-[#6b4a00]">Details loading&hellip;</div>}
           <ul className="divide-y divide-[#efeeeb]">
@@ -333,7 +338,7 @@ export default function DriverAssignment() {
 
   return (
     <DriverLayout scope={scope} name={me.data?.name ?? null}>
-      <Link href={backHref} data-testid="driver-assignment-back" className="mb-4 inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold">
+      <Link href={backHref} data-testid="driver-assignment-back" className="mb-4 inline-flex min-h-[48px] items-center gap-2 text-sm font-semibold">
         <ArrowLeft size={18} />
         {fromHistory ? "Back to history" : "Back to today"}
       </Link>
@@ -350,19 +355,17 @@ export default function DriverAssignment() {
       ) : batch && state ? (
         <div className="grid gap-3">
           <OfflineNote offline={Boolean(detail.data?.offline)} savedAt={detail.data?.saved_at} />
-          <section className="border border-[#e4e3df] bg-white p-4">
+          <section className="border border-[#e4e3df] bg-white p-4" data-testid="driver-trip-summary">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-xs font-semibold uppercase tracking-wide text-[#77787b]">{formatLongDate(batch.delivery_date)}</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">
+                  {formatLongDate(batch.delivery_date)}
+                  {tripLabel(batch) ? ` \u00b7 ${tripLabel(batch)}` : ""}
+                </div>
                 <div className="mt-1 font-mono text-2xl font-bold">{batch.vehicle}</div>
               </div>
-              <StatusBadge status={assignmentStatus(batch.assignment_status, batch.email_status)} />
+              {batch.trip && <ChipBadge chip={state.chip} label={state.chipLabel} />}
             </div>
-            {batch.trip && (
-              <div className="mt-2">
-                <ChipBadge chip={state.chip} label={state.chipLabel} />
-              </div>
-            )}
             {state.pendingCount > 0 && (
               <div className="mt-2 inline-flex border border-[#e6c36a] bg-[#fff6dd] px-2 py-1 text-xs font-bold text-[#6b4a00]">Pending sync ({state.pendingCount})</div>
             )}
@@ -374,14 +377,47 @@ export default function DriverAssignment() {
                 </div>
               </div>
             )}
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <Stat label="Orders" value={batch.so_count} />
-              <Stat label="Total" value={formatKg(batch.total_kg)} />
-              <Stat label="Packs" value={formatQty(batch.total_packs)} />
+            <div className="mt-3 grid grid-cols-3 gap-3 border-t border-[#efeeeb] pt-3 text-sm">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Orders</div>
+                <div className="font-semibold">{batch.so_count}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Total weight</div>
+                <KgValue kg={batch.total_kg} unknownLines={batch.kg_unknown_lines} className="font-semibold" />
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Packs</div>
+                <div className="font-semibold">
+                  <PacksValue packs={batch.total_packs} />
+                </div>
+              </div>
             </div>
+            {routeText(batch) && (
+              <div className="mt-3 text-sm">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Route</div>
+                <div className="font-semibold">{routeText(batch)}</div>
+              </div>
+            )}
             {batch.departure_time && <div className="mt-3 text-sm text-[#55565a]">Departure {batch.departure_time}</div>}
-            <CrewList crew={batch.crew} helpers={batch.helpers} />
             {batch.details_loading && <div className="mt-3 text-xs font-semibold text-[#6b4a00]">Some details are still loading&hellip;</div>}
+          </section>
+
+          <section className="border border-[#e4e3df] bg-white" aria-label="Crew" data-testid="driver-crew">
+            {(batch.crew && batch.crew.length > 0 ? batch.crew : (batch.helpers ?? []).map((h) => ({ id: h.id, name: h.name, role: "helper", phone: h.phone }))).map((p) => (
+              <div key={String(p.id)} className="flex min-h-[56px] items-center justify-between gap-3 border-b border-[#efeeeb] px-4 last:border-b-0">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase capitalize tracking-wide text-[#77787b]">{p.role}</div>
+                  <div className="truncate text-sm font-semibold">{p.name}</div>
+                  {p.phone && <div className="text-xs text-[#55565a]">{p.phone}</div>}
+                </div>
+                {telHref(p.phone) && (
+                  <a href={telHref(p.phone) as string} aria-label={`Call ${p.name}`} className="inline-flex h-12 w-12 shrink-0 items-center justify-center border border-[#d8d7d2]">
+                    <Phone size={18} />
+                  </a>
+                )}
+              </div>
+            ))}
           </section>
 
           {scope.isAdmin && <BlockerNote text="Admin view is read only. Crew actions are done by the driver or helper." />}
@@ -389,6 +425,26 @@ export default function DriverAssignment() {
             <PrimaryArea state={state} route={route.data?.data} scope={scope} batchId={batchId} busy={trip.busy} onStart={() => void trip.startTrip()} onEnd={() => void trip.endTrip()} />
           )}
           {route.data?.data.warning && <p className="text-xs text-[#6b4a00]">{route.data.data.warning}</p>}
+
+          <section className="grid gap-2" aria-label="Route map">
+            <h2 className="text-base font-bold">Route map</h2>
+            {route.data?.data && route.data.data.stops.some((s) => typeof s.lat === "number" && typeof s.lng === "number") ? (
+              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                <RouteMap route={route.data.data} currentSoId={batch.trip?.current_stop_so_id != null ? String(batch.trip.current_stop_so_id) : null} />
+              </Suspense>
+            ) : (
+              <p className="border border-[#e4e3df] bg-white p-3 text-sm text-[#55565a]" data-testid="driver-map-unavailable">
+                {route.isLoading ? "Loading the route..." : "These stops have no map coordinates yet, so no map is drawn. Use the stop list and Google Maps."}
+              </p>
+            )}
+            <div className="border border-[#e4e3df] bg-white">
+              <NavRow href={routePath(batchId, scope.adminDriverId)} icon={<Navigation size={18} />} label="Stops and directions" detail={`${batch.so_count} stops`} testId="driver-route-link" />
+              {batch.trip && batch.trip.status !== "pending" && <NavRow href={timelinePath(batchId, scope.adminDriverId)} icon={<MapPin size={18} />} label="Trip timeline" />}
+              {canAct && <NavRow href={`/driver/issues/new?batch=${encodeURIComponent(batchId)}`} icon={<AlertTriangle size={18} />} label="Report an issue with this trip" testId="driver-report-trip" />}
+            </div>
+          </section>
+
+          {state.orders.length > 0 && <h2 className="text-base font-bold">Order list ({state.orders.length})</h2>}
 
           {state.orders.length === 0 ? (
             <div className="border border-[#e4e3df] bg-white p-5 text-sm text-[#55565a]">No orders in this assignment.</div>

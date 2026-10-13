@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "wouter";
+import { ChevronRight } from "lucide-react";
 import * as authApi from "@/services/api/auth";
 import * as driverApi from "@/services/api/driver";
-import { formatClock, telHref } from "@/lib/driver";
+import { formatClock, formatQty, telHref } from "@/lib/driver";
+import { DASH, formatKgPartial } from "@/lib/kgDisplay";
 import { fetchWithCache } from "@/lib/offlineRuntime";
 import type { CrewMember, Helper, TripChip } from "@/lib/tripTypes";
 
@@ -58,7 +60,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 inline-flex min-h-[44px] items-center justify-center border border-[#86000B] bg-white px-5 text-sm font-semibold"
+        className="mt-3 inline-flex min-h-[48px] items-center justify-center border border-[#86000B] bg-white px-5 text-sm font-semibold"
       >
         Try again
       </button>
@@ -74,7 +76,7 @@ export function MissingDriverNotice() {
   return (
     <div className="border border-[#e4e3df] bg-white p-4 text-sm text-[#55565a]">
       Select a driver to view their assignments.
-      <Link href="/app/driver-overview" className="mt-3 inline-flex min-h-[40px] items-center border border-[#d8d7d2] px-3 font-semibold text-black">
+      <Link href="/app/driver-overview" className="mt-3 inline-flex min-h-[48px] items-center border border-[#d8d7d2] px-3 font-semibold text-black">
         Choose a driver
       </Link>
     </div>
@@ -85,7 +87,7 @@ export function PhoneLink({ phone, children, className = "" }: { phone: string |
   const href = telHref(phone);
   if (!href) return <span className={className}>{children ?? phone}</span>;
   return (
-    <a href={href} className={`inline-flex min-h-[44px] items-center font-semibold text-[#0b57d0] underline underline-offset-2 ${className}`}>
+    <a href={href} className={`inline-flex min-h-[48px] items-center font-semibold text-[#0b57d0] underline underline-offset-2 ${className}`}>
       {children ?? phone}
     </a>
   );
@@ -118,7 +120,7 @@ export function Stat({ label, value }: { label: string; value: ReactNode }) {
 
 // ---- button styles (>= 48px tap targets) ----
 export const btnPrimary =
-  "inline-flex min-h-[56px] w-full items-center justify-center gap-2 bg-black px-6 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex min-h-[56px] w-full items-center justify-center gap-2 bg-black px-6 text-base font-bold !text-white disabled:cursor-not-allowed disabled:opacity-40";
 export const btnSecondary =
   "inline-flex min-h-[48px] w-full items-center justify-center gap-2 border border-black bg-white px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40";
 export const inputClass = "min-h-[48px] w-full border border-[#d8d7d2] bg-white px-3 text-base disabled:bg-[#f2f2ef] disabled:text-[#55565a]";
@@ -216,7 +218,7 @@ export function ToastHost() {
   }, []);
   if (toasts.length === 0) return null;
   const tone = (t: ToastTone) =>
-    t === "error" ? "bg-[#86000B] text-white" : t === "warn" ? "bg-[#a16819] text-white" : "bg-black text-white";
+    t === "error" ? "bg-[#86000B] !text-white" : t === "warn" ? "bg-[#a16819] !text-white" : "bg-black !text-white";
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-28 z-50 mx-auto grid max-w-[640px] gap-2 px-4" aria-live="polite">
       {toasts.map((t) => (
@@ -225,5 +227,44 @@ export function ToastHost() {
         </div>
       ))}
     </div>
+  );
+}
+
+// ---- numbers that may be unknown or partial (see lib/kgDisplay.ts) ----
+
+// "564.67 kg", or "354 kg+" with a small note "1 line without weight" when part of the total has no weight, or a dash.
+export function KgValue({ kg, unknownLines = 0, className = "" }: { kg: number | null | undefined; unknownLines?: number; className?: string }) {
+  const { text, note } = formatKgPartial(kg, unknownLines, 2);
+  return (
+    <span className={className} data-testid="driver-kg">
+      {text}
+      {note && <span className="block text-[10px] font-normal leading-tight text-[#6b4a00]">{note}</span>}
+    </span>
+  );
+}
+
+// Packs are unknown (a dash), never 0, when no line of the order is counted in packs.
+export function PacksValue({ packs }: { packs: number | null | undefined }) {
+  return <span data-testid="driver-packs">{packs === null || packs === undefined ? DASH : formatQty(packs)}</span>;
+}
+
+export function Avatar({ name, size = 36 }: { name: string | null | undefined; size?: number }) {
+  const initials = (name ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
+  return (
+    <span aria-hidden="true" style={{ width: size, height: size }} className="inline-flex shrink-0 items-center justify-center rounded-full bg-black text-xs font-bold !text-white">
+      {initials}
+    </span>
+  );
+}
+
+// One real icon + label + chevron row (profile / trip detail sections): always a real link.
+export function NavRow({ href, icon, label, detail, testId }: { href: string; icon: ReactNode; label: string; detail?: ReactNode; testId?: string }) {
+  return (
+    <Link href={href} data-testid={testId} className="flex min-h-[52px] items-center gap-3 border-b border-[#efeeeb] px-4 text-sm font-semibold last:border-b-0">
+      <span className="shrink-0 text-[#55565a]">{icon}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {detail && <span className="shrink-0 text-xs font-normal text-[#77787b]">{detail}</span>}
+      <ChevronRight size={18} className="shrink-0 text-[#77787b]" />
+    </Link>
   );
 }

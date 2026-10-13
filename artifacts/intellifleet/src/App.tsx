@@ -18,6 +18,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   Link,
+  Redirect,
   Route,
   Switch,
   Router as WouterRouter,
@@ -151,7 +152,13 @@ import DriverOverview from "@/pages/overview/DriverOverview";
 import SetPassword from "@/pages/SetPassword";
 import DriverToday from "@/pages/driver/DriverToday";
 import DriverAssignment from "@/pages/driver/DriverAssignment";
-import DriverHistory from "@/pages/driver/DriverHistory";
+import DriverTrips from "@/pages/driver/DriverTrips";
+import DriverAlerts from "@/pages/driver/DriverAlerts";
+import DriverProfile from "@/pages/driver/DriverProfile";
+import DriverIssueForm from "@/pages/driver/DriverIssueForm";
+import DriverIssues from "@/pages/driver/DriverIssues";
+import DriverLogin from "@/pages/driver/DriverLogin";
+import DriverForgot from "@/pages/driver/DriverForgot";
 import DriverAcknowledge from "@/pages/driver/DriverAcknowledge";
 import DriverRoute from "@/pages/driver/DriverRoute";
 import DriverCheckout from "@/pages/driver/DriverCheckout";
@@ -580,13 +587,13 @@ const rolePaths: Record<Role, string> = {
 const cx = (...classes: Array<string | false | undefined>) =>
   classes.filter(Boolean).join(" ");
 
-function RoleGate({ children, allowed }: { children: ReactNode; allowed: readonly string[] }) {
+function RoleGate({ children, allowed, loginPath = "/login" }: { children: ReactNode; allowed: readonly string[]; loginPath?: string }) {
   const [, setLocation] = useLocation();
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let active = true;
     if (!getStoredSessionId()) {
-      setLocation("/login");
+      setLocation(loginPath);
       return;
     }
     authApi
@@ -594,6 +601,11 @@ function RoleGate({ children, allowed }: { children: ReactNode; allowed: readonl
       .then(({ user }) => {
         if (!active) return;
         const role = user.role.toLowerCase();
+        try {
+          localStorage.setItem("if-last-role", role); // lets the guard keep a signed-in driver in the app while the phone is offline
+        } catch {
+          /* storage unavailable */
+        }
         if (user.mustChangePassword) {
           setLocation("/set-password");
         } else if (!allowed.includes(role)) {
@@ -604,13 +616,23 @@ function RoleGate({ children, allowed }: { children: ReactNode; allowed: readonl
           setReady(true);
         }
       })
-      .catch(() => {
-        if (active) setLocation("/login");
+      .catch((error) => {
+        if (!active) return;
+        // Only a real 401 means "signed out". With no network (or a server error) the stored session is kept, and the pages show their saved data.
+        const offline = !(error instanceof ApiError && error.status === 401);
+        let lastRole: string | null = null;
+        try {
+          lastRole = localStorage.getItem("if-last-role");
+        } catch {
+          lastRole = null;
+        }
+        if (offline && lastRole && allowed.includes(lastRole)) setReady(true);
+        else setLocation(loginPath);
       });
     return () => {
       active = false;
     };
-  }, [allowed.join(","), setLocation]);
+  }, [allowed.join(","), loginPath, setLocation]);
   return ready ? <>{children}</> : <div className="flex min-h-[100dvh] items-center justify-center text-sm text-[#77787b]">Checking access...</div>;
 }
 function Button({
@@ -7172,8 +7194,10 @@ function App() {
                     </Switch>
                   </RoleGate>
                 </Route>
+                <Route path="/driver/login" component={DriverLogin} />
+                <Route path="/driver/forgot-password" component={DriverForgot} />
                 <Route path="/driver/*?">
-                  <RoleGate allowed={SECTION_ROLES.driver}>
+                  <RoleGate allowed={SECTION_ROLES.driver} loginPath="/driver/login">
                     <Switch>
                       <Route path="/driver/today" component={DriverToday} />
                       <Route path="/driver/assignment/:batch_id" component={DriverAssignment} />
@@ -7182,7 +7206,14 @@ function App() {
                       <Route path="/driver/assignment/:batch_id/checkout/:so_id" component={DriverCheckout} />
                       <Route path="/driver/assignment/:batch_id/handover" component={DriverHandover} />
                       <Route path="/driver/trip/:batch_id" component={DriverTrip} />
-                      <Route path="/driver/history" component={DriverHistory} />
+                      <Route path="/driver/trips" component={DriverTrips} />
+                      <Route path="/driver/history">
+                        <Redirect to="/driver/trips" />
+                      </Route>
+                      <Route path="/driver/alerts" component={DriverAlerts} />
+                      <Route path="/driver/profile" component={DriverProfile} />
+                      <Route path="/driver/issues/new" component={DriverIssueForm} />
+                      <Route path="/driver/issues" component={DriverIssues} />
                       <Route component={NotFound} />
                     </Switch>
                   </RoleGate>

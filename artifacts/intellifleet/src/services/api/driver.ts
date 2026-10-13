@@ -3,8 +3,13 @@ import type {
   ActionBody,
   ActionResponse,
   BatchDetail,
+  AlertList,
   DriverHistory,
+  DriverHistoryPage,
   DriverMe,
+  HistoryFilter,
+  IssueItem,
+  IssueList,
   DriverToday,
   HistoryRange,
   Officer,
@@ -43,6 +48,19 @@ export function getHistory(range: HistoryRange, driverId?: string | null): Promi
   return api.get<DriverHistory>("/api/driver/history", query);
 }
 
+export function getHistoryPage(
+  query: { range: HistoryRange; status: HistoryFilter; page: number; pageSize?: number },
+  driverId?: string | null,
+): Promise<DriverHistoryPage> {
+  const params: Record<string, string | number | undefined> = { ...scope(driverId), status: query.status, page: query.page, page_size: query.pageSize ?? 10 };
+  if ("days" in query.range) params.days = query.range.days;
+  else {
+    params.from = query.range.from;
+    params.to = query.range.to;
+  }
+  return api.get<DriverHistoryPage>("/api/driver/history", params);
+}
+
 export function getAssignment(batchId: string, driverId?: string | null): Promise<BatchDetail> {
   return api.get<BatchDetail>(`/api/driver/assignments/${encodeURIComponent(batchId)}`, scope(driverId));
 }
@@ -61,6 +79,34 @@ export function getRoute(batchId: string, driverId?: string | null): Promise<Rou
 
 export function getTimeline(batchId: string, driverId?: string | null): Promise<Timeline> {
   return api.get<Timeline>(`${base(batchId)}/timeline`, scope(driverId));
+}
+
+// ---- issues and alerts (crew only) ----
+export interface IssueInput {
+  idempotency_key: string;
+  category: string;
+  priority: string;
+  description: string;
+  batch_id: string | null;
+  so_id: string | null;
+  photo_ids: number[];
+  client_ts: string;
+}
+
+export function getIssues(): Promise<IssueList> {
+  return api.get<IssueList>("/api/driver/issues");
+}
+
+export function postIssue(body: IssueInput): Promise<{ ok: boolean; replayed: boolean; issue: IssueItem }> {
+  return api.post("/api/driver/issues", body);
+}
+
+export function getAlerts(): Promise<AlertList> {
+  return api.get<AlertList>("/api/driver/alerts");
+}
+
+export function markAlertsRead(input: { keys?: string[]; all?: boolean }): Promise<{ ok: boolean; marked: number; unread: number }> {
+  return api.post("/api/driver/alerts/read", input);
 }
 
 // ---- action paths (also used by the offline queue, which stores the path) ----

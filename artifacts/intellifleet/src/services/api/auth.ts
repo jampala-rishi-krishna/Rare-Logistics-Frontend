@@ -42,3 +42,8 @@ export function changePassword(currentPassword: string, newPassword: string): Pr
 export function setPassword(token: string, password: string): Promise<{ ok: true }> {
   return api.post<{ ok: true }>("/auth/set-password", { token, password });
 }
+
+// Public: the dispatcher number a locked-out driver can call (Forgot password). Password resets are links issued by dispatch / admin.
+export function getSupport(): Promise<{ dispatch_phone: string | null }> {
+  return api.get<{ dispatch_phone: string | null }>("/auth/support");
+}

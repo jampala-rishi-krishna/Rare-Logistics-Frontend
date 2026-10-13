@@ -127,3 +127,12 @@ test("personName and alreadyDoneText", () => {
   assert.equal(alreadyDoneText({ name: "Raymond", at: "2026-10-12T00:15:30Z" }), "Already done by Raymond at 08:15");
   assert.equal(alreadyDoneText(null), "Already done");
 });
+
+import { loginErrorText } from "./driver.ts";
+
+test("login errors are clear and never reveal which part was wrong", () => {
+  assert.match(loginErrorText(401, "Invalid credentials."), /Wrong phone number, email or password/);
+  assert.match(loginErrorText(429, null), /Too many attempts/);
+  assert.match(loginErrorText(403, "This account is disabled. Please contact dispatch."), /disabled/);
+  assert.match(loginErrorText(null, null), /Can't reach the server/);
+});

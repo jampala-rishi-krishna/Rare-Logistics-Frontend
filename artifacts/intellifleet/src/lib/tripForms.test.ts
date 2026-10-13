@@ -179,3 +179,21 @@ test("handover validation: explicit choice, note required for No, officer requir
   assert.equal(validateHandover(good, 7).ok, true);
   assert.deepEqual(buildHandoverItems(good), [{ so_id: "1", handed_over: true, note: null }, { so_id: "2", handed_over: false, note: "left at gate" }]);
 });
+
+import { INVOICE_KEY } from "./tripForms.ts";
+
+test("Invoice / DR number: digits only, kept as text, suggestion prefilled but editable", () => {
+  const items = [
+    { id: 1, key: INVOICE_KEY, label: "Invoice or DR Number", item_type: "numeric_text", required: true, options: null, prefill: null, show_when: null, position: 1 },
+    { id: 2, key: "outcome", label: "Outcome", item_type: "radio", required: true, options: ["Delivered", "Failed"], prefill: null, show_when: null, position: 2 },
+  ] as never;
+  const initial = initialCheckoutForm(items, { checkout_prefill: null, invoice_hint: "000456" } as never);
+  assert.equal(initial.values[INVOICE_KEY], "000456");
+  assert.equal(initial.locked.has(INVOICE_KEY), false); // a suggestion, never locked
+  assert.equal(initialCheckoutForm(items, { checkout_prefill: null } as never).values[INVOICE_KEY], "");
+  const values = { [INVOICE_KEY]: "12A", outcome: "Delivered" };
+  assert.deepEqual(validateCheckout(items, values), { [INVOICE_KEY]: "Digits only (0-9)" });
+  assert.deepEqual(validateCheckout(items, { [INVOICE_KEY]: "", outcome: "Delivered" }), { [INVOICE_KEY]: "Required" });
+  assert.deepEqual(validateCheckout(items, { [INVOICE_KEY]: "000123", outcome: "Delivered" }), {});
+  assert.equal(buildCheckoutAnswers(items, { [INVOICE_KEY]: " 000123 ", outcome: "Delivered" }, () => "k").answers[INVOICE_KEY], "000123"); // string, zeros kept
+});
