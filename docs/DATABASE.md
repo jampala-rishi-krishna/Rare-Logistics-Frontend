@@ -1,6 +1,6 @@
 # IntelliFleet Neon database
 
-Updated 2026-10-12. Alembic head: `p6b7c8d9e0f1` (`app_settings`). Earlier heads: `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
+Updated 2026-10-13. Alembic head: `q7c8d9e0f1a2` (driver app rebuild: `driver_issues`, `driver_alert_reads`, 2 columns, time-log template). Earlier heads: `p6b7c8d9e0f1` (`app_settings`), `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
 
 Neon stores durable business history and configuration only. Current/future Sales
 Orders, Fleet telemetry, staff directory data, alerts, routes, optimization runs,
@@ -38,6 +38,8 @@ the only date-filtered Neon reads.
 | `trip_photos` | Metadata of uploaded photos and signatures (`storage_key`, content type, size, uploader, `upload_key`); the image bytes live in Cloudflare R2, never in Neon | One INSERT per upload (`POST /api/driver/uploads`, retry-safe by `upload_key`) |
 | `invoice_handovers` | The driver's invoice hand-over to a logistics officer (one per trip): status `pending/acknowledged/closed`, who/when/GPS, chosen officer | One INSERT when the crew submits the handover; UPDATEd when the officer validates (and closed when every invoice is received) |
 | `invoice_handover_items` | One row per invoice (SO) in a handover: crew `handed_over` + note, officer `received/missing/discrepancy` + note + checked time | INSERTed with the handover; UPDATEd by officer validation and by "resolve" of a missing/discrepancy/pending invoice |
+| `driver_issues` | Issues a driver / helper reports from a trip, an order or the profile (migration `q7c8d9e0f1a2`, approved 2026-10-13): reference `IS-YYYYMMDD-nnnn`, reporter, optional batch / SO / vehicle, category, priority, description, `photo_ids` (trip_photos), status `submitted/acknowledged/in_progress/resolved/closed`, dispatch `response` | One INSERT per report (idempotent by the phone's `idempotency_key`); one UPDATE per dispatch response in Driver Overview > Issues (a repeat of the same reply writes nothing). Read: the reporter's own list, the open count in Today / Overview KPIs, the dispatch list |
+| `driver_alert_reads` | Read markers of the driver app's alerts (migration `q7c8d9e0f1a2`): `(user_id, alert_key)` unique. The alerts themselves are NOT stored: they are computed on read from assignments, trip events, officer validations and issue replies | One INSERT per alert marked read (a repeat writes nothing). Read with the alert list |
 | `alembic_version` | Migration marker | Alembic only; never truncate manually |
 
 ## Driver portal (migration `n4f5a6b7c8d9`, approved 2026-10-12)
@@ -73,6 +75,17 @@ field list is a placeholder to be replaced in Admin).
   history read `invoice_handovers` + items directly (no cache). Templates are read per validation and by `GET /api/driver/templates`.
 - **Not in Neon:** staff and drivers (n8n), live GPS, Sales Order content (live from Zoho / memory).
 - **Rollback:** `downgrade()` drops the nine tables (destructive: it deletes trip history).
+
+## Driver app rebuild (migration `q7c8d9e0f1a2`, approved 2026-10-13)
+
+Additive only: no table or column is dropped and no existing row is rewritten.
+
+- `form_template_items.app_only` (bool, default false): the field is asked by the app but is NOT in the Zoho form. Settings shows "added in app, not in Zoho form" so Logistics can turn it off.
+- `invoice_handover_items.invoice_no` (text): the Invoice / DR number typed at check-out, copied in the same INSERT as the handover item. The officer's carbon-copy checklist line is "SO number + Invoice / DR number". NULL on rows made before this change.
+- New tables `driver_issues` and `driver_alert_reads` (see the table list above).
+- **Delivery time log**: the migration inserts ONE new `form_templates` row (kind `delivery_checkout`, the next version, name "Delivery time log", not a draft, active) with 5 items, and flags the old 14-field DRAFT checkout template(s) inactive. Nothing is deleted: every stop filled with the old template keeps its template id / version / answers and stays readable. The template mirrors the Zoho form "B2B Logistics Delivery" (Name = the logged-in crew member, Sales Order Number, Invoice or DR Number, Time Logs "Arrived at Site" = check-in / "Departed from Site" = check-out, plus GPS). The Zoho form is NOT called; see `docs/TRIP_WORKFLOW.md` section 11.
+- **Read paths added**: `GET /api/driver/issues|alerts` (own rows by user id), `GET /api/driver/history?status=&page=&page_size=` (server-side paging over `sales_orders` + trip tables, only the requested page's lines are loaded), `GET /api/driver-overview/issues`. None calls Zoho. **Write paths added**: `POST /api/driver/issues`, `POST /api/driver/alerts/read`, `POST /api/driver-overview/issues/{id}/respond`.
+- **Rollback** (`downgrade()`): drops the two new tables and two new columns and removes the time-log template unless a stop was filled with it (then it stays, inactive logic restored to the newest older version). Destructive for issues / read markers.
 
 ## Admin-editable settings (`app_settings`, migration `p6b7c8d9e0f1`, approved 2026-10-12)
 
