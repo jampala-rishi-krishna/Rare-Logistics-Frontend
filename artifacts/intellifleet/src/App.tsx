@@ -71,6 +71,8 @@ import { GooglePlaceInput } from "@/components/maps/GooglePlaceInput";
 import LoadPlanningInventoryTab, {
   AssignmentEmailPreviewModal,
 } from "@/components/load-planning/LoadPlanningInventoryTab";
+import { ViewModeToggle } from "@/components/load-planning/SalesOrderCardGrid";
+import { readViewMode, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
 import { OrderTypeSwitch, type InventoryOrderKind } from "@/components/load-planning/OrderTypeControls";
 import LoadPlanningAssignmentTab from "@/components/load-planning/LoadPlanningAssignmentTab";
 import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
@@ -3499,6 +3501,11 @@ function DataTablePage({
   }, [kind, refetchOrders, orderFrom, orderTo]);
   const filtered = ordersData;
   const [lpTab, setLpTab] = useState<LoadPlanningTab>("inventory");
+  const [lpViewMode, setLpViewModeState] = useState<ViewMode>(() => readViewMode());
+  const setLpViewMode = (mode: ViewMode) => {
+    setLpViewModeState(mode);
+    writeViewMode(mode);
+  };
   const [lpOrderKind, setLpOrderKind] = useState<InventoryOrderKind>("SO");
   const labels: Record<string, [string, string]> = {
     fleet: ["Fleet", "Every vehicle, driver, and signal in the network."],
@@ -3552,6 +3559,8 @@ function DataTablePage({
           action={
             kind === "loads" && lpTab === "inventory" ? (
               <OrderTypeSwitch value={lpOrderKind} onChange={setLpOrderKind} />
+            ) : kind === "loads" && lpTab === "confirmed" ? (
+              <ViewModeToggle mode={lpViewMode} onChange={setLpViewMode} />
             ) : undefined
           }
         />
@@ -3624,6 +3633,7 @@ function DataTablePage({
           tab={lpTab}
           onTabChange={setLpTab}
           orderKind={lpOrderKind}
+          viewMode={lpViewMode}
         />
       ) : kind === "reports" ? (
         <Reports />
@@ -7362,11 +7372,13 @@ function LoadPlanningWorkspace({
   tab,
   onTabChange: setTab,
   orderKind,
+  viewMode,
 }: {
   onNotice: (s: string) => void;
   tab: LoadPlanningTab;
   onTabChange: (tab: LoadPlanningTab) => void;
   orderKind: InventoryOrderKind;
+  viewMode: ViewMode;
 }) {
   return (
     <div>
@@ -7408,7 +7420,7 @@ function LoadPlanningWorkspace({
       {tab === "inventory" ? (
         <LoadPlanningInventoryTab orderKind={orderKind} />
       ) : tab === "confirmed" ? (
-        <LoadPlanningInventoryTab assignmentScope="assigned" />
+        <LoadPlanningInventoryTab assignmentScope="assigned" viewMode={viewMode} />
       ) : (
         <LoadPlanningAssignmentTab />
       )}

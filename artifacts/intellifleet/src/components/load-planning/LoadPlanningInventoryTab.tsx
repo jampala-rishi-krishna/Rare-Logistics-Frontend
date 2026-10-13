@@ -18,11 +18,11 @@ import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
 import { lineProduct, lineProductName, lineStock } from "@/lib/loadPlanningLines";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
-import { SalesOrderCardGrid, ViewModeToggle } from "./SalesOrderCardGrid";
+import { SalesOrderCardGrid } from "./SalesOrderCardGrid";
 import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
 import { EmptyState, FilterField, ListError, Toolbar, buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFromPage, sessionAcknowledgedIds, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
-import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
+import { uniqueOrders, type ViewMode } from "@/lib/loadPlanningView";
 import type { QueryClient } from "@tanstack/react-query";
 import { OrderTypeBadge } from "./OrderTypeBadge";
 import { TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
@@ -320,18 +320,22 @@ type FlatRow = {
 export default function LoadPlanningInventoryTab({
   assignmentScope,
   orderKind = "SO",
+  viewMode = "spreadsheet",
 }: {
   assignmentScope?: "assigned";
   orderKind?: InventoryOrderKind;
+  viewMode?: ViewMode;
 }) {
-  if (assignmentScope) return <SalesOrdersView assignmentScope={assignmentScope} />;
+  if (assignmentScope) return <SalesOrdersView assignmentScope={assignmentScope} viewMode={viewMode} />;
   return orderKind === "TO" ? <TransferOrdersTab /> : <SalesOrdersView />;
 }
 
 function SalesOrdersView({
   assignmentScope,
+  viewMode = "spreadsheet",
 }: {
   assignmentScope?: "assigned";
+  viewMode?: ViewMode;
 }) {
   const [, navigate] = useLocation();
   const [emailOpen, setEmailOpen] = useState(false);
@@ -354,14 +358,9 @@ function SalesOrdersView({
   const [page, setPage] = useState(1);
   const [ackErrors, setAckErrors] = useState<Record<string, string>>({});
   const [ackGuardVersion, setAckGuardVersion] = useState(0);
-  // KPI / Spreadsheet view (Confirmed Orders only). Pure local state: it is not part of any query
-  // key, so switching views never refetches.
-  const [viewMode, setViewModeState] = useState<ViewMode>(() => readViewMode());
+  // KPI / Spreadsheet view (Confirmed Orders only): state lives in App (toggle sits in the page header).
+  // Pure local state: it is not part of any query key, so switching views never refetches.
   const [cardPage, setCardPage] = useState(1);
-  const setViewMode = (mode: ViewMode) => {
-    setViewModeState(mode);
-    writeViewMode(mode);
-  };
   const cardsView = Boolean(assignmentScope) && viewMode === "kpi";
   const client = useQueryClient();
   const apiOrderStatus =
@@ -633,14 +632,37 @@ function SalesOrdersView({
         count={orderCount}
         selectedCount={selectedOrderIds.length}
         headerActions={
-          assignmentScope ? undefined : (
+          assignmentScope ? (
+            <>
+              <button onClick={() => setConfirmUnassign(true)} disabled={bulkUnassigning || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
+                {bulkUnassigning ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Unassign selected ({selectedOrderIds.length})
+              </button>
+              <button onClick={() => setEmailOpen(true)} disabled={!visibleOrderIds.length} className={dangerButtonClass} data-testid="confirmed-email-button">
+                <Mail size={14} /> Email
+              </button>
+              <div className="relative">
+                <button onClick={() => setExportOpen(!exportOpen)} className={buttonClass}>
+                  <Download size={14} /> Export
+                </button>
+                {exportOpen && (
+                  <div className="absolute right-0 top-full z-10 mt-1 grid w-40 border border-[#d8d7d2] bg-white p-1 shadow-lg">
+                    <button onClick={() => download("pdf")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
+                      Export as PDF
+                    </button>
+                    <button onClick={() => download("excel")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
+                      Export as Excel
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
             <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass} data-testid="acknowledge-selected">
               {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
               {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
             </button>
           )
         }
-        toggle={assignmentScope ? <ViewModeToggle mode={viewMode} onChange={setViewMode} /> : undefined}
         filters={
           <>
             <FilterField label="Search" className="@[1000px]:w-[250px]">
@@ -681,28 +703,7 @@ function SalesOrdersView({
         actions={
           assignmentScope ? (
             <>
-              <div className="relative">
-                <button onClick={() => setExportOpen(!exportOpen)} className={`${buttonClass} w-full`}>
-                  <Download size={14} /> Export
-                </button>
-                {exportOpen && (
-                  <div className="absolute right-0 top-full z-10 mt-1 grid w-40 border border-[#d8d7d2] bg-white p-1 shadow-lg">
-                    <button onClick={() => download("pdf")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
-                      Export as PDF
-                    </button>
-                    <button onClick={() => download("excel")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
-                      Export as Excel
-                    </button>
-                  </div>
-                )}
-              </div>
-              <button onClick={() => setEmailOpen(true)} disabled={!visibleOrderIds.length} className={dangerButtonClass} data-testid="confirmed-email-button">
-                <Mail size={14} /> Email
-              </button>
-              <button onClick={() => setConfirmUnassign(true)} disabled={bulkUnassigning || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
-                {bulkUnassigning ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Unassign selected ({selectedOrderIds.length})
-              </button>
-              <button onClick={refresh} disabled={syncing} className={primaryButtonClass}>
+              <button onClick={refresh} disabled={syncing} className={primaryButtonClass} data-testid="confirmed-refresh">
                 {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
               </button>
             </>
