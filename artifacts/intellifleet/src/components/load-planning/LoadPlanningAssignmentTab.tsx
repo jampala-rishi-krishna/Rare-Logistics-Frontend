@@ -10,6 +10,7 @@ import { lineStock } from "@/lib/loadPlanningLines";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { FilterField, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { sessionAcknowledgedOrders } from "@/lib/acknowledgeCache";
+import { formatKgPartial } from "@/lib/kgDisplay";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -183,8 +184,8 @@ export default function LoadPlanningAssignmentTab() {
               </>
             ) : (
               <>
-                <span className="mono font-semibold text-black">{kg(weight.total)}</span>
-                {weight.unknown > 0 && <span className="font-semibold text-[#b07b12]">*</span>}
+                <span className="mono font-semibold text-black">{formatKgPartial(weight.total, weight.unknown).text}</span>
+                {weight.unknown > 0 && <span className="text-[11px] text-[#b07b12]">{formatKgPartial(weight.total, weight.unknown).note}</span>}
               </>
             )}
           </span>

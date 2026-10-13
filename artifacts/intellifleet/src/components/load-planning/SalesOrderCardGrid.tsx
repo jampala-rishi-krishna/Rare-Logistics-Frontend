@@ -2,6 +2,7 @@ import { BranchBadge } from "./BranchControls";
 import { Lock } from "lucide-react";
 import type { SalesOrderSummary } from "@/services/api/inventory";
 import { formatAddress } from "@/lib/address";
+import { formatKgPartial } from "@/lib/kgDisplay";
 import { CARDS_PER_PAGE, pageOfCards, type ViewMode } from "@/lib/loadPlanningView";
 
 const KPI_LABEL = "KPI view";
@@ -34,10 +35,10 @@ function dateLabel(value: unknown) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function orderWeight(order: SalesOrderSummary): { total: number | null; partial: boolean } {
+function orderWeight(order: SalesOrderSummary): { total: number | null; unknown: number } {
   const weights = (order.products ?? []).map((product) => product.total_weight_kg);
   const known = weights.filter((value): value is number => value != null);
-  return { total: known.length ? known.reduce((sum, value) => sum + Number(value), 0) : null, partial: known.length > 0 && known.length < weights.length };
+  return { total: known.length ? known.reduce((sum, value) => sum + Number(value), 0) : null, unknown: weights.length - known.length };
 }
 
 function warehouses(order: SalesOrderSummary) {
@@ -102,7 +103,8 @@ export function SalesOrderCard({
       <div className="mt-3 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 border-t border-[#e4e3df] pt-3">
         <Field label="Delivery date">{dateLabel(order.expected_shipment_date)}</Field>
         <Field label="Weight">
-          {weight.total == null ? "—" : `${weight.total.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg${weight.partial ? " *" : ""}`}
+          {formatKgPartial(weight.total ?? (weight.unknown ? 0 : null), weight.unknown).text}
+          {weight.unknown > 0 && <span className="block text-[10px] font-normal text-[#77787b]">{formatKgPartial(weight.total, weight.unknown).note}</span>}
         </Field>
         <Field label="Warehouse">{warehouses(order)}</Field>
         <Field label="City">{location}</Field>
