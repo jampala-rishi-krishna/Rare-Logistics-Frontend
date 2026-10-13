@@ -91,9 +91,11 @@ test("KPI mapping", () => {
     sos: { assigned: 20, acknowledged: 18, delivered: 10, partial: 1, failed: 0 },
     trips_pending_handover: 2,
     invoices_outstanding: 7,
+    issues_open: 2,
   });
   const byId = Object.fromEntries(cards.map((c) => [c.id, c]));
-  assert.equal(cards.length, 11);
+  assert.equal(cards.length, 12);
+  assert.equal(byId["issues-open"].value, 2);
   assert.equal(byId["drivers-on-trip"].value, 3);
   assert.equal(byId["sos-partial"].tone, "warn");
   assert.equal(byId["sos-failed"].tone, "neutral");
@@ -179,7 +181,10 @@ test("checkout validation catches contract violations", () => {
   assert.match(msgs([outcomeItem, item({ uid: "x", key: "x", showWhenKey: "nope", showWhenIn: "a" })]), /unknown item/);
   assert.match(msgs([outcomeItem, item({ uid: "x", key: "x", showWhenKey: "x", showWhenIn: "a" })]), /itself/);
   assert.match(msgs([outcomeItem, item({ uid: "x", key: "x", showWhenKey: "outcome", showWhenIn: "" })]), /at least one value/);
-  assert.match(msgs([item({ key: "other" })]), /"outcome" dropdown/);
+  assert.equal(msgs([item({ key: "other" })]), ""); // the outcome question is optional: without it every departed stop is recorded as Delivered
+  assert.match(msgs([item({ uid: "o2", key: "outcome", item_type: "text" })]), /must be a dropdown or radio/);
+  assert.match(msgs([item({ uid: "i", key: "invoice_dr_number", item_type: "text" })]), /digits-only/);
+  assert.equal(msgs([item({ uid: "i", key: "invoice_dr_number", item_type: "numeric_text" })]), "");
   assert.match(msgs([item({ uid: "c", key: "c", item_type: "checkbox", showWhenKey: "c2", showWhenIn: "a" }), item({ uid: "c2", key: "c2", item_type: "checkbox" })], "acknowledge_checklist"), /only supported on the checkout/);
   assert.equal(msgs([item({ key: "c", item_type: "checkbox" })], "acknowledge_checklist"), "");
 });
@@ -208,4 +213,12 @@ test("blank item and round trip", () => {
   assert.equal(edit[0].keyLocked, true);
   assert.equal(edit[0].optionsText, "A, B");
   assert.equal(edit[0].showWhenIn, "1");
+});
+
+
+test("app-only flag round-trips through the editor and the payload", () => {
+  const [editor] = toEditorItems([{ key: "outcome", label: "Outcome", item_type: "radio", required: true, options: ["Delivered"], show_when: null, active: true, app_only: true }]);
+  assert.equal(editor.appOnly, true);
+  assert.equal(buildTemplatePayload("delivery_checkout", "T", [editor]).items[0].app_only, true);
+  assert.equal(blankItem("delivery_checkout", []).appOnly, true); // anything added in Settings is not in the Zoho form
 });

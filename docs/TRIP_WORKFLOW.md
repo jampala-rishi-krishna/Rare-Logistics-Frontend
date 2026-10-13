@@ -168,3 +168,29 @@ The pre-existing `/orders/{id}/proof` writes to the API server's local disk (eph
 Actions are queued in IndexedDB (blobs included) in tap order and replayed FIFO when online: on 2xx or `already_done` -> done; on 409 `out_of_order` or 422 -> marked "needs attention" and
 shown to the user (never silently dropped); on network error / 5xx -> retry with backoff. Each queued action keeps its original `idempotency_key` and `client_ts`. The UI shows a
 "pending sync (n)" badge and applies queued actions optimistically over the last server state.
+
+## 11. Driver app rebuild (2026-10-13): time log, issues, alerts, paging, Overview additions
+
+**Delivery time log** (replaces the 14-field DRAFT checkout; template kind `delivery_checkout`, v2, not a draft). Mirrors the Zoho form "B2B Logistics Delivery"
+(Name / Sales Order Number / Invoice or DR Number / Time Logs). It is a TIME LOG submitted twice per stop:
+
+| Step | App action | Recorded |
+|---|---|---|
+| Check-in (4) | one tap "Arrived at site" (`POST .../check-in`) | Time Logs = Arrived at Site: crew member (Name), SO, server time + phone time, GPS (or the reason it was denied), distance from the address |
+| Check-out (5) | "Departed from site" form (`POST .../check-out`) | Time Logs = Departed from Site: same, plus **Invoice or DR Number** (item `invoice_dr_number`, type `numeric_text` = digits only, text so leading zeros survive; prefilled from `order.invoice_hint` when the SO already in memory lists exactly one invoice, never a Zoho call) |
+| App-only extras | `outcome` (Delivered / Partially delivered / Failed), `reason` (required unless Delivered), `delivery_photo`, `notes` | flagged `app_only` in Settings ("added in app, not in Zoho form"); Logistics can switch each off. With no `outcome` item every stop is recorded as Delivered |
+
+Handover (steps 8-9): one carbon-copy line per SO = SO number + the Invoice/DR number recorded at check-out (`invoice_handover_items.invoice_no`); the officer validates each as received / missing / discrepancy.
+Entries stay in our database only. Pushing them into the Zoho form later: see the final report (not implemented, no Zoho Forms call exists in the code).
+
+**Crew endpoints added** (driver / helper only, always the caller's own data):
+`GET /api/driver/issues`, `POST /api/driver/issues` (body: `idempotency_key, category, priority normal|high|urgent, description >= 5 chars, batch_id?, so_id?, photo_ids[], client_ts`; replay with the same key returns the stored report),
+`GET /api/driver/alerts` -> `{alerts[{key,type assigned|changed|validated|issue,title,body,at,link,priority,read}], unread}` (derived from assignments, trip events, officer validations and issue replies; nothing stored),
+`POST /api/driver/alerts/read` `{keys[] | all:true}`, `GET /api/driver/history?status=all|completed|failed&page=&page_size=` (server-side paging; without these params the old shape is returned),
+`GET /api/driver/today` now carries `summary {assigned, completed, remaining, needs_attention, open_issues, trips}`, `GET /api/driver/me` carries `staff_id, email, vehicles_today, crew_today`, `GET /auth/support` (public: dispatch phone for "Forgot password").
+Uploads: `field_key = issue_photo` with `batch_id = profile` attaches a photo to an issue that is not tied to a trip.
+
+**Driver Overview endpoints added** (admin + dispatcher): `GET /live` (last known fix per truck, process memory only), `GET /trips` (one row per batch in a range), `GET /hardcopies` (every invoice copy not yet validated, who holds it and since when),
+`GET /issues`, `POST /issues/{id}/respond` `{status, response}`, `GET /reconcile` (admin). `GET /board` rows also carry `so_numbers` (search), `trips[]`, `state_label`; `GET /map` adds `stop` points (planned stops);
+the timeline carries `checkout.invoice_no`, `address_gps`, `assigned_at`; the CSV has `arrived_at, departed_at, invoice_dr_number`.
+The Overview refreshes every 15 s while its tab is visible (react-query polling; no WebSocket for business data). Truck movement uses the existing Cartrack WebSocket feed (shared socket) and glides with `MarkerAnimator`.

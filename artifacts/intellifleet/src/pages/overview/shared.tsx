@@ -60,3 +60,7 @@ export function Empty({ children }: { children: ReactNode }) {
 export const inputClass = "min-h-[38px] w-full border border-[#d8d7d2] bg-white px-2.5 text-sm outline-none focus:border-black";
 export const buttonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 border border-[#d8d7d2] bg-white px-3 text-sm font-semibold hover:bg-[#efefed] disabled:opacity-40";
 export const primaryButtonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 bg-black px-4 text-sm font-semibold text-white disabled:opacity-40";
+
+export function Skeleton({ className = "h-10" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-[4px] bg-[#e4e3df] ${className}`} />;
+}

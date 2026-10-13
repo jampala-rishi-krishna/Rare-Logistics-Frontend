@@ -1,288 +1,147 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import * as overviewApi from "@/services/api/overview";
-import * as dispatchApi from "@/services/api/dispatch";
-import { withDriverParams } from "@/lib/driver";
-import {
-  DEFAULT_STALE_MINUTES,
-  STALE_STORAGE_KEY,
-  STATUS_FILTERS,
-  isValidRange,
-  kpiCards,
-  manilaDate,
-  parseStaleMinutes,
-  type Tone,
-} from "@/lib/overview";
-import BoardTab from "./BoardTab";
-import MapTab from "./MapTab";
+import { STATUS_FILTERS, kpiCards, manilaDate } from "@/lib/overview";
+import type { KpiCard, Tone } from "@/lib/overview";
+import { formatKgPartial } from "@/lib/kgDisplay";
 import ExportTab from "./ExportTab";
-import ChecklistTab from "./ChecklistTab";
-import { Empty, ErrorNote, inputClass } from "./shared";
+import HandoverTab from "./HandoverTab";
+import IssuesTab from "./IssuesTab";
+import LiveTab from "./LiveTab";
+import SettingsTab from "./SettingsTab";
+import TripsTab from "./TripsTab";
+import type { TopFilter } from "./LiveTab";
+import { ErrorNote, Skeleton, inputClass } from "./shared";
 
-const POLL_MS = 30_000;
-type Tab = "board" | "map" | "drivers" | "export" | "checklist";
+type Tab = "live" | "trips" | "handover" | "issues" | "settings" | "export";
 const TABS: Array<[Tab, string]> = [
-  ["board", "Board"],
-  ["map", "Map"],
-  ["drivers", "Drivers"],
-  ["export", "Export"],
-  ["checklist", "Checklist settings"],
+  ["live", "Live"],
+  ["trips", "Trips"],
+  ["handover", "Invoices & handover"],
+  ["issues", "Issues"],
+  ["settings", "Settings"],
+  ["export", "Export CSV"],
 ];
 
-function readStale(): number {
-  try {
-    return parseStaleMinutes(window.localStorage.getItem(STALE_STORAGE_KEY));
-  } catch {
-    return DEFAULT_STALE_MINUTES;
-  }
+const TONE: Record<Tone, string> = { good: "text-[#1e7b44]", warn: "text-[#8a5a00]", bad: "text-[#c4291f]", info: "text-[#1d4ed8]", neutral: "text-black" };
+
+function Kpis({ cards, totals }: { cards: KpiCard[]; totals: { kg: string; note: string | null } | null }) {
+  const groups: Array<KpiCard["group"]> = ["Drivers", "Sales orders", "Handover"];
+  return (
+    <section className="grid gap-2 lg:grid-cols-[auto_auto_auto]" aria-label="Key numbers" data-testid="kpi-strip">
+      {groups.map((g) => (
+        <div key={g} className="min-w-0 border border-[#e4e3df] bg-white p-2">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#77787b]">
+            {g === "Drivers" ? "Drivers" : g === "Sales orders" ? "Sales orders" : "Handover and issues"}
+            {g === "Sales orders" && totals ? ` · ${totals.kg}` : ""}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {cards
+              .filter((c) => c.group === g)
+              .map((c) => (
+                <div key={c.id} data-testid={`kpi-${c.id}`} className="min-w-[64px]">
+                  <div className={`text-xl font-bold leading-none ${TONE[c.tone]}`}>{c.value}</div>
+                  <div className="mt-0.5 text-[10px] font-semibold text-[#55565a]">
+                    {c.label}
+                    {c.hint ? <span className="font-normal text-[#77787b]"> ({c.hint})</span> : null}
+                  </div>
+                </div>
+              ))}
+          </div>
+          {g === "Sales orders" && totals?.note && <div className="mt-1 text-[10px] text-[#8a5a00]">{totals.note}</div>}
+        </div>
+      ))}
+    </section>
+  );
 }
 
-const KPI_TONE: Record<Tone, string> = {
-  good: "text-[#1e7b44]",
-  warn: "text-[#8a5a00]",
-  bad: "text-[#c4291f]",
-  info: "text-[#1d4ed8]",
-  neutral: "text-black",
-};
+function shiftDay(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function DriverOverview() {
   const today = manilaDate();
-  const [tab, setTab] = useState<Tab>("board");
-  const [mode, setMode] = useState<"day" | "range">("day");
+  const [tab, setTab] = useState<Tab>("live");
   const [date, setDate] = useState(today);
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
   const [warehouse, setWarehouse] = useState("");
-  const [driverId, setDriverId] = useState("");
   const [status, setStatus] = useState("");
-  const [stale, setStale] = useState<number>(readStale);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(STALE_STORAGE_KEY, String(stale));
-    } catch {
-      /* storage unavailable: the setting just is not remembered */
-    }
-  }, [stale]);
-
-  const rangeOk = mode === "day" || isValidRange(from, to);
-  const range = mode === "day" ? { from: date, to: date } : { from, to };
-  const baseFilter: overviewApi.OverviewFilter = useMemo(
-    () => ({
-      ...(mode === "day" ? { date } : { from, to }),
-      warehouse: warehouse || undefined,
-      driver_id: driverId || undefined,
-    }),
-    [mode, date, from, to, warehouse, driverId],
-  );
-
-  // Interval polling pauses while the tab is hidden and refetches when it becomes visible again.
+  const [search, setSearch] = useState("");
+  const filter: TopFilter = { date, warehouse, status, search };
   const summary = useQuery({
-    queryKey: ["driver-overview", "summary", baseFilter],
-    queryFn: () => overviewApi.getSummary(baseFilter),
-    enabled: rangeOk,
-    refetchInterval: POLL_MS,
+    queryKey: ["overview-summary", date, warehouse],
+    queryFn: () => overviewApi.getSummary({ date, warehouse: warehouse || undefined }),
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    retry: 1,
   });
-  // The board is a single-day view; for a range it shows the range end.
-  const boardDate = mode === "day" ? date : to;
-  const board = useQuery({
-    queryKey: ["driver-overview", "board", { ...baseFilter, date: boardDate, status, stale }],
-    queryFn: () =>
-      overviewApi.getBoard({
-        date: boardDate,
-        warehouse: warehouse || undefined,
-        driver_id: driverId || undefined,
-        status: status || undefined,
-        stale_minutes: stale,
-      }),
-    enabled: rangeOk,
-    refetchInterval: POLL_MS,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    retry: 1,
-  });
-
-  const staff = useQuery({ queryKey: ["dispatch-staff-all"], queryFn: () => dispatchApi.listStaff(), staleTime: 10 * 60_000, retry: 1 });
-  const driverOptions = useMemo(() => {
-    const fromStaff = (staff.data ?? []).filter((s) => s.active && /driver/i.test(s.title ?? "")).map((s) => ({ id: String(s.id), name: s.name }));
-    if (fromStaff.length > 0) return fromStaff;
-    return (board.data?.rows ?? []).filter((r) => r.role === "driver").map((r) => ({ id: String(r.staff_id), name: r.name }));
-  }, [staff.data, board.data]);
-
   const cards = summary.data ? kpiCards(summary.data.kpis) : [];
-  const groups = ["Drivers", "Sales orders", "Handover"] as const;
-  const drivers = (board.data?.rows ?? []).filter((r) => r.role === "driver");
+  const k = summary.data?.kpis;
+  const kg = k ? formatKgPartial(k.kg ?? 0, k.kg_unknown_lines ?? 0, 0) : null;
 
   return (
-    <div className="grid gap-4">
-      <section className="grid gap-3 border border-[#e4e3df] bg-white p-3" aria-label="Filters">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-          <label className="grid gap-1 text-xs font-semibold">
-            Dates
-            <select value={mode} onChange={(e) => setMode(e.target.value as "day" | "range")} className={inputClass}>
-              <option value="day">Single day</option>
-              <option value="range">Date range</option>
-            </select>
+    <div className="grid min-w-0 gap-3" data-testid="driver-overview">
+      <div className="flex flex-wrap items-end gap-2 border border-[#e4e3df] bg-white p-2" role="search" aria-label="Filters">
+        <div className="flex items-end gap-1">
+          <button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))} className="inline-flex h-[38px] w-9 items-center justify-center border border-[#d8d7d2] bg-white">
+            <ChevronLeft size={16} />
+          </button>
+          <label className="grid gap-1 text-[11px] font-semibold">
+            Date (Manila)
+            <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className={`${inputClass} !w-auto`} data-testid="top-date" />
           </label>
-          {mode === "day" ? (
-            <label className="grid gap-1 text-xs font-semibold">
-              Date
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value || today)} className={inputClass} />
-            </label>
-          ) : (
-            <>
-              <label className="grid gap-1 text-xs font-semibold">
-                From
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputClass} />
-              </label>
-              <label className="grid gap-1 text-xs font-semibold">
-                To
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} />
-              </label>
-            </>
+          <button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))} className="inline-flex h-[38px] w-9 items-center justify-center border border-[#d8d7d2] bg-white">
+            <ChevronRight size={16} />
+          </button>
+          {date !== today && (
+            <button type="button" onClick={() => setDate(today)} className="h-[38px] border border-[#d8d7d2] bg-white px-3 text-sm font-semibold">
+              Today
+            </button>
           )}
-          <label className="grid gap-1 text-xs font-semibold">
-            Warehouse
-            <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className={inputClass}>
-              <option value="">All</option>
-              <option value="METS">METS</option>
-              <option value="GLACIER">GLACIER</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-semibold">
-            Driver
-            <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className={inputClass}>
-              <option value="">All drivers</option>
-              {driverOptions.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-semibold">
-            Status
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
-              {STATUS_FILTERS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-semibold">
-            Stale after (min)
-            <input
-              type="number"
-              min={1}
-              max={1440}
-              value={stale}
-              onChange={(e) => setStale(parseStaleMinutes(e.target.value))}
-              className={inputClass}
-              data-testid="stale-minutes"
-            />
-          </label>
         </div>
-        {!rangeOk && <div className="text-xs text-[#86000B]">The From date must not be after the To date.</div>}
-        {mode === "range" && rangeOk && <div className="text-xs text-[#77787b]">The live board shows the range end date ({to}); KPIs and the map cover the whole range.</div>}
-      </section>
+        <label className="grid gap-1 text-[11px] font-semibold">
+          Warehouse
+          <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className={`${inputClass} !w-auto`} data-testid="top-warehouse">
+            <option value="">All</option>
+            <option value="METS">METS</option>
+            <option value="GLACIER">GLACIER</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-[11px] font-semibold">
+          Status
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${inputClass} !w-auto`} data-testid="top-status">
+            {STATUS_FILTERS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="relative grid min-w-[200px] flex-1 gap-1 text-[11px] font-semibold">
+          Search driver, truck or SO
+          <Search size={14} className="pointer-events-none absolute bottom-3 left-2.5 text-[#77787b]" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, plate or SO number" className={`${inputClass} pl-8`} data-testid="top-search" />
+        </label>
+      </div>
 
-      {summary.isError ? (
-        <ErrorNote error={summary.error} onRetry={() => void summary.refetch()} />
-      ) : (
-        <section className="grid gap-3 lg:grid-cols-3" aria-label="Key figures">
-          {groups.map((g) => (
-            <div key={g} className="border border-[#e4e3df] bg-white p-3">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#77787b]">{g}</div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
-                {summary.isLoading
-                  ? Array.from({ length: g === "Handover" ? 2 : g === "Drivers" ? 4 : 5 }).map((_, i) => <div key={i} className="h-12 animate-pulse bg-[#f2f2ef]" />)
-                  : cards
-                      .filter((c) => c.group === g)
-                      .map((c) => (
-                        <div key={c.id} data-testid={`kpi-${c.id}`}>
-                          <div className={`text-2xl font-bold ${KPI_TONE[c.tone]}`}>{c.value}</div>
-                          <div className="text-xs text-[#55565a]">
-                            {c.label}
-                            {c.hint ? <span className="text-[#77787b]"> ({c.hint})</span> : null}
-                          </div>
-                        </div>
-                      ))}
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
+      {summary.isLoading ? <Skeleton className="h-16" /> : summary.isError ? <ErrorNote error={summary.error} onRetry={() => void summary.refetch()} /> : <Kpis cards={cards} totals={kg ? { kg: kg.text, note: kg.note } : null} />}
 
-      <div className="flex gap-1 overflow-x-auto border-b border-[#e4e3df]" role="tablist">
+      <div role="tablist" aria-label="Driver Overview sections" className="flex flex-wrap border-b border-[#e4e3df]">
         {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-            data-testid={`overview-tab-${id}`}
-            className={`min-h-[40px] shrink-0 border-b-2 px-3 text-sm font-semibold ${tab === id ? "border-black" : "border-transparent text-[#77787b]"}`}
-          >
+          <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`tab-${id}`} onClick={() => setTab(id)} className={`min-h-[40px] border-b-2 px-4 text-sm font-semibold ${tab === id ? "border-black text-black" : "border-transparent text-[#77787b] hover:text-black"}`}>
             {label}
+            {id === "issues" && (k?.issues_open ?? 0) > 0 ? <span className="ml-1.5 rounded-full bg-[#8a5a00] px-1.5 text-[10px] text-white">{k?.issues_open}</span> : null}
           </button>
         ))}
       </div>
 
-      {tab === "board" && (
-        <BoardTab rows={board.data?.rows ?? []} isLoading={board.isLoading} error={board.isError ? board.error : null} onRetry={() => void board.refetch()} range={range} />
-      )}
-      {tab === "map" && (rangeOk ? <MapTab filter={baseFilter} /> : <Empty>Pick a valid date range.</Empty>)}
-      {tab === "drivers" && (
-        <div className="overflow-x-auto border border-[#e4e3df] bg-white">
-          {board.isError ? (
-            <div className="p-3">
-              <ErrorNote error={board.error} onRetry={() => void board.refetch()} />
-            </div>
-          ) : drivers.length === 0 ? (
-            <Empty>No drivers match these filters.</Empty>
-          ) : (
-            <table className="w-full min-w-[560px] text-left text-sm">
-              <thead className="bg-[#f2f2ef] text-xs uppercase text-[#55565a]">
-                <tr>
-                  <th className="px-3 py-2">Driver</th>
-                  <th>Warehouse</th>
-                  <th>Vehicle</th>
-                  <th>State</th>
-                  <th>Progress</th>
-                  <th>Driver view</th>
-                </tr>
-              </thead>
-              <tbody>
-                {drivers.map((r) => (
-                  <tr key={String(r.staff_id)} className="border-t border-[#efeeeb]">
-                    <td className="px-3 py-2 font-semibold">{r.name}</td>
-                    <td>{r.warehouse ?? "-"}</td>
-                    <td className="font-mono text-xs">{r.vehicle ?? "-"}</td>
-                    <td>{r.state.replaceAll("_", " ")}</td>
-                    <td>{r.progress && r.progress.total > 0 ? `${r.progress.done} of ${r.progress.total}` : "-"}</td>
-                    <td className="pr-3">
-                      <Link
-                        href={withDriverParams("/driver/today", { driver_id: String(r.staff_id) })}
-                        className="inline-flex min-h-[40px] items-center border border-[#d8d7d2] px-3 text-xs font-semibold hover:border-black"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-      {tab === "export" && <ExportTab defaultFrom={range.from} defaultTo={range.to} warehouse={warehouse} driverId={driverId} />}
-      {tab === "checklist" && <ChecklistTab />}
+      {tab === "live" && <LiveTab filter={filter} />}
+      {tab === "trips" && <TripsTab filter={filter} />}
+      {tab === "handover" && <HandoverTab filter={filter} />}
+      {tab === "issues" && <IssuesTab filter={filter} />}
+      {tab === "settings" && <SettingsTab />}
+      {tab === "export" && <ExportTab filter={filter} />}
     </div>
   );
 }

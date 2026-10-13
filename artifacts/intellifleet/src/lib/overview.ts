@@ -125,6 +125,7 @@ type SummaryKpis = {
   sos: { assigned: number; acknowledged: number; delivered: number; partial: number; failed: number };
   trips_pending_handover: number;
   invoices_outstanding: number;
+  issues_open?: number;
 };
 
 export function kpiCards(k: SummaryKpis): KpiCard[] {
@@ -140,6 +141,7 @@ export function kpiCards(k: SummaryKpis): KpiCard[] {
     { id: "sos-failed", group: "Sales orders", label: "Failed", value: k.sos.failed, tone: k.sos.failed > 0 ? "bad" : "neutral" },
     { id: "trips-pending-handover", group: "Handover", label: "Trips pending handover", value: k.trips_pending_handover, tone: k.trips_pending_handover > 0 ? "warn" : "neutral" },
     { id: "invoices-outstanding", group: "Handover", label: "Invoices outstanding", hint: "all dates", value: k.invoices_outstanding, tone: k.invoices_outstanding > 0 ? "bad" : "neutral" },
+    { id: "issues-open", group: "Handover", label: "Open issues", hint: "all dates", value: k.issues_open ?? 0, tone: (k.issues_open ?? 0) > 0 ? "warn" : "neutral" },
   ];
 }
 
@@ -218,7 +220,7 @@ export type TemplateKindId = "acknowledge_checklist" | "delivery_checkout";
 
 export const ITEM_TYPES: Record<TemplateKindId, readonly string[]> = {
   acknowledge_checklist: ["checkbox", "count", "photo", "note"],
-  delivery_checkout: ["text", "textarea", "dropdown", "radio", "number", "date", "datetime", "photo", "signature", "checkbox"],
+  delivery_checkout: ["text", "textarea", "dropdown", "radio", "number", "numeric_text", "date", "datetime", "photo", "signature", "checkbox"],
 };
 
 export const OPTION_TYPES = ["dropdown", "radio"] as const;
@@ -239,6 +241,8 @@ export interface EditorItem {
   showWhenKey: string;
   showWhenIn: string;
   prefill: unknown;
+  // a field the app asks for that is NOT in the Zoho form (Logistics may switch it off)
+  appOnly: boolean;
 }
 
 export function slugifyKey(label: string): string {
@@ -287,6 +291,7 @@ export function blankItem(kind: TemplateKindId, existing: ReadonlyArray<EditorIt
     showWhenKey: "",
     showWhenIn: "",
     prefill: null,
+    appOnly: true, // anything added here is by definition not in the Zoho form
   };
 }
 
@@ -312,7 +317,7 @@ export function removeItem<T>(items: ReadonlyArray<T>, index: number): T[] {
   return items.filter((_, i) => i !== index);
 }
 
-export function toEditorItems(items: ReadonlyArray<{ key: string; label: string; item_type: string; required: boolean; options: string[] | null; prefill?: unknown; show_when: { key: string; in: unknown[] } | null; active?: boolean }>): EditorItem[] {
+export function toEditorItems(items: ReadonlyArray<{ key: string; label: string; item_type: string; required: boolean; options: string[] | null; prefill?: unknown; show_when: { key: string; in: unknown[] } | null; active?: boolean; app_only?: boolean }>): EditorItem[] {
   return items.map((it) => ({
     uid: nextUid(),
     key: it.key,
@@ -325,6 +330,7 @@ export function toEditorItems(items: ReadonlyArray<{ key: string; label: string;
     showWhenKey: it.show_when?.key ?? "",
     showWhenIn: (it.show_when?.in ?? []).map((v) => String(v)).join(", "),
     prefill: it.prefill ?? null,
+    appOnly: Boolean(it.app_only),
   }));
 }
 
@@ -356,10 +362,13 @@ export function validateTemplate(kind: TemplateKindId, name: string, items: Read
     }
   });
   if (kind === "delivery_checkout") {
+    // The outcome question is optional (switch it off and every departed stop is recorded as Delivered), but when it exists it must be a choice.
     const outcome = items.find((i) => i.key === "outcome");
-    if (!outcome || !needsOptions(outcome.item_type) || !outcome.active) {
-      errors.push({ uid: outcome?.uid ?? null, message: 'The checkout form must keep an active "outcome" dropdown or radio item.' });
+    if (outcome && outcome.active && !needsOptions(outcome.item_type)) {
+      errors.push({ uid: outcome.uid, message: 'The "outcome" item must be a dropdown or radio item.' });
     }
+    const invoice = items.find((i) => i.key === "invoice_dr_number");
+    if (invoice && invoice.active && invoice.item_type !== "numeric_text") errors.push({ uid: invoice.uid, message: 'The "invoice_dr_number" item must be the digits-only (numeric_text) type.' });
   }
   return errors;
 }
@@ -368,7 +377,7 @@ export function buildTemplatePayload(
   kind: TemplateKindId,
   name: string,
   items: ReadonlyArray<EditorItem>,
-): { name: string; items: Array<{ key: string; label: string; item_type: string; required: boolean; options: string[] | null; prefill: unknown; show_when: { key: string; in: unknown[] } | null; active: boolean }> } {
+): { name: string; items: Array<{ key: string; label: string; item_type: string; required: boolean; options: string[] | null; prefill: unknown; show_when: { key: string; in: unknown[] } | null; active: boolean; app_only: boolean }> } {
   return {
     name: name.trim(),
     items: items.map((it) => ({
@@ -380,6 +389,7 @@ export function buildTemplatePayload(
       prefill: it.prefill ?? null,
       show_when: kind === "delivery_checkout" && it.showWhenKey ? { key: it.showWhenKey, in: parseList(it.showWhenIn) } : null,
       active: it.active,
+      app_only: it.appOnly,
     })),
   };
 }

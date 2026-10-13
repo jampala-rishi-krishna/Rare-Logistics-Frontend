@@ -2,6 +2,7 @@
 // Nothing else may leave the browser: any other fetch/XHR is aborted and recorded, and the spec fails if one happened.
 import type { Page, Route } from "playwright";
 import * as d from "./fixtures/driverData.ts";
+import * as ov from "./fixtures/overviewData.ts";
 
 export const API_ORIGIN = "http://mock-api.test";
 
@@ -16,6 +17,9 @@ export interface Scenario {
   actionError?: { status: number; body: unknown } | null;
   loginFails?: boolean;
   slowMs?: number;
+  role?: "admin" | "dispatcher";
+  board?: unknown;
+  issues_ov?: unknown;
 }
 
 export interface Recorder {
@@ -58,7 +62,31 @@ export async function installMocks(page: Page, scenario: Scenario = {}): Promise
     recorder.calls.push({ method: request.method(), path, body });
     if (scenario.slowMs) await new Promise((r) => setTimeout(r, scenario.slowMs));
 
-    if (path === "/auth/session") return scenario.session === null ? json(route, { detail: "Not authenticated" }, 401) : json(route, scenario.session ?? d.session);
+    if (path === "/auth/session") {
+      const fallback = scenario.role === "dispatcher" ? ov.dispatcherSession : scenario.role === "admin" ? ov.adminSession : d.session;
+      return scenario.session === null ? json(route, { detail: "Not authenticated" }, 401) : json(route, scenario.session ?? fallback);
+    }
+    // the app shell of the /app pages asks for the mailbox connection once
+    if (path === "/api/gmail/auth-status") return json(route, { connected: true, authorized: true, status: "connected" });
+    // ---- Driver Overview (admin / dispatcher) ----
+    if (path.startsWith("/api/driver-overview/")) {
+      const sub = path.slice("/api/driver-overview/".length);
+      if (sub === "summary") return json(route, ov.kpis);
+      if (sub === "board") return json(route, scenario.board ?? ov.board);
+      if (sub === "live") return json(route, ov.live);
+      if (sub === "map") return json(route, ov.map);
+      if (sub === "trips") return json(route, ov.trips);
+      if (sub === "hardcopies") return json(route, ov.hardcopies);
+      if (sub === "issues" && request.method() === "GET") return json(route, scenario.issues_ov ?? ov.issues);
+      if (/^issues\/\d+\/respond$/.test(sub)) return json(route, { ok: true, changed: true, issue: ov.issues.issues[0] });
+      if (sub === "templates") return json(route, ov.templatesResponse);
+      if (/^templates\/[a-z_]+\/versions\/\d+$/.test(sub)) return json(route, { ...ov.templatesResponse.delivery_checkout.active, version: 1, name: "DRAFT \u2014 mirror of Zoho form", is_draft: true, active: false });
+      if (/^templates\/[a-z_]+$/.test(sub) && request.method() === "POST") return json(route, { ...ov.templatesResponse.delivery_checkout.active, version: 3 }, 201);
+      if (/^trips\/[^/]+$/.test(sub)) return json(route, ov.tripTimeline);
+      if (/^drivers\/\d+$/.test(sub)) return json(route, ov.driverDetail);
+      if (sub === "export.csv") return route.fulfill({ status: 200, contentType: "text/csv; charset=utf-8", headers: { ...CORS, "content-disposition": 'attachment; filename="driver-overview-test.csv"', "access-control-expose-headers": "content-disposition" }, body: ov.csv });
+    }
+
     if (path === "/auth/login") {
       const identifier = String((body as { identifier?: string } | null)?.identifier ?? "");
       if (scenario.loginFails || identifier === "wrong@example.test") return json(route, { detail: "Invalid credentials." }, 401);
