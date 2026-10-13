@@ -94,6 +94,14 @@ Data only (no schema change). Copies the active "Delivery time log" into the nex
 Skipped when the active template is no longer the seeded one (an admin saved their own). Photo bytes still live in R2; without `R2_*` the server cannot require a photo, so the app shows "Photo upload is not configured, contact admin" and still lets the crew save the departure.
 Editing the templates moved from Driver Overview to **Admin > Settings > Driver app forms** (admin only); it writes the same `form_templates` / `form_template_items` rows as before.
 
+## Transfer orders in Load Planning (migration `s9e0f1a2b3c4`, pre-approved by Rishi 2026-10-13)
+
+Additive only, no new table. Three columns on `sales_orders`: `order_type` (NOT NULL, server default `'SO'`, so every existing row stays an SO), `source_warehouse`, `destination_warehouse` (nullable, TO only). A transfer order (TO) is stored like an SO row **only when it is assigned** (id `TO:<zoho id>`, `salesorder_number` = the TO#, `customer_name` = the destination warehouse, lines in `sales_order_lines`), through the same `sync_history_row` write as an SO. `assignment_batch_id` and every existing SO row are untouched.
+
+- LIVE: the Draft Mets<->Glacier TO list (matched by Zoho warehouse ID, `services/transfer_orders.py`) and each TO's lines are read from Zoho into memory only; the list is pulled on first load / after the TTL / on the TO tab's "Hard refresh", never per render. No Neon read for "today".
+- Neon reads: past-dated Confirmed Orders (same path as SOs, now filtered by `order_type`), and the driver app / Driver Overview (same rows as SOs).
+- PO: postponed, nothing stored.
+
 ## Admin-editable settings (`app_settings`, migration `p6b7c8d9e0f1`, approved 2026-10-12)
 
 `app_settings(key text PK, value text, updated_by text, updated_at timestamptz)`. Only five non-secret keys can ever be stored
