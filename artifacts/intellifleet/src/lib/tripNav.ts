@@ -44,6 +44,7 @@ export function acknowledgeLeft(orders: Array<Pick<EffectiveOrder, "canAcknowled
 export interface StopRow {
   so_id: string;
   so_number: string;
+  order_type?: "SO" | "TO" | "PO" | null;
   customer_name: string;
   address_text: string;
   sequence: number;
@@ -61,6 +62,7 @@ export function stopRows(route: RouteInfo | undefined, orders: EffectiveOrder[])
       .map((s) => ({
         so_id: String(s.so_id),
         so_number: s.so_number,
+        order_type: s.order_type ?? null,
         customer_name: s.customer_name,
         address_text: s.address_text,
         sequence: s.sequence,
@@ -72,6 +74,7 @@ export function stopRows(route: RouteInfo | undefined, orders: EffectiveOrder[])
     .map((o, i) => ({
       so_id: o.so_id,
       so_number: o.order.so_number,
+      order_type: o.order.order_type ?? null,
       customer_name: o.order.customer_name,
       address_text: o.order.address_text,
       sequence: o.order.workflow?.stop?.sequence ?? i + 1,

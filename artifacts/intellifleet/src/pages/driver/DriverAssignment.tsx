@@ -1,4 +1,5 @@
 import { Link, useParams, useSearchParams } from "wouter";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { lazy, Suspense } from "react";
 import { AlertTriangle, ArrowLeft, MapPin, Navigation, Phone } from "lucide-react";
 import { formatClock, formatKg, formatLongDate, formatQty, mapsSearchUrl, personName, telHref, withDriverParams } from "@/lib/driver";
@@ -79,7 +80,9 @@ function OrderCard({
         <div className="min-w-0">
           <div className="font-mono text-xs font-semibold text-[#77787b]">
             {stop ? `Stop ${stop.sequence} · ` : ""}
+            <OrderTypeBadge type={order.order_type} className="mr-1.5 align-middle" />
             {order.so_number}
+            {order.order_type === "TO" && order.destination_warehouse ? ` · to ${order.destination_warehouse}` : ""}
           </div>
           <h2 className="mt-1 break-words text-lg font-bold leading-snug">{order.customer_name}</h2>
         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { Link, useParams } from "wouter";
 import * as driverApi from "@/services/api/driver";
 import { buildHandoverItems, validateHandover } from "@/lib/tripForms";
@@ -83,8 +84,9 @@ function HandoverForm({ scope, batchId, state, officers, canSubmit }: { scope: D
           return (
             <li key={o.so_id} className={`border bg-white p-4 ${err ? "border-[#86000B]" : "border-[#e4e3df]"}`} data-testid={`driver-handover-row-${o.so_id}`}>
               <div className="font-mono text-xs font-semibold text-[#77787b]">
+                <OrderTypeBadge type={o.order.order_type} className="mr-1.5 align-middle" />
                 {o.order.so_number}
-                <span data-testid={`driver-handover-invoice-${o.order.so_number}`}>{o.order.workflow?.stop?.invoice_no ? ` \u00b7 Invoice/DR ${o.order.workflow.stop.invoice_no}` : " \u00b7 Invoice/DR not recorded"}</span>
+                <span data-testid={`driver-handover-invoice-${o.order.so_number}`}>{o.order.order_type && o.order.order_type !== "SO" ? ` \u00b7 Ref ${o.order.order_reference ?? o.order.so_number}` : o.order.workflow?.stop?.invoice_no ? ` \u00b7 Invoice/DR ${o.order.workflow.stop.invoice_no}` : " \u00b7 Invoice/DR not recorded"}</span>
               </div>
               <div className="break-words text-base font-bold leading-snug">{o.order.customer_name}</div>
               <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label={`Invoice ${o.order.so_number} handed over`}>

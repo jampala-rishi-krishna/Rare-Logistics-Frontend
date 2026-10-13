@@ -72,6 +72,9 @@ import LoadPlanningInventoryTab, {
   AssignmentEmailPreviewModal,
 } from "@/components/load-planning/LoadPlanningInventoryTab";
 import LoadPlanningAssignmentTab from "@/components/load-planning/LoadPlanningAssignmentTab";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
+import { orderTypeColor, orderTypeOfRow, normalizeOrderType } from "@/lib/orderType";
+import { countByType, describeCounts, groupOrdersByTruck } from "@/lib/orderMerge";
 import { capacityOverage, loadOverage } from "@/lib/capacity";
 import { EXPRESSWAY_CHOICES, RETURN_WAREHOUSE_HINT, compareBadges, effectiveOptions, etaLabel, resolveActivePlan, returnWarehouseMissing, type ExpresswayChoice } from "@/lib/routeCost";
 import { RouteCostCard, RouteKpis, RouteOptionCards, RouteTimeline } from "@/components/routes/RouteResultCards";
@@ -181,7 +184,7 @@ interface Vehicle {
   x: number;
   y: number;
   zone: string;
-  associatedSos?: { soNumber: string; clientName: string | null; destinationCity: string | null; warehouse: string | null; orderedWeightKg?: number | null; shippedWeightKg?: number | null; deliveryStatus?: string | null }[];
+  associatedSos?: { soNumber: string; clientName: string | null; destinationCity: string | null; warehouse: string | null; orderedWeightKg?: number | null; shippedWeightKg?: number | null; deliveryStatus?: string | null; order_type?: string | null; orderType?: string | null; destination_warehouse?: string | null }[];
   warehousePickup?: string | null;
   locked?: boolean;
   lockReason?: string | null;
@@ -216,6 +219,7 @@ interface Order {
   batchId?: string | null;
   emailStatus?: inventoryApi.SalesOrderSummary["email_status"];
   emailError?: string | null;
+  orderType?: "SO" | "TO" | "PO";
 }
 
 const orders: Order[] = [];
@@ -254,11 +258,11 @@ function nextExpectedDate() {
   return manilaDate(1);
 }
 
-function useOrdersData(dateFrom: string, dateTo: string, options: { search?: string; status?: string; assignment?: "assigned" | "unassigned"; vehicle?: string; customer?: string; deliveryStatus?: string } = {}) {
+function useOrdersData(dateFrom: string, dateTo: string, options: { search?: string; status?: string; assignment?: "assigned" | "unassigned"; vehicle?: string; customer?: string; deliveryStatus?: string; orderTypes?: string } = {}) {
   const query = useQuery({
     queryKey: ["orders", dateFrom, dateTo, options],
     queryFn: async () => {
-      const page = await inventoryApi.listSalesOrders(dateFrom, dateTo, 1, options.status || "All", options.search || "", options.assignment || "assigned", [], options);
+      const page = await inventoryApi.listSalesOrders(dateFrom, dateTo, 1, options.status || "All", options.search || "", options.assignment || "assigned", [], { ...options, orderTypes: (options.assignment || "assigned") === "assigned" ? options.orderTypes : undefined });
       return { ...page, items: page.items.map((item) => ({
         id: item.salesorder_number || item.id,
         customer: item.customer_name || "—",
@@ -277,6 +281,7 @@ function useOrdersData(dateFrom: string, dateTo: string, options: { search?: str
         batchId: item.assignment_batch_id ?? null,
         emailStatus: item.email_status ?? null,
         emailError: item.email_error ?? null,
+        orderType: orderTypeOfRow(item),
       } satisfies Order)) };
     },
     staleTime: 5000,
@@ -3470,7 +3475,7 @@ function DataTablePage({
   const [showOrderFilters, setShowOrderFilters] = useState(false);
   const [showOrderColumns, setShowOrderColumns] = useState(false);
   const [orderColumns, setOrderColumns] = useState({ customer: true, route: true, vehicle: true, status: true, eta: true });
-  const orderOptions = { search: query, status: orderStatus, assignment: orderAssignment, vehicle: orderVehicle, customer: orderCustomer, deliveryStatus: orderDelivery };
+  const orderOptions = { search: query, status: orderStatus, assignment: orderAssignment, vehicle: orderVehicle, customer: orderCustomer, deliveryStatus: orderDelivery, orderTypes: "SO,TO" };
   const { data: ordersData, total: ordersTotal, refetch: refetchOrders, isFetching: ordersFetching } = useOrdersData(orderFrom, orderTo, orderOptions);
   const zohoUsage = useQuery({
     queryKey: ["zoho-usage"],
@@ -3612,7 +3617,7 @@ function DataTablePage({
       ) : (
         <>
           <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
-            {kind === "orders" && <div className="rounded-[4px] border border-[#e4e3df] bg-white px-4 py-2 text-sm"><span className="font-semibold">{ordersTotal}</span> confirmed SOs</div>}
+            {kind === "orders" && <div className="rounded-[4px] border border-[#e4e3df] bg-white px-4 py-2 text-sm"><span className="font-semibold">{ordersTotal}</span> confirmed orders</div>}
             {kind === "orders" && <div className="flex items-center gap-2 text-xs"><label>From <input type="date" value={orderFrom} onChange={(e) => setOrderFrom(e.target.value)} className="ml-1 border border-[#d8d7d2] px-2 py-2" /></label><label>To <input type="date" value={orderTo} onChange={(e) => setOrderTo(e.target.value)} className="ml-1 border border-[#d8d7d2] px-2 py-2" /></label></div>}
             <div className="relative min-w-0 w-full max-w-sm">
               <Search
@@ -3686,7 +3691,7 @@ function TableFrame({
   );
 }
 function FleetMobileCards({ vehicles, onSelect }: { vehicles: Vehicle[]; onSelect: (vehicle: Vehicle) => void }) {
-  return <div className="grid gap-2 p-2 md:hidden">{vehicles.map((v) => { const sos = v.associatedSos || []; return <article key={v.id} className={`rounded-[4px] border p-3 ${v.locked ? "border-[#d7d7d3] bg-[#e7e7e4] text-[#77787b]" : "border-[#e4e3df] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><div className="mono text-sm font-bold text-black">{v.plate}</div><div className="mt-0.5 text-xs">Vehicle ID: {v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</div><StatusChip status={v.status} /></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#efeeeb] pt-3 text-xs"><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Speed</div><div className="font-semibold">{v.speed} kph</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fuel</div><div className="font-semibold">{v.fuel}%</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Zone</div><div>{v.zone || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Warehouse pickup</div><div>{v.warehousePickup || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Load</div><div className={loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) ? "font-semibold text-[#c4291f]" : ""}>{v.load ? `${v.load.assignedWeightKg.toLocaleString()} / ${v.load.capacityKg.toLocaleString()} kg` : "—"}</div>{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) && <div className="text-[10px] font-semibold text-[#c4291f]">{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg)!.text}</div>}</div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fulfillment</div><div>{v.fulfillment ? `${Math.round(v.fulfillment.percent)}% ${v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}` : "—"}</div></div></div><div className="mt-3 border-t border-[#efeeeb] pt-2"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Associated sales orders</div>{sos.length ? <button className="mt-1 flex flex-wrap gap-1 text-left" onClick={() => onSelect(v)}>{sos.slice(0, 3).map((so) => <span className="rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px] text-black" key={so.soNumber}>{so.soNumber}</span>)}{sos.length > 3 && <span className="px-1 text-[10px] text-black">+{sos.length - 3} more</span>}</button> : <div className="mt-1 text-xs">—</div>}</div></article>; })}</div>;
+  return <div className="grid gap-2 p-2 md:hidden">{vehicles.map((v) => { const sos = v.associatedSos || []; return <article key={v.id} className={`rounded-[4px] border p-3 ${v.locked ? "border-[#d7d7d3] bg-[#e7e7e4] text-[#77787b]" : "border-[#e4e3df] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><div className="mono text-sm font-bold text-black">{v.plate}</div><div className="mt-0.5 text-xs">Vehicle ID: {v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</div><StatusChip status={v.status} /></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#efeeeb] pt-3 text-xs"><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Speed</div><div className="font-semibold">{v.speed} kph</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fuel</div><div className="font-semibold">{v.fuel}%</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Zone</div><div>{v.zone || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Warehouse pickup</div><div>{v.warehousePickup || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Load</div><div className={loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) ? "font-semibold text-[#c4291f]" : ""}>{v.load ? `${v.load.assignedWeightKg.toLocaleString()} / ${v.load.capacityKg.toLocaleString()} kg` : "—"}</div>{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) && <div className="text-[10px] font-semibold text-[#c4291f]">{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg)!.text}</div>}</div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fulfillment</div><div>{v.fulfillment ? `${Math.round(v.fulfillment.percent)}% ${v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}` : "—"}</div></div></div><div className="mt-3 border-t border-[#efeeeb] pt-2"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Associated orders (SO / TO)</div>{sos.length ? <button className="mt-1 flex flex-wrap gap-1 text-left" onClick={() => onSelect(v)}>{sos.slice(0, 3).map((so) => <span className="inline-flex items-center gap-1 rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }} key={so.soNumber}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</span>)}{sos.length > 3 && <span className="px-1 text-[10px] text-black">+{sos.length - 3} more</span>}</button> : <div className="mt-1 text-xs">—</div>}</div></article>; })}</div>;
 }
 function FleetTable({ vehicles }: { vehicles: Vehicle[] }) {
   const [selected, setSelected] = useState<Vehicle | null>(null);
@@ -3695,14 +3700,14 @@ function FleetTable({ vehicles }: { vehicles: Vehicle[] }) {
   return (
     <div className="min-w-0 overflow-x-auto border border-[#e4e3df] bg-white"><FleetMobileCards vehicles={ordered} onSelect={setSelected} /><table className="hidden w-full min-w-[1180px] text-left text-sm md:table">
       <thead className="border-b border-[#e4e3df] bg-[#f7f7f4] text-[11px] uppercase tracking-wider text-[#77787b]"><tr>
-          <th className="sticky left-0 z-10 bg-[#f7f7f4] px-4 py-3">Vehicle</th><th className="px-3">Associated SOs</th><th className="px-3">SO Status</th><th className="px-3">Destination City</th><th className="px-3">Status</th><th className="px-3">Zone</th><th className="px-3">Speed</th><th className="px-3">Fuel</th><th className="px-3">Load</th><th className="px-3">Fulfillment</th><th className="px-3">Warehouse Pickup</th>
+          <th className="sticky left-0 z-10 bg-[#f7f7f4] px-4 py-3">Vehicle</th><th className="px-3">Associated Orders</th><th className="px-3">Order Status</th><th className="px-3">Destination City</th><th className="px-3">Status</th><th className="px-3">Zone</th><th className="px-3">Speed</th><th className="px-3">Fuel</th><th className="px-3">Load</th><th className="px-3">Fulfillment</th><th className="px-3">Warehouse Pickup</th>
       </tr></thead><tbody className="divide-y divide-[#efeeeb]">
       {ordered.map((v) => {
         const muted = v.locked ? "bg-[#e7e7e4] text-[#77787b]" : "hover:bg-[#fafaf8]";
         const sos = v.associatedSos || [];
         return <tr className={muted} key={v.id}>
           <td className={`sticky left-0 z-[1] px-4 py-4 ${v.locked ? "bg-[#e7e7e4]" : "bg-white"}`}><span className="mono font-semibold text-sm">{v.plate}</span><div className="mt-1 text-xs">{v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</td>
-          <td className="px-3"><button className="flex flex-wrap gap-1 text-left" onClick={() => sos.length && setSelected(v)}>{sos.length ? sos.slice(0, 2).map((so) => <span className="rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" key={so.soNumber}>{so.soNumber}</span>) : "—"}{sos.length > 2 && <span className="text-xs">+{sos.length - 2}</span>}</button></td>
+          <td className="px-3"><button className="flex flex-wrap gap-1 text-left" onClick={() => sos.length && setSelected(v)}>{sos.length ? sos.slice(0, 2).map((so) => <span className="inline-flex items-center gap-1 rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }} key={so.soNumber}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</span>) : "—"}{sos.length > 2 && <span className="text-xs">+{sos.length - 2}</span>}</button></td>
           <td className="px-3 text-xs"><div className="flex max-w-[150px] flex-wrap gap-1">{sos.length ? sos.slice(0, 2).map((so) => <span title={`Raw status: ${so.deliveryStatus || "unresolved"}`} className={`rounded-full px-2 py-0.5 text-[10px] ${so.deliveryStatus === "Delivered" ? "bg-[#e5f4e9] text-[#28723d]" : "bg-[#f2f1ed] text-[#55565a]"}`} key={`${so.soNumber}-status`}>{so.deliveryStatus || "Unresolved"}</span>) : "—"}{sos.length > 2 && <span>+{sos.length - 2}</span>}</div></td>
           <td className="px-3 text-xs">{compact(sos.map((so) => so.destinationCity).filter(Boolean) as string[]) || "—"}</td><td className="px-3"><StatusChip status={v.status} /></td><td className="px-3 text-[#55565a]">{v.zone}</td><td className="px-3 mono text-xs font-semibold">{v.speed} kph</td>
           <td className="px-3"><div className="flex items-center gap-2"><div className="h-1.5 w-16 bg-[#e8e7e3]"><div className="h-full bg-black" style={{ width: `${v.fuel}%` }} /></div><span className="mono text-xs">{v.fuel}%</span></div></td>
@@ -3711,7 +3716,7 @@ function FleetTable({ vehicles }: { vehicles: Vehicle[] }) {
           <td className="px-3 text-xs">{v.warehousePickup || "—"}</td>
         </tr>;
       })}
-      </tbody></table>{selected && <div className="fixed inset-0 z-[2000] bg-black/20" onClick={() => setSelected(null)}><aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-auto bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-between"><h2 className="text-lg font-bold">Associated SOs · {selected.plate}</h2><button onClick={() => setSelected(null)}><X size={18} /></button></div><p className="mt-2 text-xs text-[#77787b]">Weights use the authoritative per-line Zoho package calculation. Load is the sum of assigned SO weights.</p>{(selected.associatedSos || []).map((so) => <div className="mt-4 border-b border-[#efeeeb] pb-4" key={so.soNumber}><div className="font-semibold">{so.soNumber}</div><div className="mt-1 text-xs text-[#55565a]">{so.clientName || "—"} · {so.destinationCity || "—"}</div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><div className="text-[#77787b]">Assigned</div><div className="font-semibold">{so.orderedWeightKg == null ? "—" : `${so.orderedWeightKg} kg`}</div></div><div><div className="text-[#77787b]">Shipped</div><div className="font-semibold">{so.shippedWeightKg == null ? "—" : `${so.shippedWeightKg} kg`}</div></div><div><div className="text-[#77787b]">Remaining</div><div className="font-semibold">{so.orderedWeightKg == null || so.shippedWeightKg == null ? "—" : `${Math.max(0, so.orderedWeightKg - so.shippedWeightKg)} kg`}</div></div></div><div className="mt-1 text-xs text-[#77787b]">Pickup: {so.warehouse || "—"}</div></div>)}</aside></div>}</div>
+      </tbody></table>{selected && <div className="fixed inset-0 z-[2000] bg-black/20" onClick={() => setSelected(null)}><aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-auto bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-between"><h2 className="text-lg font-bold">Associated orders · {selected.plate}</h2><button onClick={() => setSelected(null)}><X size={18} /></button></div><p className="mt-2 text-xs text-[#77787b]">Weights use the authoritative per-line Zoho package calculation. Load is the sum of assigned SO weights.</p>{(selected.associatedSos || []).map((so) => <div className="mt-4 border-b border-[#efeeeb] pb-4" key={so.soNumber}><div className="flex items-center gap-2 font-semibold" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</div><div className="mt-1 text-xs text-[#55565a]">{so.clientName || "—"} · {so.destinationCity || "—"}{normalizeOrderType(so.order_type ?? so.orderType) === "TO" && so.destination_warehouse ? ` · to ${so.destination_warehouse}` : ""}</div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><div className="text-[#77787b]">Assigned</div><div className="font-semibold">{so.orderedWeightKg == null ? "—" : `${so.orderedWeightKg} kg`}</div></div><div><div className="text-[#77787b]">Shipped</div><div className="font-semibold">{so.shippedWeightKg == null ? "—" : `${so.shippedWeightKg} kg`}</div></div><div><div className="text-[#77787b]">Remaining</div><div className="font-semibold">{so.orderedWeightKg == null || so.shippedWeightKg == null ? "—" : `${Math.max(0, so.orderedWeightKg - so.shippedWeightKg)} kg`}</div></div></div><div className="mt-1 text-xs text-[#77787b]">Pickup: {so.warehouse || "—"}</div></div>)}</aside></div>}</div>
   );
 }
 function OrderTable({
@@ -3772,7 +3777,14 @@ function OrderTable({
         </>
       }
     >
-      {onOrders.map((o) => (
+      {groupOrdersByTruck(onOrders).flatMap((group) => [
+        <tr key={`group-${group.vehicle}`} className="bg-[#f7f7f4]" data-testid={`truck-group-${group.vehicle}`}>
+          <td colSpan={7} className="px-4 py-2 text-xs font-semibold text-[#55565a]">
+            <span className="mono text-black">{group.vehicle}</span> · {group.orders.length} order{group.orders.length === 1 ? "" : "s"}
+            {describeCounts(countByType(group.orders.map((o) => ({ id: o.sourceId ?? o.id, order_type: o.orderType })))) ? ` (${describeCounts(countByType(group.orders.map((o) => ({ id: o.sourceId ?? o.id, order_type: o.orderType }))))})` : ""}
+          </td>
+        </tr>,
+        ...group.orders.map((o) => (
         <tr
           data-testid={`row-order-${o.id}`}
           onClick={() => onSelect(o)}
@@ -3780,7 +3792,8 @@ function OrderTable({
           key={o.id}
         >
           <td className="px-4 py-4">
-            <span className="mono font-semibold">{o.id}</span>
+            <span className="mr-1.5 align-middle"><OrderTypeBadge type={o.orderType} /></span>
+            <span className="mono font-semibold" style={{ color: orderTypeColor(o.orderType) }}>{o.id}</span>
             <div className="mt-1 text-xs text-[#77787b]">
               {o.temperature} cargo
             </div>
@@ -3801,7 +3814,8 @@ function OrderTable({
             <ChevronRight size={16} className="text-[#77787b]" />
           </td>
         </tr>
-      ))}
+        )),
+      ])}
     </TableFrame>
   );
 }
@@ -4074,7 +4088,7 @@ function LegacyDispatchDashboard() {
               key={String(o.salesorder_id ?? o.id)}
             >
               <span>
-                <b>{String(o.salesorder_number ?? o.id)}</b> ({String(o.id)}) ·{" "}
+                <OrderTypeBadge type={(o as any).order_type} /> <b style={{ color: orderTypeColor((o as any).order_type) }}>{String(o.salesorder_number ?? o.id)}</b> ({String(o.id)}) ·{" "}
                 {String(o.vehicle_id ?? "Unassigned")}
               </span>
               <span>{String(o.status ?? o.assignment_status ?? "Pending")}</span>
@@ -5898,7 +5912,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
   const confirm = async () => {
     if (alreadyAssigned) {
       setError(
-        "This sales order is already assigned. Open Confirmed SO to review or edit the assignment.",
+        "This sales order is already assigned. Open Confirmed Orders to review or edit the assignment.",
       );
       return;
     }
@@ -5980,14 +5994,18 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         : "";
       await queryClient.invalidateQueries({ queryKey: ["dispatch-dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["inventory-sales-orders"] });
+      // Assigned SO + TO leave the Inventory SO/TO tabs and the Load Planning unassigned list (and show in Confirmed Orders).
+      await queryClient.invalidateQueries({ queryKey: ["load-planning-unassigned"] });
+      await queryClient.invalidateQueries({ queryKey: ["inventory-transfer-orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
       if (!assignedDriverIds.length) {
-        onNotice(`${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Third-party truck has no staff notification recipient.${overCapacityNote}`);
+        onNotice(`${ids.length} order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Third-party truck has no staff notification recipient.${overCapacityNote}`);
         return;
       }
       const savedAssignment = { salesOrderIds: ids, vehicleId: vehicle, driverIds: assignedDriverIds, manualVehicle: manualVehiclePayload, assignmentBatchId: assigned?.assignment_batch_id ?? null };
       setLastAssignment(savedAssignment);
       onNotice(
-        `${ids.length} sales order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Nothing has been sent yet: review the email and press Send to notify the driver.${overCapacityNote}`,
+        `${ids.length} order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Nothing has been sent yet: review the email and press Send to notify the driver.${overCapacityNote}`,
       );
       await openEmailEditor(savedAssignment, true);
     } catch (e: any) {
@@ -6063,11 +6081,12 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         </div>
         <div className="mt-4 border-b border-[#e4e3df] pb-4 text-base font-bold leading-7 text-black">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#55565a]">
-            Selected sales orders
+            Selected orders (SO / TO)
           </div>
           {ids.map((selectedId) => (
-            <div key={selectedId} className="rounded bg-white px-2 py-1">
-              SO {selectedId === id ? data.order.number || selectedId : selectedId}
+            <div key={selectedId} className="flex items-center gap-2 rounded bg-white px-2 py-1">
+              <OrderTypeBadge type={orderTypeOfRow({ id: selectedId })} />
+              <span style={{ color: orderTypeColor(orderTypeOfRow({ id: selectedId })) }}>{selectedId === id ? data.order.number || selectedId : selectedId.replace(/^TO:/, "")}</span>
             </div>
           ))}
         </div>
@@ -7360,13 +7379,13 @@ function LoadPlanningWorkspace({
         <button
           onClick={() => setTab("confirmed")}
           className={cx(
-            "min-w-[120px] shrink-0 border-b-2 px-3 pb-3 text-sm font-semibold",
+            "min-w-[150px] shrink-0 border-b-2 px-3 pb-3 text-sm font-semibold",
             tab === "confirmed"
               ? "border-black"
               : "border-transparent text-[#77787b]",
           )}
         >
-          Confirmed SO
+          Confirmed Orders
         </button>
       </div>
       {tab === "inventory" ? (

@@ -50,6 +50,18 @@ export interface SalesOrderSummary {
   unit_count?: number;
   total_item_quantity?: number;
   zoho_lock?: ZohoLockStatus;
+  /** "SO" (default when absent) or "TO". TO rows have id `TO:<zoho id>` and salesorder_number = the TO number. */
+  order_type?: "SO" | "TO" | null;
+  transfer_order_number?: string | null;
+  reason?: string | null;
+  source_warehouse?: string | null;
+  destination_warehouse?: string | null;
+  source_warehouse_key?: "mets" | "glacier" | null;
+  destination_warehouse_key?: "mets" | "glacier" | null;
+  created_by?: string | null;
+  last_modified_by?: string | null;
+  /** TO#/PO# used instead of an invoice number. */
+  order_reference?: string | null;
 }
 
 export interface ZohoLockStatus {
@@ -78,6 +90,21 @@ export interface SalesOrdersPage {
   total_weight_kg?: number;
   /** False when some line has no known weight yet (or Zoho has no package weight for it). */
   weight_complete?: boolean;
+}
+
+export interface TransferOrdersPage {
+  items: SalesOrderSummary[];
+  page: number;
+  per_page: number;
+  total: number;
+  has_more: boolean;
+  total_weight_kg?: number;
+  /** False when some line has no known weight yet: show "kg+". */
+  weight_complete?: boolean;
+  /** True while line details/weights fill in on the backend: poll again. */
+  details_pending?: boolean;
+  last_refreshed_at?: string | null;
+  source?: string;
 }
 
 export interface AssignmentOptions {
@@ -124,7 +151,7 @@ export interface ManualVehicleInput {
   third_party?: boolean;
 }
 export function getAssignmentOptions(id: string, otherSelectedIds: string[] = []) {
-  return api.get<AssignmentOptions>(`/api/load-planning/assignments/${id}`, otherSelectedIds.length ? { extra_ids: otherSelectedIds.join(",") } : undefined);
+  return api.get<AssignmentOptions>(`/api/load-planning/assignments/${encodeURIComponent(id)}`, otherSelectedIds.length ? { extra_ids: otherSelectedIds.join(",") } : undefined);
 }
 export function assignSalesOrder(
   id: string,
@@ -202,7 +229,7 @@ export function listSalesOrders(
   search = "",
   assignment?: "assigned" | "unassigned",
   cities: string[] = [],
-  filters: { vehicle?: string; customer?: string; deliveryStatus?: string; branches?: string[] } = {},
+  filters: { vehicle?: string; customer?: string; deliveryStatus?: string; branches?: string[]; orderTypes?: string } = {},
 ): Promise<SalesOrdersPage> {
   return api.get<SalesOrdersPage>("/api/load-planning/inventory/sales-orders", {
     date_from: dateFrom,
@@ -217,7 +244,78 @@ export function listSalesOrders(
     customer: filters.customer,
     delivery_status: filters.deliveryStatus,
     branches: filters.branches?.length ? filters.branches.join(",") : undefined,
+    // Only meaningful with assignment=assigned (Confirmed Orders): merges assigned SO + TO rows.
+    order_types: filters.orderTypes || undefined,
   });
+}
+
+/** Transfer orders (Draft, Mets<->Glacier). `assignment` omitted = unassigned (Inventory TO tab). */
+export function listTransferOrders(
+  dateFrom: string,
+  dateTo: string,
+  page = 1,
+  search = "",
+  assignment?: "assigned" | "unassigned",
+): Promise<TransferOrdersPage> {
+  return api.get<TransferOrdersPage>("/api/load-planning/inventory/transfer-orders", {
+    date_from: dateFrom,
+    date_to: dateTo,
+    search,
+    assignment,
+    page,
+    per_page: 100,
+  });
+}
+
+/** Hard refresh: bypasses the backend cache and re-reads Zoho. */
+export function refreshTransferOrders(): Promise<{ refreshed_at: string; count: number }> {
+  return api.post("/api/load-planning/inventory/transfer-orders/refresh", undefined, undefined, 90000);
+}
+
+export interface BulkUnassignResult {
+  unassigned: string[];
+  count: number;
+  count_by_type: { SO?: number; TO?: number };
+  skipped: { id: string; reason: string }[];
+}
+
+export function bulkUnassignOrders(orderIds: string[]) {
+  return api.post<BulkUnassignResult>("/api/load-planning/assignments/bulk-unassign", { order_ids: orderIds }, undefined, 60000);
+}
+
+export interface ConfirmedEmailPreview {
+  warehouse: "mets" | "glacier";
+  order_count: number;
+  line_count: number;
+  counts_by_type: { SO?: number; TO?: number };
+  headers: string[];
+  rows: (string | number | null)[][];
+  pdf_base64: string;
+  xlsx_base64: string;
+  pdf_filename: string;
+  xlsx_filename: string;
+}
+
+export function previewConfirmedEmail(body: { warehouse: "mets" | "glacier"; order_ids: string[]; date_from?: string; date_to?: string }) {
+  return api.post<ConfirmedEmailPreview>("/api/load-planning/email/confirmed/preview", body, undefined, 90000);
+}
+
+export function sendConfirmedEmail(body: {
+  warehouse: "mets" | "glacier";
+  order_ids: string[];
+  to: string[];
+  cc: string[];
+  subject: string;
+  html_body: string;
+  date_from?: string;
+  date_to?: string;
+}) {
+  return api.post<{ success: boolean; status: "sent" | "queued" | "failed"; messageId?: string; orderCount?: number; lineCount?: number }>(
+    "/api/load-planning/email/confirmed/send",
+    body,
+    undefined,
+    90000,
+  );
 }
 
 export function listBranches() {
@@ -417,8 +515,10 @@ export function downloadSalesOrders(
   search: string,
   assignment?: "assigned" | "unassigned",
   branches: string[] = [],
+  orderTypes?: string,
 ) {
   return api.download(`/api/load-planning/inventory/export/${format}`, {
+    order_types: orderTypes || undefined,
     date_from: dateFrom,
     date_to: dateTo,
     status,

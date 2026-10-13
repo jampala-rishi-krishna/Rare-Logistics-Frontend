@@ -214,3 +214,18 @@ test("proof of delivery: a missing photo is explained, never silently hidden; th
   assert.equal(submitLabelFor("Failed"), "Save departure");
   assert.equal(submitLabelFor(undefined), "Save departure");
 });
+
+import { checkoutItemsForOrder } from "./tripForms.ts";
+
+test("TO/PO check-out has no invoice/DR item (so nothing to require); SO keeps it", () => {
+  const items = [
+    { id: 1, key: INVOICE_KEY, label: "Invoice or DR Number", item_type: "numeric_text", required: true, options: null, prefill: null, show_when: null, position: 1 },
+    { id: 2, key: "outcome", label: "Outcome", item_type: "dropdown", required: true, options: ["Delivered"], prefill: null, show_when: null, position: 2 },
+  ] as never[];
+  assert.equal(checkoutItemsForOrder(items, "SO").length, 2);
+  assert.equal(checkoutItemsForOrder(items, undefined).length, 2);
+  const forTo = checkoutItemsForOrder(items, "TO");
+  assert.deepEqual(forTo.map((i: { key: string }) => i.key), ["outcome"]);
+  assert.deepEqual(validateCheckout(forTo, { outcome: "Delivered" }), {});
+  assert.equal(checkoutItemsForOrder(items, "PO").length, 1);
+});

@@ -1,4 +1,6 @@
 import { BranchBadge } from "./BranchControls";
+import { OrderTypeBadge } from "./OrderTypeBadge";
+import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
 import { Lock } from "lucide-react";
 import type { SalesOrderSummary } from "@/services/api/inventory";
 import { formatAddress } from "@/lib/address";
@@ -21,7 +23,7 @@ export function ViewModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (
     </button>
   );
   return (
-    <div role="group" aria-label="Confirmed SO view" className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-[4px] border border-[#d8d7d2] bg-white" data-testid="view-toggle">
+    <div role="group" aria-label="Confirmed Orders view" className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-[4px] border border-[#d8d7d2] bg-white" data-testid="view-toggle">
       {button("kpi", KPI_LABEL)}
       {button("spreadsheet", SPREADSHEET_LABEL)}
     </div>
@@ -87,7 +89,7 @@ export function SalesOrderCard({
       <div className="flex items-start gap-3">
         <input type="checkbox" checked={selected} onChange={() => onToggle(String(order.id))} aria-label={`Select ${order.salesorder_number ?? order.id}`} className="mt-1" />
         <button type="button" onClick={() => onOpen(order)} className="min-w-0 max-w-full flex-1 text-left">
-          <div className="mono text-xs text-[#77787b]">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
+          <div className="mono text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}><span className="mr-1.5 align-middle"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
           <h3 className="mt-1 break-words text-sm font-semibold text-black">{order.customer_name ?? "Unnamed customer"}</h3>
         </button>
         <div className="flex max-w-[45%] shrink-0 flex-col items-end gap-1">
@@ -138,7 +140,7 @@ export function SalesOrderCard({
 }
 
 /**
- * KPI view: the Confirmed SO list as cards, 2 columns x 2 rows per page (1 column on narrow
+ * KPI view: the Confirmed Orders list as cards, 2 columns x 2 rows per page (1 column on narrow
  * screens). It renders exactly the orders it is given - the same filtered, searched and sorted
  * set the spreadsheet shows - and paginates them 4 at a time.
  */

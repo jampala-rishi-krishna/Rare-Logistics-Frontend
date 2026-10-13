@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { Link, useLocation, useParams } from "wouter";
 import * as driverApi from "@/services/api/driver";
 import { formatClock, personName } from "@/lib/driver";
@@ -164,6 +165,7 @@ function AckBody({
     <div className="grid gap-4">
       <section className="border border-[#e4e3df] bg-white p-4">
         <div className="font-mono text-xs font-semibold text-[#77787b]">
+          <OrderTypeBadge type={eff.order.order_type} className="mr-1.5 align-middle" />
           {eff.order.so_number}
           {position > 0 ? ` · order ${position} of ${state.orders.length}` : ""}
         </div>

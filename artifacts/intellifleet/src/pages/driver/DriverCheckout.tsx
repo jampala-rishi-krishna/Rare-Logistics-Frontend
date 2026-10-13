@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { Link, useLocation, useParams } from "wouter";
 import * as driverApi from "@/services/api/driver";
 import { formatClock, personName } from "@/lib/driver";
-import { blockedPhotoItems, buildCheckoutAnswers, initialCheckoutForm, isItemRequired, isItemVisible, mapServerErrors, submitLabelFor, usableItems, validateCheckout } from "@/lib/tripForms";
+import { blockedPhotoItems, buildCheckoutAnswers, checkoutItemsForOrder, initialCheckoutForm, isItemRequired, isItemVisible, mapServerErrors, submitLabelFor, usableItems, validateCheckout } from "@/lib/tripForms";
 import type { FieldErrors, FormValue, FormValues } from "@/lib/tripForms";
 import { browserDraftStore, clearDraft, draftKey, loadDraft, mergeValues, readFormDraft, saveDraft, serializeValues } from "@/lib/tripDrafts";
 import { newIdempotencyKey } from "@/lib/tripActions";
@@ -19,7 +20,8 @@ function CheckoutBody({ scope, batchId, eff, templates, canSubmit }: { scope: Dr
   const [, setLocation] = useLocation();
   const actions = useCrewAction(scope, batchId);
   const template = templates.delivery_checkout;
-  const items = useMemo(() => usableItems(template.items, templates.photo_storage_enabled), [template, templates.photo_storage_enabled]);
+  // TO/PO stops need no invoice/DR number: the order number is the reference.
+  const items = useMemo(() => checkoutItemsForOrder(usableItems(template.items, templates.photo_storage_enabled), eff.order.order_type), [template, templates.photo_storage_enabled, eff.order.order_type]);
   const initial = useMemo(() => initialCheckoutForm(items, eff.order), [items, eff.order]);
   const key = draftKey("checkout", batchId, eff.so_id, template.id);
   const [values, setValues] = useState<FormValues>(() => {
@@ -88,6 +90,7 @@ function CheckoutBody({ scope, batchId, eff, templates, canSubmit }: { scope: Dr
       <section className="border border-[#e4e3df] bg-white p-4">
         <div className="font-mono text-xs font-semibold text-[#77787b]">
           {stop ? `Stop ${stop.sequence} · ` : ""}
+          <OrderTypeBadge type={eff.order.order_type} className="mr-1.5 align-middle" />
           {eff.order.so_number}
         </div>
         <h2 className="mt-1 break-words text-lg font-bold leading-snug">{eff.order.customer_name}</h2>

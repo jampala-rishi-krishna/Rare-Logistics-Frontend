@@ -133,6 +133,10 @@ export interface OrderWorkflow {
 export interface DriverOrder {
   id: number | string;
   so_number: string;
+  // Order type: absent = "SO". TO/PO use the order number as the reference (no invoice/DR number at check-out).
+  order_type?: "SO" | "TO" | "PO" | null;
+  order_reference?: string | null;
+  destination_warehouse?: string | null;
   customer_name: string;
   contact: OrderContact | null;
   address_lines: string[];
@@ -292,6 +296,10 @@ export interface Officer {
 export interface RouteStop {
   so_id: string | number;
   so_number: string;
+  // Order type: absent = "SO". TO/PO use the order number as the reference (no invoice/DR number at check-out).
+  order_type?: "SO" | "TO" | "PO" | null;
+  order_reference?: string | null;
+  destination_warehouse?: string | null;
   customer_name: string;
   address_text: string;
   sequence: number;
@@ -367,6 +375,10 @@ export interface TimelineAnswer {
 export interface TimelineOrder {
   so_id: string | number;
   so_number: string;
+  // Order type: absent = "SO". TO/PO use the order number as the reference (no invoice/DR number at check-out).
+  order_type?: "SO" | "TO" | "PO" | null;
+  order_reference?: string | null;
+  destination_warehouse?: string | null;
   customer_name: string;
   address_text: string;
   ack: {

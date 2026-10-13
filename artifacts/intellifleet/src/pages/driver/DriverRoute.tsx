@@ -1,4 +1,5 @@
 import { Link, useParams } from "wouter";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { MapPin, Navigation, Warehouse } from "lucide-react";
 import { formatClock, personName } from "@/lib/driver";
 import { actionsEnabled, assignmentPath, checkinNotice, checkoutPath, handoverPath, stopRows } from "@/lib/tripNav";
@@ -20,7 +21,7 @@ function StopCard({ row, scope, batchId, canAct, busy, onArrived }: { row: StopR
       <div className="flex items-start gap-3">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-black text-sm font-bold !text-white">{row.sequence}</span>
         <div className="min-w-0 flex-1">
-          <div className="font-mono text-xs font-semibold text-[#77787b]">{row.so_number}</div>
+          <div className="font-mono text-xs font-semibold text-[#77787b]"><OrderTypeBadge type={row.order_type ?? row.eff?.order.order_type} className="mr-1.5 align-middle" />{row.so_number}</div>
           <div className="break-words text-base font-bold leading-snug">{row.customer_name}</div>
           {row.address_text && (
             <div className="mt-1 flex items-start gap-1.5 text-sm text-[#55565a]">

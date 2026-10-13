@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -11,6 +11,10 @@ import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { FilterField, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { sessionAcknowledgedOrders } from "@/lib/acknowledgeCache";
 import { formatKgPartial } from "@/lib/kgDisplay";
+import { OrderTypeBadge } from "./OrderTypeBadge";
+import { TypeFilterSelect } from "./OrderTypeControls";
+import { filterByType, idsStillPresent, mergeOrders, weightTotals, type TypeFilter } from "@/lib/orderMerge";
+import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -61,7 +65,7 @@ function lineWarehouse(order: Order, product: Product | null | undefined) {
 const COLUMNS: [string, number][] = [
   ["", 44],
   ["Expected Shipment Date", 120],
-  ["Sales Order#", 130],
+  ["Order#", 130],
   ["Customer Name", 210],
   ["Product", 220],
   ["SKU", 110],
@@ -86,6 +90,24 @@ export default function LoadPlanningAssignmentTab() {
   const [citiesOpen, setCitiesOpen] = useState(false);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  // Unassigned transfer orders (assignment=unassigned). The key shares the "load-planning-unassigned" prefix, so
+  // assigning/unassigning (which invalidates that prefix) refreshes SO and TO together.
+  const transferOrders = useQuery({
+    queryKey: ["load-planning-unassigned", "to", from, to, search],
+    queryFn: async () => {
+      const first = await inventoryApi.listTransferOrders(from, to, 1, search, "unassigned");
+      let items = first.items;
+      let last = first;
+      for (let page = 2; last.has_more && page <= 20; page += 1) {
+        last = await inventoryApi.listTransferOrders(from, to, page, search, "unassigned");
+        items = [...items, ...last.items];
+      }
+      return { ...first, items, has_more: false, details_pending: last.details_pending };
+    },
+    retry: false,
+    refetchInterval: (query) => (query.state.data?.details_pending ? 4000 : false),
+  });
   const orders = useQuery({
     queryKey: ["load-planning-unassigned", from, to, search, selectedBranches.join(",")],
     // Load every page so the city filter and the total weight cover all filtered orders.
@@ -108,11 +130,11 @@ export default function LoadPlanningAssignmentTab() {
   // Both city choices and table rows use the same acknowledged, unassigned list.
   const citySource = orders;
   const cityOptions = useMemo(() => {
-    const values = (citySource.data?.items ?? [])
+    const values = [...(citySource.data?.items ?? []), ...(transferOrders.data?.items ?? [])]
       .map(orderCity)
       .filter((value): value is string => Boolean(value && value !== "-"));
     return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
-  }, [citySource.data]);
+  }, [citySource.data, transferOrders.data]);
   const visibleOrders = useMemo(() => {
     const merged = new Map<string, Order>();
     for (const order of sessionAcknowledgedOrders()) {
@@ -123,24 +145,22 @@ export default function LoadPlanningAssignmentTab() {
       if (matchesDate && matchesSearch && matchesBranch) merged.set(String(order.id), { ...order, order_status: "acknowledged" });
     }
     for (const order of orders.data?.items ?? []) merged.set(String(order.id), order);
-    const items = Array.from(merged.values());
+    // One combined list: SO (acknowledged, unassigned) + TO (unassigned), same city/type filters and totals.
+    const items = filterByType(mergeOrders(Array.from(merged.values()), transferOrders.data?.items ?? []), typeFilter);
     if (!selectedCities.length) return items;
     return items.filter((order) => selectedCities.includes(orderCity(order)));
-  }, [orders.data, selectedCities, from, to, search, selectedBranches]);
+  }, [orders.data, transferOrders.data, selectedCities, from, to, search, selectedBranches, typeFilter]);
   const ids = useMemo(() => visibleOrders.map((x) => x.id), [visibleOrders]);
   // Total weight of exactly what the filters leave on screen.
-  const weight = useMemo(() => {
-    let total = 0;
-    let unknown = 0;
-    for (const order of visibleOrders) {
-      for (const product of order.products ?? []) {
-        if (product.total_weight_kg == null) unknown += 1;
-        else total += Number(product.total_weight_kg);
-      }
-    }
-    return { total, unknown };
+  const weight = useMemo(() => weightTotals(visibleOrders), [visibleOrders]);
+  const calculating = orders.isLoading || Boolean(orders.data?.stock_pending) || transferOrders.isLoading || Boolean(transferOrders.data?.details_pending);
+  // An order that was assigned elsewhere leaves the list: drop it from the selection too.
+  useEffect(() => {
+    setSelected((current) => {
+      const next = idsStillPresent(current, visibleOrders);
+      return next.length === current.length ? current : next;
+    });
   }, [visibleOrders]);
-  const calculating = orders.isLoading || Boolean(orders.data?.stock_pending);
   const rows = useMemo(
     () =>
       visibleOrders.flatMap((order) => {
@@ -173,7 +193,7 @@ export default function LoadPlanningAssignmentTab() {
                 ? "Item weights are still loading from Zoho"
                 : weight.unknown
                   ? `${weight.unknown} line${weight.unknown === 1 ? " has" : "s have"} no weight in Zoho and ${weight.unknown === 1 ? "is" : "are"} not included`
-                  : "Total weight of the filtered sales orders"
+                  : "Total weight of the filtered sales and transfer orders"
             }
           >
             <Scale size={13} className="shrink-0" />
@@ -209,6 +229,7 @@ export default function LoadPlanningAssignmentTab() {
               <input type="date" min={from} value={to} onChange={(e) => setTo(e.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
             </FilterField>
             <BranchFilter options={branchOptions} selected={selectedBranches} counts={orders.data?.branch_counts} onChange={setSelectedBranches} />
+            <TypeFilterSelect value={typeFilter} onChange={setTypeFilter} />
             <FilterField label="Destination cities">
               <div className="relative min-w-0 w-full sm:w-[190px]">
               <button
@@ -272,11 +293,12 @@ export default function LoadPlanningAssignmentTab() {
             type="button"
             onClick={() => {
               void orders.refetch();
+              void transferOrders.refetch();
             }}
-            disabled={orders.isFetching || citySource.isFetching}
+            disabled={orders.isFetching || citySource.isFetching || transferOrders.isFetching}
             className={primaryButtonClass}
           >
-            <RefreshCw size={15} className={orders.isFetching ? "animate-spin" : ""} />
+            <RefreshCw size={15} className={orders.isFetching || transferOrders.isFetching ? "animate-spin" : ""} />
             Refresh
           </button>
         }
@@ -308,6 +330,10 @@ export default function LoadPlanningAssignmentTab() {
         <div className="p-10 text-center text-sm text-[#a32720]">
           {(orders.error as Error).message}
         </div>
+      ) : transferOrders.isError && typeFilter === "TO" ? (
+        <div className="p-10 text-center text-sm text-[#a32720]">
+          {(transferOrders.error as Error).message}
+        </div>
       ) : visibleOrders.length ? (
         <>
           <div className="grid gap-3 p-3 md:hidden">
@@ -328,15 +354,15 @@ export default function LoadPlanningAssignmentTab() {
                       aria-label={`Select ${order.salesorder_number ?? order.id}`}
                     />
                     <div className="min-w-0 max-w-full flex-1 [overflow-wrap:anywhere] [word-break:break-word]">
-                      <div className="mono text-xs text-[#77787b]">
-                        {order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} />
+                      <div className="mono text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>
+                        <span className="mr-1.5 align-middle"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} />
                       </div>
                       <h3 className="mt-1 break-words font-semibold">
                         {order.customer_name ?? "Unnamed customer"}
                       </h3>
                     </div>
                     <span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">
-                      Acknowledged
+                      {orderTypeOfRow(order) === "TO" ? "Draft" : "Acknowledged"}
                     </span>
                   </div>
                   <div className="mt-4 grid min-w-0 max-w-full gap-2 overflow-hidden border-t pt-3 text-xs text-[#55565a]">
@@ -384,7 +410,7 @@ export default function LoadPlanningAssignmentTab() {
                       key={name || "select"}
                       className={`px-3 py-3 font-semibold leading-tight ${index < 4 ? `sticky z-[4] whitespace-nowrap bg-[#f7f7f4] ${STICKY_LEFT[index]}` : "whitespace-normal"}`}
                     >
-                      {index === 0 ? <input type="checkbox" aria-label="Select all visible sales orders" checked={all} onChange={toggleAll} /> : name}
+                      {index === 0 ? <input type="checkbox" aria-label="Select all visible orders" checked={all} onChange={toggleAll} /> : name}
                     </th>
                   ))}
                 </tr>
@@ -398,7 +424,7 @@ export default function LoadPlanningAssignmentTab() {
                     <tr key={key} className={`border-b border-[#efeeeb] hover:bg-[#fafaf8] ${picked ? "bg-[#f4f4f0]" : ""}`}>
                       <td className="sticky left-0 z-[2] bg-white px-3 py-4 align-top"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={picked} onChange={() => toggle(order.id)} /></td>
                       <td className="sticky left-[44px] z-[1] bg-white px-3 py-4 align-top">{dateLabel(order.expected_shipment_date)}</td>
-                      <td className="sticky left-[164px] z-[1] bg-white px-3 py-4 align-top font-semibold">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></td>
+                      <td className="sticky left-[164px] z-[1] bg-white px-3 py-4 align-top font-semibold" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}><span className="mr-1.5 align-middle"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></td>
                       <td className="sticky left-[294px] z-[1] bg-white px-3 py-4 align-top">{order.customer_name ?? "-"}</td>
                       <td className="whitespace-normal break-words px-3 py-4 align-top font-semibold">{product?.name || "Details unavailable"}</td>
                       <td className="px-3 py-4 align-top">{product?.sku ?? "-"}</td>
@@ -425,13 +451,13 @@ export default function LoadPlanningAssignmentTab() {
           </HorizontalScrollTable>
           {weight.unknown > 0 && !calculating && (
             <div className="border-t border-[#e4e3df] bg-[#fffaf0] px-4 py-2 text-xs text-[#7a5b00]">
-              * {weight.unknown} line{weight.unknown === 1 ? "" : "s"} {weight.unknown === 1 ? "has" : "have"} no package weight in Zoho, so {weight.unknown === 1 ? "it is" : "they are"} not included in the total.
+              * {weight.unknown} line{weight.unknown === 1 ? "" : "s"} {weight.unknown === 1 ? "has" : "have"} no known weight, so {weight.unknown === 1 ? "it is" : "they are"} not included in the total.
             </div>
           )}
         </>
       ) : (
         <div className="p-12 text-center text-sm text-[#77787b]">
-          No unassigned orders match this date, city, or search.
+          No unassigned orders match this date, city, type, or search.
         </div>
       )}
     </div>

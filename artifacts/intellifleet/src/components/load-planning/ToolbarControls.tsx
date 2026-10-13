@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /**
- * Shared toolbar styling for the Load Planning tabs (Inventory, Load Planning, Confirmed SO),
+ * Shared toolbar styling for the Load Planning tabs (Inventory, Load Planning, Confirmed Orders),
  * so every control has the same height, font size, radius and border colour.
  */
 export const CONTROL_HEIGHT = "h-9"; // 36px
@@ -29,7 +29,9 @@ export function FilterField({ label, className = "", children }: { label: string
  * the left, actions on the right, bottom-aligned. At <1200px the actions drop below the filters (right-aligned) when the card is narrower than 1240px;
  * at <640px every control goes full width.
  */
-export function Toolbar({ count, noun = "orders", meta, toggle, filters, actions }: { count: number; noun?: string; meta?: ReactNode; toggle?: ReactNode; filters: ReactNode; actions: ReactNode }) {
+export function Toolbar({ count, noun = "orders", meta, toggle, filters, actions, singleRow = false }: { count: number; noun?: string; meta?: ReactNode; toggle?: ReactNode; filters: ReactNode; actions: ReactNode; singleRow?: boolean }) {
+  // singleRow: filters then actions on ONE aligned row from ~960px of card width (Inventory tab); otherwise the 1240px rule.
+  const rowClass = singleRow ? "@[960px]:flex-row @[960px]:items-end @[960px]:justify-between" : "@[1240px]:flex-row @[1240px]:items-end @[1240px]:justify-between";
   return (
     <div className="@container grid min-w-0 gap-3 border-b border-[#e4e3df] p-3 sm:p-4" data-testid="lp-toolbar">
       <div className="flex min-w-0 items-center justify-between gap-3">
@@ -41,7 +43,7 @@ export function Toolbar({ count, noun = "orders", meta, toggle, filters, actions
         </div>
         {toggle}
       </div>
-      <div className="flex min-w-0 flex-col gap-3 sm:gap-4 @[1240px]:flex-row @[1240px]:items-end @[1240px]:justify-between">
+      <div className={`flex min-w-0 flex-col gap-3 sm:gap-4 ${rowClass}`}>
         <div className="flex min-w-0 flex-1 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-end [&>*]:w-full sm:[&>*]:w-auto">{filters}</div>
         <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end [&>*]:w-full sm:[&>*]:w-auto">{actions}</div>
       </div>

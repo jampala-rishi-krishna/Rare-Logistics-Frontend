@@ -24,9 +24,15 @@ import { FilterField, Toolbar, buttonClass, dangerButtonClass, inputClass, prima
 import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFromPage, sessionAcknowledgedIds, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
 import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
 import type { QueryClient } from "@tanstack/react-query";
+import { OrderTypeBadge } from "./OrderTypeBadge";
+import { OrderTypeSwitch, TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
+import TransferOrdersTab, { TRANSFER_ORDERS_KEY } from "./TransferOrdersTab";
+import ConfirmedEmailDialog from "./ConfirmedEmailDialog";
+import { describeCounts, orderTypesParam, countByType, type TypeFilter } from "@/lib/orderMerge";
+import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
 
 // Query-key prefixes. The Inventory list's key carries its scope ("inventory" | "assigned"), so
-// the Inventory and Confirmed SO tabs can never share a cache entry.
+// the Inventory and Confirmed Orders tabs can never share a cache entry.
 const INVENTORY_LIST_KEY = "inventory-sales-orders";
 const LOAD_PLANNING_LIST_KEY = "load-planning-unassigned";
 
@@ -46,6 +52,9 @@ function refetchOrderLists(client: QueryClient, ids: string[]) {
   return Promise.all([
     client.invalidateQueries({ queryKey: [INVENTORY_LIST_KEY] }),
     client.invalidateQueries({ queryKey: [LOAD_PLANNING_LIST_KEY] }),
+    client.invalidateQueries({ queryKey: [TRANSFER_ORDERS_KEY] }),
+    client.invalidateQueries({ queryKey: ["dispatch-dashboard"] }),
+    client.invalidateQueries({ queryKey: ["orders"] }),
     ...ids.map((id) => client.invalidateQueries({ queryKey: ["inventory-sales-order", id] })),
   ]);
 }
@@ -307,194 +316,32 @@ type FlatRow = {
   city: string;
 };
 
-function SendToEmailModal({
-  context,
-  onClose,
+/** Inventory tab: SO | PO (coming soon) | TO switch. Confirmed Orders (assignmentScope) has no switch. */
+export default function LoadPlanningInventoryTab({
+  assignmentScope,
 }: {
-  context: inventoryApi.EmailFilterContext;
-  onClose: () => void;
+  assignmentScope?: "assigned";
 }) {
-  const [to, setTo] = useState("");
-  const [subject, setSubject] = useState("Sales Orders");
-  const [htmlBody, setHtmlBody] = useState("");
-  const [loadingDraft, setLoadingDraft] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-  const [sent, setSent] = useState(false);
-  useEffect(() => {
-    let active = true;
-    inventoryApi
-      .createSalesOrderEmailDraft(context)
-      .then((draft) => {
-        if (!active) return;
-        setSubject(draft.subject);
-        setHtmlBody(draft.htmlBody);
-      })
-      .catch((reason: any) => {
-        if (active)
-          setError(reason?.message || "Could not prepare the email draft.");
-      })
-      .finally(() => {
-        if (active) setLoadingDraft(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [context]);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-  const send = async () => {
-    if (!to.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
-      setError("Enter a valid recipient email address.");
-      return;
-    }
-    if (!subject.trim() || !htmlBody.trim()) {
-      setError("Subject and email body are required.");
-      return;
-    }
-    setError("");
-    setSending(true);
-    try {
-      await inventoryApi.sendSalesOrderEmail({
-        ...context,
-        to: to.trim(),
-        subject: subject.trim(),
-        htmlBody,
-      });
-      setSent(true);
-      window.setTimeout(onClose, 1200);
-    } catch (reason: any) {
-      setError(reason?.message || "The email could not be sent.");
-    } finally {
-      setSending(false);
-    }
-  };
+  const [kind, setKind] = useState<InventoryOrderKind>("SO");
+  if (assignmentScope) return <SalesOrdersView assignmentScope={assignmentScope} />;
   return (
-    <div
-      className="fixed inset-0 z-[60] grid place-items-center bg-black/30 p-4"
-      onClick={onClose}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="send-email-title"
-        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border border-[#e4e3df] bg-[#fafaf8] shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between border-b border-[#0b0b0b] bg-[#0b0b0b] px-6 py-5">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#a1a1a1]">
-              Load Planning
-            </div>
-            <h2
-              id="send-email-title"
-              className="mt-1 text-2xl font-bold text-white"
-            >
-              Send sales orders by email
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close email dialog"
-            className="p-1 text-white hover:text-[#d9d9d9]"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="grid gap-4 px-6 py-5">
-          <label className="grid gap-1 text-sm font-semibold text-[#0b0b0b]">
-            Recipient email
-            <input
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-              type="email"
-              placeholder="recipient@company.com"
-              className="border border-[#d8d7d2] px-3 py-2.5 font-normal outline-none focus:border-[#0b0b0b]"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-semibold text-[#0b0b0b]">
-            Subject
-            <input
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              className="border border-[#d8d7d2] px-3 py-2.5 font-normal outline-none focus:border-[#0b0b0b]"
-            />
-          </label>
-          <div className="grid gap-1 text-sm font-semibold text-[#1B2419]">
-            <span>Email body</span>
-            {loadingDraft ? (
-              <div className="min-h-52 animate-pulse border border-[#d8d7d2] bg-[#f2f2ef] p-4 text-sm font-normal text-[#1e7b44]">
-                Writing a polished email draft...
-              </div>
-            ) : (
-              <div
-                contentEditable
-                suppressContentEditableWarning
-                dangerouslySetInnerHTML={{ __html: htmlBody }}
-                onInput={(event) => setHtmlBody(event.currentTarget.innerHTML)}
-                aria-label="Email body HTML"
-                role="textbox"
-                className="min-h-52 border border-[#d8d7d2] bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-[#0b0b0b]"
-              />
-            )}
-          </div>
-          <div className="border border-[#e4e3df] bg-[#f2f2ef] px-4 py-3 text-sm text-[#0b0b0b]">
-            <div className="font-semibold">Attachments</div>
-            <div className="mt-1 text-[#1e7b44]">
-              SalesOrders.pdf, SalesOrders.xlsx
-            </div>
-          </div>
-          {error && (
-            <div
-              role="alert"
-              className="border border-[#86000B]/30 bg-[#fff4f4] px-4 py-3 text-sm text-[#86000B]"
-            >
-              {error}
-            </div>
-          )}
-          {sent && (
-            <div className="border border-[#33673B]/30 bg-[#f1f8f2] px-4 py-3 text-sm text-[#33673B]">
-              Email sent successfully.
-            </div>
-          )}
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={onClose}
-              className="border border-[#d8d7d2] px-4 py-2 text-sm text-[#0b0b0b]"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={send}
-              disabled={sending || loadingDraft || sent}
-              className="inline-flex items-center gap-2 bg-[#0b0b0b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {sending ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <Send size={15} />
-              )}{" "}
-              {sending ? "Sending..." : "Resend"}
-            </button>
-          </div>
-        </div>
-      </section>
+    <div className="grid gap-3">
+      <OrderTypeSwitch value={kind} onChange={setKind} />
+      {kind === "TO" ? <TransferOrdersTab /> : <SalesOrdersView />}
     </div>
   );
 }
 
-export default function LoadPlanningInventoryTab({
+function SalesOrdersView({
   assignmentScope,
 }: {
   assignmentScope?: "assigned";
 }) {
   const [, navigate] = useLocation();
   const [emailOpen, setEmailOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [confirmUnassign, setConfirmUnassign] = useState(false);
+  const [bulkUnassigning, setBulkUnassigning] = useState(false);
   const initial = tomorrowPht();
   const [from, setFrom] = useState(initial);
   const [to, setTo] = useState(initial);
@@ -511,7 +358,7 @@ export default function LoadPlanningInventoryTab({
   const [page, setPage] = useState(1);
   const [ackErrors, setAckErrors] = useState<Record<string, string>>({});
   const [ackGuardVersion, setAckGuardVersion] = useState(0);
-  // KPI / Spreadsheet view (Confirmed SO only). Pure local state: it is not part of any query
+  // KPI / Spreadsheet view (Confirmed Orders only). Pure local state: it is not part of any query
   // key, so switching views never refetches.
   const [viewMode, setViewModeState] = useState<ViewMode>(() => readViewMode());
   const [cardPage, setCardPage] = useState(1);
@@ -548,7 +395,7 @@ export default function LoadPlanningInventoryTab({
     ...(assignmentScope ? [180, 220, 80] : []),
   ];
   const orders = useQuery({
-    queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query, selectedBranches.join(",")],
+    queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query, selectedBranches.join(","), assignmentScope ? orderTypesParam(typeFilter) : ""],
     queryFn: () =>
       inventoryApi.listSalesOrders(
         from,
@@ -558,7 +405,7 @@ export default function LoadPlanningInventoryTab({
         query,
         assignmentScope,
         [],
-        { branches: selectedBranches },
+        { branches: selectedBranches, orderTypes: assignmentScope ? orderTypesParam(typeFilter) : undefined },
       ),
     retry: false,
     staleTime: 0,
@@ -573,6 +420,7 @@ export default function LoadPlanningInventoryTab({
     () =>
       (orders.data?.items ?? [])
         .filter((order) => assignmentScope || !guardedAcknowledged.has(String(order.id)))
+        .filter((order) => !assignmentScope || typeFilter === "all" || orderTypeOfRow(order) === typeFilter)
         .filter(
           (order) =>
             (orderStatus === "All" &&
@@ -622,7 +470,7 @@ export default function LoadPlanningInventoryTab({
             };
           });
         }),
-    [orders.data, orderStatus, query, assignmentScope, guardedAcknowledged],
+    [orders.data, orderStatus, query, assignmentScope, guardedAcknowledged, typeFilter],
   );
   const guardedInventoryCount = !assignmentScope
     ? (orders.data?.items ?? []).filter((order) => guardedAcknowledged.has(String(order.id))).length
@@ -725,15 +573,40 @@ export default function LoadPlanningInventoryTab({
     try {
       await inventoryApi.unassignSalesOrder(order.id);
       setSyncMessage(`Unassigned ${order.salesorder_number ?? order.id}.`);
-      await client.invalidateQueries({ queryKey: [INVENTORY_LIST_KEY] });
+      await refetchOrderLists(client, [order.id]);
     } catch (error: any) {
       setSyncMessage(error?.message || "The sales order could not be unassigned.");
+    }
+  };
+  const selectedCounts = useMemo(() => {
+    const picked = new Set(selectedOrderIds);
+    return countByType((orders.data?.items ?? []).filter((order) => picked.has(String(order.id))));
+  }, [selectedOrderIds, orders.data]);
+  const bulkUnassign = async () => {
+    setBulkUnassigning(true);
+    setSyncMessage("");
+    try {
+      const result = await inventoryApi.bulkUnassignOrders(selectedOrderIds);
+      setConfirmUnassign(false);
+      setSelectedOrderIds([]);
+      const skipped = result.skipped?.length ? ` ${result.skipped.length} skipped.` : "";
+      setSyncMessage(`Unassigned ${result.count} order${result.count === 1 ? "" : "s"} (${describeCounts(result.count_by_type ?? {}) || "none"}).${skipped}`);
+      await refetchOrderLists(client, result.unassigned ?? []);
+    } catch (error: any) {
+      setConfirmUnassign(false);
+      setSyncMessage(error?.message || "The selected orders could not be unassigned.");
+    } finally {
+      setBulkUnassigning(false);
     }
   };
   useEffect(() => {
     setPage(1);
     setCardPage(1);
-  }, [from, to, orderStatus, query, selectedBranches]);
+  }, [from, to, orderStatus, query, selectedBranches, typeFilter]);
+  // Transfer orders have no Zoho sales-order drawer (and no Acknowledge): only SO rows open it.
+  const openOrder = (order: inventoryApi.SalesOrderSummary) => {
+    if (orderTypeOfRow(order) === "SO") setSelected(order);
+  };
   const download = async (format: "pdf" | "excel") => {
     setExportOpen(false);
     const result = await inventoryApi.downloadSalesOrders(
@@ -744,6 +617,7 @@ export default function LoadPlanningInventoryTab({
       query,
       assignmentScope,
       selectedBranches,
+      assignmentScope ? orderTypesParam(typeFilter) : undefined,
     );
     const url = URL.createObjectURL(result.blob);
     const link = document.createElement("a");
@@ -755,6 +629,7 @@ export default function LoadPlanningInventoryTab({
   return (
     <div className="load-planning-panel min-w-0 border border-[#e4e3df] bg-white">
       <Toolbar
+        singleRow={!assignmentScope}
         count={orderCount}
         toggle={assignmentScope ? <ViewModeToggle mode={viewMode} onChange={setViewMode} /> : undefined}
         filters={
@@ -764,8 +639,8 @@ export default function LoadPlanningInventoryTab({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search sales orders"
-                aria-label="Search sales orders"
+                placeholder={assignmentScope ? "Search orders" : "Search sales orders"}
+                aria-label="Search orders"
                 className={`${inputClass} w-full pl-9 pr-3`}
               />
             </div>
@@ -785,45 +660,48 @@ export default function LoadPlanningInventoryTab({
               </select>
             </FilterField>
             <BranchFilter options={branchOptions} selected={selectedBranches} counts={orders.data?.branch_counts} onChange={setSelectedBranches} />
+            {assignmentScope && <TypeFilterSelect value={typeFilter} onChange={setTypeFilter} />}
           </>
         }
         actions={
-          <>
-            <div className="relative">
-              <button onClick={() => setExportOpen(!exportOpen)} className={`${buttonClass} w-full`}>
-                <Download size={14} /> Export
+          assignmentScope ? (
+            <>
+              <div className="relative">
+                <button onClick={() => setExportOpen(!exportOpen)} className={`${buttonClass} w-full`}>
+                  <Download size={14} /> Export
+                </button>
+                {exportOpen && (
+                  <div className="absolute right-0 top-full z-10 mt-1 grid w-40 border border-[#d8d7d2] bg-white p-1 shadow-lg">
+                    <button onClick={() => download("pdf")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
+                      Export as PDF
+                    </button>
+                    <button onClick={() => download("excel")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
+                      Export as Excel
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setEmailOpen(true)} disabled={!visibleOrderIds.length} className={dangerButtonClass} data-testid="confirmed-email-button">
+                <Mail size={14} /> Email
               </button>
-              {exportOpen && (
-                <div className="absolute right-0 top-full z-10 mt-1 grid w-40 border border-[#d8d7d2] bg-white p-1 shadow-lg">
-                  <button onClick={() => download("pdf")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
-                    Export as PDF
-                  </button>
-                  <button onClick={() => download("excel")} className="px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]">
-                    Export as Excel
-                  </button>
-                  <button
-                    onClick={() => {
-                      setExportOpen(false);
-                      setEmailOpen(true);
-                    }}
-                    className="inline-flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#f2f2ef]"
-                  >
-                    <Mail size={14} /> Send to Email
-                  </button>
-                </div>
-              )}
-            </div>
-            <button onClick={() => setEmailOpen(true)} className={dangerButtonClass}>
-              <Mail size={14} /> Send to Email
-            </button>
-            <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass}>
-              {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
-              {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
-            </button>
-            <button onClick={refresh} disabled={syncing} className={primaryButtonClass}>
-              {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
-            </button>
-          </>
+              <button onClick={() => setConfirmUnassign(true)} disabled={bulkUnassigning || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
+                {bulkUnassigning ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Unassign selected ({selectedOrderIds.length})
+              </button>
+              <button onClick={refresh} disabled={syncing} className={primaryButtonClass}>
+                {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass}>
+                {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
+                {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
+              </button>
+              <button onClick={refresh} disabled={syncing} className={primaryButtonClass}>
+                {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
+              </button>
+            </>
+          )
         }
       />
       {syncMessage && (
@@ -865,7 +743,7 @@ export default function LoadPlanningInventoryTab({
             errors={ackErrors}
             showAssignment
             onToggle={toggleOrder}
-            onOpen={setSelected}
+            onOpen={openOrder}
             onEdit={(order) => navigate(`/app/routes?assign=${encodeURIComponent(order.id)}`)}
             onUnassign={(order) => void unassign(order)}
           />
@@ -883,7 +761,7 @@ export default function LoadPlanningInventoryTab({
         </>
       ) : (
         <>
-          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, lineIndex, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); const product = lineProduct(order, item, lineIndex); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => setSelected(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs text-[#77787b]">{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{lineProductName(product, item)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{lineWeightLabel(product, orders.data?.stock_pending)}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
+          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, lineIndex, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); const product = lineProduct(order, item, lineIndex); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => openOrder(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{assignmentScope && <span className="mr-1.5"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{lineProductName(product, item)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{lineWeightLabel(product, orders.data?.stock_pending)}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
             <table className="w-full min-w-[2200px] table-fixed text-left text-xs">
               <colgroup>
                 {columnWidths.map((width, index) => (
@@ -898,7 +776,7 @@ export default function LoadPlanningInventoryTab({
                   {[
                     "Select",
                     "Expected Shipment Date",
-                    "Sales Order#",
+                    assignmentScope ? "Order#" : "Sales Order#",
                     "Customer Name",
                     "Products",
                     "Packs / Cases",
@@ -939,7 +817,7 @@ export default function LoadPlanningInventoryTab({
                     return (
                       <tr
                         key={`${order.id}-${item.line_item_id ?? index}`}
-                        onClick={() => setSelected(order)}
+                        onClick={() => openOrder(order)}
                         className="cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8]"
                       >
                         <td className="sticky left-0 z-[2] bg-white px-3 py-4 align-top"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={(event) => { event.stopPropagation(); toggleOrder(String(order.id)); }} onClick={(event) => event.stopPropagation()} /></td>
@@ -947,7 +825,7 @@ export default function LoadPlanningInventoryTab({
                           {dateLabel(order.expected_shipment_date)}
                         </td>
                         <td className="sticky left-[120px] z-[1] bg-white px-3 py-4 align-top font-semibold">
-                          <div>{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
+                          <div style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{assignmentScope && <span className="mr-1.5 align-middle"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
                           {ackErrors[String(order.id)] && <div className="mt-1 text-[10px] font-normal text-[#a32720]">{ackErrors[String(order.id)]}</div>}
                           {order.zoho_lock?.is_locked && (
                             <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal text-[#1e7b44]" title={[order.zoho_lock.config_name, order.zoho_lock.locked_by, order.zoho_lock.lock_time].filter(Boolean).join(" - ")}>
@@ -1090,18 +968,34 @@ export default function LoadPlanningInventoryTab({
           onClose={() => setSelected(null)}
         />
       )}
-      {emailOpen && (
-        <SendToEmailModal
-          context={{
-            date_from: from,
-            date_to: to,
-            status: apiOrderStatus,
-            search: query,
-            assignment: assignmentScope,
-            branches: selectedBranches.join(",") || undefined,
-          }}
+      {emailOpen && assignmentScope && (
+        <ConfirmedEmailDialog
+          orderIds={selectedOrderIds.length ? selectedOrderIds : visibleOrderIds}
+          dateFrom={from}
+          dateTo={to}
           onClose={() => setEmailOpen(false)}
         />
+      )}
+      {confirmUnassign && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 p-4" onClick={() => !bulkUnassigning && setConfirmUnassign(false)}>
+          <section role="alertdialog" aria-modal="true" aria-labelledby="bulk-unassign-title" className="w-full max-w-md border border-[#e4e3df] bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()} data-testid="bulk-unassign-dialog">
+            <h2 id="bulk-unassign-title" className="text-lg font-bold">
+              Unassign {selectedOrderIds.length} order{selectedOrderIds.length === 1 ? "" : "s"}?
+            </h2>
+            <p className="mt-2 text-sm text-[#55565a]" data-testid="bulk-unassign-counts">
+              {describeCounts(selectedCounts) || `${selectedOrderIds.length} orders`}
+            </p>
+            <p className="mt-2 text-xs text-[#77787b]">They return to the Load Planning list and the assignment emails for their trucks are reset.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmUnassign(false)} disabled={bulkUnassigning} className={buttonClass}>
+                Cancel
+              </button>
+              <button type="button" onClick={bulkUnassign} disabled={bulkUnassigning} className={dangerButtonClass}>
+                {bulkUnassigning && <Loader2 size={14} className="animate-spin" />} Unassign
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { useQuery } from "@tanstack/react-query";
 import * as overviewApi from "@/services/api/overview";
 import { HARD_COPY_TONE, sortHardCopies } from "@/lib/overviewView";
@@ -62,7 +63,7 @@ export default function HandoverTab({ filter }: { filter: TopFilter }) {
             <tbody>
               {rows.map((r, i) => (
                 <tr key={`${r.batch_id}-${r.so_number}-${i}`} className="border-b border-[#efeeeb]">
-                  <td className={`${cell} font-mono`}>{r.so_number}</td>
+                  <td className={`${cell} font-mono`}><OrderTypeBadge type={r.order_type} className="mr-1.5 align-middle" />{r.so_number}</td>
                   <td className={`${cell} font-mono font-semibold`}>{r.invoice_no ?? "—"}</td>
                   <td className={cell}>{r.customer_name}</td>
                   <td className={cell}>

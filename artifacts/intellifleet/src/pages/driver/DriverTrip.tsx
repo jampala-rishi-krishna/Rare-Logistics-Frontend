@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import type { ReactNode } from "react";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, RefreshCw } from "lucide-react";
@@ -54,6 +55,7 @@ function OrderTimeline({ order }: { order: TimelineOrder }) {
     <article className={`border bg-white p-4 ${issues.length ? "border-[#e6b4b7]" : "border-[#e4e3df]"}`} data-testid={`driver-timeline-${order.so_number}`}>
       <div className="font-mono text-xs font-semibold text-[#77787b]">
         {stop ? `Stop ${stop.sequence} · ` : ""}
+        <OrderTypeBadge type={order.order_type} className="mr-1.5 align-middle" />
         {order.so_number}
       </div>
       <h2 className="break-words text-base font-bold leading-snug">{order.customer_name}</h2>

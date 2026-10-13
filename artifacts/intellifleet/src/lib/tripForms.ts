@@ -3,6 +3,7 @@
 // Mirrors the server rules in docs/TRIP_WORKFLOW.md so the app rejects bad input before sending.
 import type { AckAnswer, DriverOrder, HandoverItemInput, TemplateItem } from "./tripTypes.ts";
 import type { QueueBlob } from "./offlineQueue.ts";
+import { requiresInvoice } from "./orderType.ts";
 
 export interface FileValue {
   blob: Blob;
@@ -122,6 +123,12 @@ export interface InitialForm {
 }
 
 export const INVOICE_KEY = "invoice_dr_number";
+
+// Transfer / purchase order stops need no invoice/DR number (the TO#/PO# is the reference): drop that item from the form.
+// A missing order_type means a sales order, which still requires it.
+export function checkoutItemsForOrder(items: TemplateItem[], orderType: unknown): TemplateItem[] {
+  return requiresInvoice(orderType) ? items : items.filter((item) => item.key !== INVOICE_KEY);
+}
 
 export function initialCheckoutForm(items: TemplateItem[], order: Pick<DriverOrder, "checkout_prefill" | "invoice_hint"> | null): InitialForm {
   const values: FormValues = {};

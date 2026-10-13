@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { useQuery } from "@tanstack/react-query";
 import { Camera, MapPin } from "lucide-react";
 import * as overviewApi from "@/services/api/overview";
@@ -75,6 +76,7 @@ function OrderTimeline({ order }: { order: overviewApi.TimelineOrder }) {
         <div className="min-w-0">
           <div className="font-mono text-xs text-[#77787b]">
             {stop?.sequence ? `Stop ${stop.sequence} · ` : ""}
+            <OrderTypeBadge type={order.order_type} className="mr-1.5 align-middle" />
             {order.so_number}
             {out?.invoice_no ? ` · Invoice/DR ${out.invoice_no}` : ""}
           </div>
