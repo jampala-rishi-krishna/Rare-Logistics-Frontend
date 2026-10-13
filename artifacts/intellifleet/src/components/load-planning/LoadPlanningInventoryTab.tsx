@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -20,7 +20,7 @@ import { lineProduct, lineProductName, lineStock } from "@/lib/loadPlanningLines
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { SalesOrderCardGrid, ViewModeToggle } from "./SalesOrderCardGrid";
 import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
-import { FilterField, Toolbar, buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
+import { EmptyState, FilterField, ListError, Toolbar, buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFromPage, sessionAcknowledgedIds, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
 import { readViewMode, uniqueOrders, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
 import type { QueryClient } from "@tanstack/react-query";
@@ -506,7 +506,10 @@ function SalesOrdersView({
       }
     }
   };
+  const syncingRef = useRef(false);
   const refresh = async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSyncMessage("");
     setSyncing(true);
     try {
@@ -522,6 +525,7 @@ function SalesOrdersView({
         error?.message || "Zoho Inventory could not be refreshed.",
       );
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
   };
@@ -629,29 +633,32 @@ function SalesOrdersView({
   return (
     <div className="load-planning-panel min-w-0 border border-[#e4e3df] bg-white">
       <Toolbar
-        singleRow={!assignmentScope}
+        title={assignmentScope ? "Confirmed Orders" : "Sales Orders"}
         count={orderCount}
+        selectedCount={selectedOrderIds.length}
         toggle={assignmentScope ? <ViewModeToggle mode={viewMode} onChange={setViewMode} /> : undefined}
         filters={
           <>
-            <div className="relative min-w-0 sm:min-w-[220px] sm:flex-1 sm:basis-[220px]">
-              <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={assignmentScope ? "Search orders" : "Search sales orders"}
-                aria-label="Search orders"
-                className={`${inputClass} w-full pl-9 pr-3`}
-              />
-            </div>
+            <FilterField label="Search">
+              <div className="relative min-w-0">
+                <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={assignmentScope ? "Search orders" : "Search sales orders"}
+                  aria-label="Search orders"
+                  className={`${inputClass} w-full pl-9 pr-3`}
+                />
+              </div>
+            </FilterField>
             <FilterField label="From">
-              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
             <FilterField label="To">
-              <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+              <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
             <FilterField label="Order status">
-              <select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`}>
+              <select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} className={`${inputClass} w-full`}>
                 <option>All</option>
                 <option>Draft</option>
                 <option>Confirmed</option>
@@ -659,6 +666,10 @@ function SalesOrdersView({
                 <option>Void</option>
               </select>
             </FilterField>
+          </>
+        }
+        secondary={
+          <>
             <BranchFilter options={branchOptions} selected={selectedBranches} counts={orders.data?.branch_counts} onChange={setSelectedBranches} />
             {assignmentScope && <TypeFilterSelect value={typeFilter} onChange={setTypeFilter} />}
           </>
@@ -693,12 +704,12 @@ function SalesOrdersView({
             </>
           ) : (
             <>
-              <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass}>
+              <button onClick={refresh} disabled={syncing} className={buttonClass} data-testid="inventory-refresh">
+                {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
+              </button>
+              <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass} data-testid="acknowledge-selected">
                 {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
                 {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
-              </button>
-              <button onClick={refresh} disabled={syncing} className={primaryButtonClass}>
-                {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
               </button>
             </>
           )
@@ -711,9 +722,7 @@ function SalesOrdersView({
         </div>
       )}
       {orders.isError ? (
-        <div className="p-10 text-center text-sm text-[#a32720]">
-          {(orders.error as Error).message}
-        </div>
+        <ListError message={(orders.error as Error).message} />
       ) : orders.isLoading || syncing ? (
         <div
           className="overflow-hidden p-4"
@@ -730,9 +739,10 @@ function SalesOrdersView({
           </div>
         </div>
       ) : rows.length === 0 ? (
-        <div className="p-12 text-center text-sm text-[#77787b]">
-          No orders for this filter. Click Refresh to sync Zoho.
-        </div>
+        <EmptyState
+          title="No orders found"
+          hint={query || orderStatus !== "All" || selectedBranches.length || typeFilter !== "all" ? "Nothing matches these filters. Try widening the dates or clearing a filter." : "No orders in this date range. Click Refresh to sync Zoho."}
+        />
       ) : cardsView ? (
         <>
           <SalesOrderCardGrid

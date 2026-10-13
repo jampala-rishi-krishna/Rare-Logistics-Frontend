@@ -4,7 +4,7 @@ import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { OrderTypeBadge } from "./OrderTypeBadge";
-import { FilterField, Toolbar, inputClass, primaryButtonClass } from "./ToolbarControls";
+import { EmptyState, FilterField, ListError, Toolbar, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { lastRefreshedLabel } from "@/lib/orderMerge";
 import { ORDER_TYPE_STYLE } from "@/lib/orderType";
 
@@ -76,9 +76,9 @@ export default function TransferOrdersTab() {
   return (
     <div className="load-planning-panel min-w-0 border border-[#e4e3df] bg-white" data-testid="transfer-orders-tab">
       <Toolbar
-        singleRow
+        title="Transfer Orders"
         count={orders.data?.total ?? 0}
-        noun="transfer orders"
+        noun="orders"
         meta={
           <>
             <span data-testid="to-total-weight" className="inline-flex items-center gap-1.5 text-[13px] text-[#77787b]" title={complete ? "Total weight of the listed transfer orders" : "Some line weights are still unknown, so the real total is higher"}>
@@ -91,36 +91,40 @@ export default function TransferOrdersTab() {
                 <span className="mono font-semibold text-black">{weightText}</span>
               )}
             </span>
-            {refreshedAt && (
-              <span data-testid="to-last-refreshed" className="text-[13px] text-[#77787b]">
-                Last refreshed <span className="mono font-semibold text-black">{refreshedAt}</span>
-              </span>
-            )}
           </>
         }
         filters={
           <>
-            <div className="relative min-w-0 sm:min-w-[220px] sm:flex-1 sm:basis-[220px]">
-              <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search transfer orders" aria-label="Search transfer orders" className={`${inputClass} w-full pl-9 pr-3`} />
-            </div>
+            <FilterField label="Search">
+              <div className="relative min-w-0">
+                <Search size={15} className="pointer-events-none absolute left-3 top-[10px] text-[#77787b]" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search transfer orders" aria-label="Search transfer orders" className={`${inputClass} w-full pl-9 pr-3`} />
+              </div>
+            </FilterField>
             <FilterField label="From">
-              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
             <FilterField label="To">
-              <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full sm:w-[150px]`} />
+              <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
           </>
         }
         actions={
-          <button type="button" onClick={() => hardRefresh.mutate()} disabled={hardRefresh.isPending} className={primaryButtonClass} data-testid="to-hard-refresh">
-            {hardRefresh.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {hardRefresh.isPending ? "Refreshing..." : "Hard refresh"}
-          </button>
+          <>
+            {refreshedAt && (
+              <span data-testid="to-last-refreshed" className="text-xs text-[#77787b]">
+                Last refreshed <span className="mono font-semibold text-black">{refreshedAt}</span>
+              </span>
+            )}
+            <button type="button" onClick={() => hardRefresh.mutate()} disabled={hardRefresh.isPending} className={primaryButtonClass} data-testid="to-hard-refresh">
+              {hardRefresh.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {hardRefresh.isPending ? "Refreshing..." : "Hard refresh"}
+            </button>
+          </>
         }
       />
       {message && <div className="border-b border-[#cddfd2] bg-[#edf6f0] px-4 py-2 text-xs text-[#1e7b44]">{message}</div>}
       {orders.isError ? (
-        <div className="p-10 text-center text-sm text-[#a32720]">{(orders.error as Error).message}</div>
+        <ListError message={(orders.error as Error).message} />
       ) : orders.isLoading ? (
         <div className="grid gap-2 p-4" aria-label="Loading transfer orders">
           {[1, 2, 3, 4, 5].map((row) => (
@@ -128,7 +132,7 @@ export default function TransferOrdersTab() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="p-12 text-center text-sm text-[#77787b]">No transfer orders for this filter. Click Hard refresh to re-read Zoho.</div>
+        <EmptyState title="No orders found" hint={query ? "No transfer orders match this search. Try widening the dates." : "No transfer orders in this date range. Click Hard refresh to re-read Zoho."} />
       ) : (
         <>
           <div className="grid gap-3 p-3 md:hidden">

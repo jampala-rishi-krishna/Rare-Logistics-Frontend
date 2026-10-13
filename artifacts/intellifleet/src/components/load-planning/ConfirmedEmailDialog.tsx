@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Eye, Loader2, Send, X } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, RefreshCw, Send, X } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
 import { canSendEmail, parseRecipients, removeRecipient } from "@/lib/recipients";
 import { describeCounts } from "@/lib/orderMerge";
@@ -9,10 +9,6 @@ type Warehouse = "mets" | "glacier";
 type SendState = "idle" | "queued" | "sent" | "failed";
 
 const WAREHOUSE_LABEL: Record<Warehouse, string> = { mets: "Mets", glacier: "Glacier" };
-
-function escapeHtml(text: string) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 function base64ToBlobUrl(base64: string, type: string) {
   const binary = atob(base64);
@@ -90,7 +86,11 @@ export default function ConfirmedEmailDialog({ orderIds, dateFrom, dateTo, onClo
   const [to, setTo] = useState<string[]>([]);
   const [cc, setCc] = useState<string[]>([]);
   const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  const [draft, setDraft] = useState<inventoryApi.EmailDraft | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState("");
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const draftRequest = useRef(0);
   const [preview, setPreview] = useState<inventoryApi.ConfirmedEmailPreview | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -98,26 +98,43 @@ export default function ConfirmedEmailDialog({ orderIds, dateFrom, dateTo, onClo
   const [error, setError] = useState("");
   const subjectTouched = useRef(false);
 
-  // Default subject / body follow the warehouse + date range until the user edits them.
-  useEffect(() => {
-    if (!warehouse || subjectTouched.current) return;
-    const range = dateFrom === dateTo ? dateFrom : `${dateFrom} to ${dateTo}`;
-    setSubject(`Confirmed orders for ${WAREHOUSE_LABEL[warehouse]} - ${range}`);
-    setBody(`Hello,\n\nPlease find attached the confirmed orders (Sales Orders and Transfer Orders) for ${WAREHOUSE_LABEL[warehouse]} for ${range}.\n\nThank you.`);
-  }, [warehouse, dateFrom, dateTo]);
+  // The body is the fixed RareChain HTML template from the backend draft endpoint (same one the old email flow used).
+  const loadDraft = async (target: Warehouse) => {
+    const request = ++draftRequest.current;
+    setDraft(null);
+    setDraftError("");
+    setDraftLoading(true);
+    try {
+      const result = await inventoryApi.createSalesOrderEmailDraft({ date_from: dateFrom, date_to: dateTo, status: "All", search: "", order_ids: orderIds, assignment: "assigned" });
+      if (request !== draftRequest.current) return;
+      setDraft(result);
+      if (!subjectTouched.current) setSubject(`${result.subject} - ${WAREHOUSE_LABEL[target]}`);
+    } catch (reason: any) {
+      if (request !== draftRequest.current) return;
+      setDraftError(reason?.message || "Could not load the email draft.");
+    } finally {
+      if (request === draftRequest.current) setDraftLoading(false);
+    }
+  };
 
+  // Esc closes only the top-most layer: the attachment popup first, then the email dialog.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && sendState !== "queued") onClose();
+      if (event.key !== "Escape") return;
+      if (attachmentsOpen) setAttachmentsOpen(false);
+      else if (sendState !== "queued") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, sendState]);
+  }, [onClose, sendState, attachmentsOpen]);
 
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
 
   const chooseWarehouse = (next: Warehouse) => {
+    if (next === warehouse) return;
     setWarehouse(next);
+    setAttachmentsOpen(false);
+    void loadDraft(next);
     // A different warehouse means different lines: the old preview no longer applies.
     setPreview(null);
     setPdfUrl(null);
@@ -125,8 +142,10 @@ export default function ConfirmedEmailDialog({ orderIds, dateFrom, dateTo, onClo
     setError("");
   };
 
-  const loadPreview = async () => {
+  const openAttachments = async () => {
     if (!warehouse) return;
+    setAttachmentsOpen(true);
+    if (preview) return;
     setPreviewing(true);
     setError("");
     setSendState("idle");
@@ -143,14 +162,13 @@ export default function ConfirmedEmailDialog({ orderIds, dateFrom, dateTo, onClo
     }
   };
 
-  const ready = canSendEmail(warehouse, to) && Boolean(subject.trim()) && Boolean(preview);
+  const ready = canSendEmail(warehouse, to) && Boolean(subject.trim()) && Boolean(preview) && Boolean(draft);
   const send = async () => {
-    if (!warehouse || !ready) return;
+    if (!warehouse || !ready || !draft) return;
     setError("");
     setSendState("queued");
     try {
-      const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">${escapeHtml(body).replace(/\n/g, "<br>")}</div>`;
-      const result = await inventoryApi.sendConfirmedEmail({ warehouse, order_ids: orderIds, to, cc, subject: subject.trim(), html_body: htmlBody, date_from: dateFrom, date_to: dateTo });
+      const result = await inventoryApi.sendConfirmedEmail({ warehouse, order_ids: orderIds, to, cc, subject: subject.trim(), html_body: draft.htmlBody, date_from: dateFrom, date_to: dateTo });
       if (result.success === false || result.status === "failed") throw new Error("The email could not be sent.");
       setSendState("sent");
     } catch (reason: any) {
@@ -196,57 +214,36 @@ export default function ConfirmedEmailDialog({ orderIds, dateFrom, dateTo, onClo
             Subject
             <input value={subject} onChange={(event) => { subjectTouched.current = true; setSubject(event.target.value); }} className={`${inputClass} w-full font-normal`} />
           </label>
-          <label className="grid gap-1 text-sm font-semibold text-[#0b0b0b]">
-            Message
-            <textarea value={body} onChange={(event) => { subjectTouched.current = true; setBody(event.target.value); }} rows={4} className="rounded-[4px] border border-[#d8d7d2] bg-white px-2.5 py-2 text-sm font-normal outline-none focus:border-[#0b0b0b]" />
-          </label>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="button" onClick={loadPreview} disabled={!warehouse || previewing || busy || sendState === "sent"} className={buttonClass}>
-              {previewing ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />} {preview ? "Refresh preview" : "Preview attachments"}
-            </button>
-            <span className="text-xs text-[#77787b]">{orderIds.length} order{orderIds.length === 1 ? "" : "s"} selected. Nothing is sent until you press Send.</span>
+          <div className="grid gap-1 text-sm font-semibold text-[#0b0b0b]">
+            Email body (preview)
+            {!warehouse ? (
+              <div className="border border-dashed border-[#d8d7d2] bg-white px-3 py-6 text-center text-xs font-normal text-[#77787b]">Choose a warehouse to load the email.</div>
+            ) : draftLoading ? (
+              <div className="flex items-center gap-2 border border-[#e4e3df] bg-white px-3 py-6 text-xs font-normal text-[#55565a]" data-testid="email-draft-loading">
+                <Loader2 size={14} className="animate-spin" /> Loading the email...
+              </div>
+            ) : draftError ? (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border border-[#86000B]/30 bg-[#fff4f4] px-3 py-3 text-xs font-normal text-[#86000B]">
+                {draftError}
+                <button type="button" onClick={() => void loadDraft(warehouse)} className={buttonClass}>
+                  <RefreshCw size={14} /> Retry
+                </button>
+              </div>
+            ) : draft ? (
+              <iframe title="Email body preview" sandbox="" srcDoc={draft.htmlBody} data-testid="email-body-preview" className="h-[320px] w-full border border-[#e4e3df] bg-white sm:h-[380px]" />
+            ) : null}
           </div>
 
-          {preview && (
-            <div className="grid gap-3 border border-[#e4e3df] bg-white p-3" data-testid="email-preview">
-              <div className="text-xs text-[#55565a]">
-                {preview.order_count} order{preview.order_count === 1 ? "" : "s"} ({describeCounts(preview.counts_by_type) || "none"}), {preview.line_count} line{preview.line_count === 1 ? "" : "s"} for {WAREHOUSE_LABEL[preview.warehouse]}.
-              </div>
-              <div>
-                <div className="mb-1 text-xs font-semibold">PDF: {preview.pdf_filename}</div>
-                {pdfUrl && <iframe title="PDF preview" src={pdfUrl} className="h-[320px] w-full border border-[#e4e3df] sm:h-[420px]" />}
-              </div>
-              <div>
-                <div className="mb-1 text-xs font-semibold">Excel: {preview.xlsx_filename}</div>
-                <div className="max-h-[260px] overflow-auto border border-[#e4e3df]">
-                  <table className="w-full min-w-max text-left text-[11px]">
-                    <thead className="sticky top-0 bg-[#f7f7f4] text-[10px] uppercase tracking-wide text-[#77787b]">
-                      <tr>
-                        {preview.headers.map((header) => (
-                          <th key={header} className="whitespace-nowrap px-2 py-2 font-semibold">
-                            {header}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewRows.map((row, index) => (
-                        <tr key={index} className="border-t border-[#efeeeb]">
-                          {row.map((cell, cellIndex) => (
-                            <td key={cellIndex} className="whitespace-nowrap px-2 py-1.5">
-                              {cell ?? ""}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {preview.rows.length > previewRows.length && <div className="mt-1 text-[11px] text-[#77787b]">Showing the first {previewRows.length} of {preview.rows.length} rows; the attachment has all of them.</div>}
-              </div>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={openAttachments} disabled={!warehouse || previewing || busy} className={buttonClass} data-testid="preview-attachments">
+              {previewing ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />} Preview attachments
+            </button>
+            <span className="text-xs text-[#77787b]" data-testid="attachment-summary">
+              {preview
+                ? `${preview.pdf_filename} + ${preview.xlsx_filename} attached (${preview.order_count} order${preview.order_count === 1 ? "" : "s"}, ${preview.line_count} line${preview.line_count === 1 ? "" : "s"}).`
+                : `${orderIds.length} order${orderIds.length === 1 ? "" : "s"} selected. Nothing is sent until you press Send.`}
+            </span>
+          </div>
 
           {error && (
             <div role="alert" className="border border-[#86000B]/30 bg-[#fff4f4] px-4 py-3 text-sm text-[#86000B]">
@@ -264,12 +261,85 @@ export default function ConfirmedEmailDialog({ orderIds, dateFrom, dateTo, onClo
             <button type="button" onClick={onClose} disabled={busy} className={buttonClass}>
               {sendState === "sent" ? "Close" : "Cancel"}
             </button>
-            <button type="button" onClick={send} disabled={!ready || busy || sendState === "sent"} className={primaryButtonClass} title={!preview ? "Preview the attachments first" : !to.length ? "Add at least one recipient" : undefined}>
+            <button type="button" onClick={send} disabled={!ready || busy || sendState === "sent"} className={primaryButtonClass} title={!draft ? "Choose a warehouse and wait for the email to load" : !preview ? "Preview the attachments first" : !to.length ? "Add at least one recipient" : undefined}>
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} {busy ? "Sending..." : sendState === "failed" ? "Retry send" : "Send"}
             </button>
           </div>
         </div>
       </section>
+      {attachmentsOpen && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-3 sm:p-4" onClick={(event) => { event.stopPropagation(); setAttachmentsOpen(false); }} data-testid="attachment-popup-backdrop">
+          <section role="dialog" aria-modal="true" aria-labelledby="attachment-popup-title" className="max-h-[92vh] w-full max-w-4xl overflow-y-auto border border-[#e4e3df] bg-[#fafaf8] shadow-2xl" onClick={(event) => event.stopPropagation()} data-testid="attachment-popup">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#e4e3df] bg-white px-4 py-3">
+              <h3 id="attachment-popup-title" className="text-base font-bold">
+                Attachment preview{warehouse ? ` - ${WAREHOUSE_LABEL[warehouse]}` : ""}
+              </h3>
+              <button type="button" onClick={() => setAttachmentsOpen(false)} aria-label="Close attachment preview" className="p-1 hover:text-[#55565a]">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid gap-3 p-4">
+              {previewing && (
+                <div className="flex items-center gap-2 text-sm text-[#55565a]">
+                  <Loader2 size={14} className="animate-spin" /> Building the attachments...
+                </div>
+              )}
+              {!previewing && !preview && error && (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border border-[#86000B]/30 bg-[#fff4f4] px-3 py-3 text-sm text-[#86000B]">
+                  {error}
+                  <button type="button" onClick={() => void openAttachments()} className={buttonClass}>
+                    <RefreshCw size={14} /> Retry
+                  </button>
+                </div>
+              )}
+              {preview && (
+                <div className="grid gap-3" data-testid="email-preview">
+                  <div className="text-xs text-[#55565a]">
+                    {preview.order_count} order{preview.order_count === 1 ? "" : "s"} ({describeCounts(preview.counts_by_type) || "none"}), {preview.line_count} line{preview.line_count === 1 ? "" : "s"} for {WAREHOUSE_LABEL[preview.warehouse]}.
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs font-semibold">PDF: {preview.pdf_filename}</div>
+                    {pdfUrl && <iframe title="PDF preview" src={pdfUrl} className="h-[360px] w-full border border-[#e4e3df] bg-white sm:h-[460px]" />}
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs font-semibold">Excel: {preview.xlsx_filename}</div>
+                    <div className="max-h-[280px] overflow-auto border border-[#e4e3df] bg-white">
+                      <table className="w-full min-w-max text-left text-[11px]">
+                        <thead className="sticky top-0 bg-[#f7f7f4] text-[10px] uppercase tracking-wide text-[#77787b]">
+                          <tr>
+                            {preview.headers.map((header) => (
+                              <th key={header} className="whitespace-nowrap px-2 py-2 font-semibold">
+                                {header}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewRows.map((row, index) => (
+                            <tr key={index} className="border-t border-[#efeeeb]">
+                              {row.map((cell, cellIndex) => (
+                                <td key={cellIndex} className="whitespace-nowrap px-2 py-1.5">
+                                  {cell ?? ""}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {preview.rows.length > previewRows.length && <div className="mt-1 text-[11px] text-[#77787b]">Showing the first {previewRows.length} of {preview.rows.length} rows; the attachment has all of them.</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end border-t border-[#e4e3df] bg-white px-4 py-3">
+              <button type="button" onClick={() => setAttachmentsOpen(false)} className={buttonClass}>
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

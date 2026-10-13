@@ -3,30 +3,40 @@ import type { TypeFilter } from "../../lib/orderMerge";
 
 export type InventoryOrderKind = "SO" | "PO" | "TO";
 
-/** [ SO | PO | TO ] segmented switch at the top of the Inventory tab. PO is postponed: disabled, "Coming soon". */
+export const ORDER_KIND_LABEL: Record<InventoryOrderKind, string> = { SO: "Sales Orders", PO: "Purchase Orders", TO: "Transfer Orders" };
+
+/** One compact connected segmented control: Sales Orders | Purchase Orders | Transfer Orders. PO is postponed: disabled, "Soon". */
 export function OrderTypeSwitch({ value, onChange }: { value: InventoryOrderKind; onChange: (value: InventoryOrderKind) => void }) {
-  const segment = (kind: InventoryOrderKind, label: string, disabled = false) => (
-    <button
-      key={kind}
-      type="button"
-      disabled={disabled}
-      aria-pressed={value === kind}
-      title={disabled ? "Coming soon" : label}
-      data-testid={`order-kind-${kind}`}
-      onClick={() => onChange(kind)}
-      className={`h-full min-w-[72px] whitespace-nowrap px-3 text-xs! font-semibold leading-none! transition-colors ${
-        value === kind ? "bg-[#0b0b0b] text-white" : disabled ? "cursor-not-allowed bg-[#f4f4f1] text-[#a3a39f]" : "bg-white text-[#55565a] hover:bg-[#f2f2ef]"
-      }`}
-    >
-      {label}
-      {disabled && <span className="ml-1.5 text-[9px] font-medium uppercase tracking-wide">Coming soon</span>}
-    </button>
-  );
+  const segment = (kind: InventoryOrderKind, disabled = false) => {
+    const selected = value === kind;
+    const label = ORDER_KIND_LABEL[kind];
+    return (
+      <button
+        key={kind}
+        type="button"
+        aria-pressed={selected}
+        aria-disabled={disabled || undefined}
+        aria-label={label}
+        title={disabled ? "Coming soon" : label}
+        data-testid={`order-kind-${kind}`}
+        onClick={() => {
+          if (!disabled) onChange(kind);
+        }}
+        className={`inline-flex h-full flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-3 text-xs! font-semibold leading-none! transition-colors sm:w-[132px] sm:flex-none ${
+          selected ? "bg-[#0b0b0b] text-white" : disabled ? "cursor-not-allowed bg-white text-[#a3a39f]" : "bg-white text-[#55565a] hover:bg-[#f2f2ef]"
+        }`}
+      >
+        <span className="sm:hidden">{kind}</span>
+        <span className="hidden sm:inline">{label}</span>
+        {disabled && <span className="hidden text-[9px] font-medium uppercase tracking-wide text-[#a3a39f] sm:inline">Soon</span>}
+      </button>
+    );
+  };
   return (
-    <div role="group" aria-label="Order type" className="inline-flex h-8 shrink-0 items-stretch divide-x divide-[#d8d7d2] overflow-hidden rounded-[4px] border border-[#d8d7d2] bg-white" data-testid="order-kind-switch">
-      {segment("SO", "SO")}
-      {segment("PO", "PO", true)}
-      {segment("TO", "TO")}
+    <div role="group" aria-label="Order type" className="inline-flex h-8 w-full shrink-0 items-stretch divide-x divide-[#d8d7d2] overflow-hidden rounded-[4px] border border-[#d8d7d2] bg-white sm:w-fit" data-testid="order-kind-switch">
+      {segment("SO")}
+      {segment("PO", true)}
+      {segment("TO")}
     </div>
   );
 }
