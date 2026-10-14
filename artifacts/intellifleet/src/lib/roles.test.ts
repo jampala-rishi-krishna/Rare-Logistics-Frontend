@@ -46,24 +46,29 @@ test("crew and officers outside their section go home", () => {
   assert.equal(redirectForDisallowedRole("mystery"), "/login");
 });
 
-test("driver overview is for admin, dispatcher, planner only", () => {
+test("driver overview and fleet health are admin only", () => {
   const allowed = SECTION_ROLES.driverOverview as readonly string[];
-  for (const r of ["admin", "dispatcher", "planner"]) assert.ok(allowed.includes(r));
-  for (const r of ["warehouse", "driver", "helper", "client", "logistics_officer"]) assert.ok(!allowed.includes(r));
+  assert.deepEqual(allowed, ["admin"]);
+  for (const r of ["dispatcher", "planner", "warehouse", "driver", "helper", "client", "logistics_officer"]) assert.ok(!allowed.includes(r));
+  assert.deepEqual(SECTION_ROLES.fleetHealth as readonly string[], ["admin"]);
   assert.ok("/app/driver-overview" in NAV_ROLES);
+  assert.ok("/app/fleet-health" in NAV_ROLES);
 });
 
-test("nav filtering hides driver overview from warehouse", () => {
+test("nav filtering hides admin-only operations from non-admin roles", () => {
   const groups = [
-    { label: "Control", items: [["/app/tower", "Tower"]] as const },
+    { label: "Control", items: [["/app/tower", "Tower"], ["/app/fleet-health", "Fleet Health"]] as const },
     { label: "Execution", items: [["/app/orders", "Orders"], ["/app/driver-overview", "Driver Overview"]] as const },
   ];
-  assert.ok(canSeeNavItem("/app/driver-overview", "Dispatcher"));
+  assert.ok(!canSeeNavItem("/app/driver-overview", "Dispatcher"));
   assert.ok(!canSeeNavItem("/app/driver-overview", "warehouse"));
+  assert.ok(!canSeeNavItem("/app/fleet-health", "planner"));
   assert.ok(canSeeNavItem("/app/tower", "warehouse"));
   const wh = filterNavGroups(groups, "warehouse");
+  assert.deepEqual(wh[0].items.map((i) => i[0]), ["/app/tower"]);
   assert.deepEqual(wh[1].items.map((i) => i[0]), ["/app/orders"]);
   const admin = filterNavGroups(groups, "admin");
+  assert.equal(admin[0].items.length, 2);
   assert.equal(admin[1].items.length, 2);
 });
 

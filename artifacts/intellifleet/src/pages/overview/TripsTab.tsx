@@ -47,12 +47,12 @@ export default function TripsTab({ filter }: { filter: TopFilter }) {
       ) : trips.isError ? (
         <ErrorNote error={trips.error} onRetry={() => void trips.refetch()} />
       ) : rows.length === 0 ? (
-        <Empty>No trips in this period.</Empty>
+        <Empty>No trips found for this date range.</Empty>
       ) : (
-        <div className="overflow-x-auto border border-[#e4e3df] bg-white">
+        <div className="overflow-x-auto rounded-[6px] border border-[#e4e3df] bg-white">
           <table className="w-full min-w-[900px] border-collapse" data-testid="trips-table">
             <thead>
-              <tr className="border-b border-[#e4e3df]">
+              <tr className="border-b border-[#e4e3df] bg-[#fafaf8]">
                 {["Date", "Driver", "Vehicle", "Status", "SOs", "Done", "Weight", "Packs", "Outcomes", "Trip length", "Started"].map((h) => (
                   <th key={h} className={head}>
                     {h}
@@ -66,7 +66,7 @@ export default function TripsTab({ filter }: { filter: TopFilter }) {
                 const isOpen = open === t.batch_id;
                 return (
                   <Fragment key={t.batch_id}>
-                    <tr className="cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8]" onClick={() => setOpen(isOpen ? null : t.batch_id)} data-testid={`trip-row-${t.batch_id}`}>
+                    <tr className="h-[54px] cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8]" onClick={() => setOpen(isOpen ? null : t.batch_id)} data-testid={`trip-row-${t.batch_id}`}>
                       <td className={cell}>{t.date}</td>
                       <td className={cell}>
                         <div className="font-semibold">{t.driver_name ?? "-"}</div>

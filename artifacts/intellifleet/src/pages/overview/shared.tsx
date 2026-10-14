@@ -34,7 +34,7 @@ const TONE_CLASS: Record<Tone, string> = {
 };
 
 export function Chip({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={`inline-flex items-center whitespace-nowrap border px-2 py-0.5 text-xs font-semibold ${TONE_CLASS[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center whitespace-nowrap rounded-[4px] border px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[tone]}`}>{children}</span>;
 }
 
 export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
@@ -54,12 +54,12 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="border border-[#e4e3df] bg-white p-6 text-center text-sm text-[#55565a]">{children}</div>;
+  return <div className="rounded-[6px] border border-[#e4e3df] bg-white p-6 text-center text-sm text-[#55565a]">{children}</div>;
 }
 
-export const inputClass = "min-h-[38px] w-full border border-[#d8d7d2] bg-white px-2.5 text-sm outline-none focus:border-black";
-export const buttonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 border border-[#d8d7d2] bg-white px-3 text-sm font-semibold hover:bg-[#efefed] disabled:opacity-40";
-export const primaryButtonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 bg-black px-4 text-sm font-semibold text-white disabled:opacity-40";
+export const inputClass = "min-h-[38px] w-full rounded-[5px] border border-[#d8d7d2] bg-white px-2.5 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10";
+export const buttonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 rounded-[5px] border border-[#d8d7d2] bg-white px-3 text-sm font-semibold transition hover:bg-[#efefed] focus:outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-40";
+export const primaryButtonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 rounded-[5px] bg-black px-4 text-sm font-semibold text-white transition hover:bg-[#242424] focus:outline-none focus:ring-2 focus:ring-black/20 disabled:opacity-40";
 
 export function Skeleton({ className = "h-10" }: { className?: string }) {
   return <div className={`animate-pulse rounded-[4px] bg-[#e4e3df] ${className}`} />;

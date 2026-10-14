@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
 import * as overviewApi from "@/services/api/overview";
 import { STATUS_FILTERS, kpiCards, manilaDate } from "@/lib/overview";
 import type { KpiCard, Tone } from "@/lib/overview";
@@ -27,19 +27,19 @@ const TONE: Record<Tone, string> = { good: "text-[#1e7b44]", warn: "text-[#8a5a0
 function Kpis({ cards, totals }: { cards: KpiCard[]; totals: { kg: string; note: string | null } | null }) {
   const groups: Array<KpiCard["group"]> = ["Drivers", "Sales orders", "Handover"];
   return (
-    <section className="grid gap-2 lg:grid-cols-[auto_auto_auto]" aria-label="Key numbers" data-testid="kpi-strip">
+    <section className="grid gap-3 lg:grid-cols-3" aria-label="Key numbers" data-testid="kpi-strip">
       {groups.map((g) => (
-        <div key={g} className="min-w-0 border border-[#e4e3df] bg-white p-2">
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#77787b]">
+        <div key={g} className="min-w-0 rounded-[6px] border border-[#e4e3df] bg-white p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase text-[#77787b]">
             {g === "Drivers" ? "Drivers" : g === "Sales orders" ? "Sales orders" : "Handover and issues"}
             {g === "Sales orders" && totals ? ` · ${totals.kg}` : ""}
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
             {cards
               .filter((c) => c.group === g)
               .map((c) => (
                 <div key={c.id} data-testid={`kpi-${c.id}`} className="min-w-[64px]">
-                  <div className={`text-xl font-bold leading-none ${TONE[c.tone]}`}>{c.value}</div>
+                  <div className={`text-[22px] font-semibold leading-none tabular-nums ${TONE[c.tone]}`}>{c.value}</div>
                   <div className="mt-0.5 text-[10px] font-semibold text-[#55565a]">
                     {c.label}
                     {c.hint ? <span className="font-normal text-[#77787b]"> ({c.hint})</span> : null}
@@ -80,20 +80,20 @@ export default function DriverOverview() {
 
   return (
     <div className="grid min-w-0 gap-3" data-testid="driver-overview">
-      <div className="flex flex-wrap items-end gap-2 border border-[#e4e3df] bg-white p-2" role="search" aria-label="Filters">
+      <div className="flex flex-wrap items-end gap-2 rounded-[6px] border border-[#e4e3df] bg-white p-2.5" role="search" aria-label="Filters">
         <div className="flex items-end gap-1">
-          <button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))} className="inline-flex h-[38px] w-9 items-center justify-center border border-[#d8d7d2] bg-white">
+          <button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))} className="inline-flex h-[38px] w-9 items-center justify-center rounded-[5px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
             <ChevronLeft size={16} />
           </button>
           <label className="grid gap-1 text-[11px] font-semibold">
             Date (Manila)
             <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className={`${inputClass} !w-auto`} data-testid="top-date" />
           </label>
-          <button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))} className="inline-flex h-[38px] w-9 items-center justify-center border border-[#d8d7d2] bg-white">
+          <button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))} className="inline-flex h-[38px] w-9 items-center justify-center rounded-[5px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
             <ChevronRight size={16} />
           </button>
           {date !== today && (
-            <button type="button" onClick={() => setDate(today)} className="h-[38px] border border-[#d8d7d2] bg-white px-3 text-sm font-semibold">
+            <button type="button" onClick={() => setDate(today)} className="h-[38px] rounded-[5px] border border-[#d8d7d2] bg-white px-3 text-sm font-semibold hover:bg-[#efefed]">
               Today
             </button>
           )}
@@ -125,9 +125,10 @@ export default function DriverOverview() {
 
       {summary.isLoading ? <Skeleton className="h-16" /> : summary.isError ? <ErrorNote error={summary.error} onRetry={() => void summary.refetch()} /> : <Kpis cards={cards} totals={kg ? { kg: kg.text, note: kg.note } : null} />}
 
-      <div role="tablist" aria-label="Driver Overview sections" className="flex flex-wrap border-b border-[#e4e3df]">
+      <div role="tablist" aria-label="Driver Overview sections" className="flex flex-wrap gap-1 border-b border-[#e4e3df]">
         {TABS.map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`tab-${id}`} onClick={() => setTab(id)} className={`min-h-[40px] border-b-2 px-4 text-sm font-semibold ${tab === id ? "border-black text-black" : "border-transparent text-[#77787b] hover:text-black"}`}>
+          <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`tab-${id}`} onClick={() => setTab(id)} className={`inline-flex min-h-[42px] items-center gap-1.5 border-b-2 px-3 text-sm font-semibold transition ${tab === id ? "border-black text-black" : "border-transparent text-[#77787b] hover:text-black"}`}>
+            {id === "export" ? <Download size={14} /> : null}
             {label}
             {id === "issues" && (k?.issues_open ?? 0) > 0 ? <span className="ml-1.5 rounded-full bg-[#8a5a00] px-1.5 text-[10px] text-white">{k?.issues_open}</span> : null}
           </button>

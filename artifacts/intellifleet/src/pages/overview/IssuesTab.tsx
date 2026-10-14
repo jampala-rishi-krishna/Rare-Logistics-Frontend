@@ -72,9 +72,9 @@ export default function IssuesTab({ filter }: { filter: TopFilter }) {
   const list = (issues.data?.issues ?? []).filter((i) => !needle || [i.reference, i.category, i.description, i.reporter.name, i.vehicle, i.so_number].some((v) => String(v ?? "").toLowerCase().includes(needle)));
   return (
     <section className="grid gap-3" data-testid="issues-tab">
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Show issues">
+      <div className="inline-flex w-fit flex-wrap items-center rounded-[6px] border border-[#d8d7d2] bg-white p-1" role="group" aria-label="Show issues">
         {SHOW.map(([v, l]) => (
-          <button key={v} type="button" aria-pressed={show === v} onClick={() => setShow(v)} className={`${buttonClass} ${show === v ? "!border-black !bg-black !text-white" : ""}`}>
+          <button key={v} type="button" aria-pressed={show === v} onClick={() => setShow(v)} className={`${buttonClass} !min-h-[32px] !border-transparent !px-3 !text-xs ${show === v ? "!bg-black !text-white" : "!bg-white"}`}>
             {l}
           </button>
         ))}
@@ -84,7 +84,7 @@ export default function IssuesTab({ filter }: { filter: TopFilter }) {
       ) : issues.isError ? (
         <ErrorNote error={issues.error} onRetry={() => void issues.refetch()} />
       ) : list.length === 0 ? (
-        <Empty>No issues to show.</Empty>
+        <Empty>No issues to show. Operational exceptions will appear here when they are reported.</Empty>
       ) : (
         <div className="grid gap-3 xl:grid-cols-2">
           {list.map((i) => (

@@ -10,8 +10,8 @@ import TripTimeline from "./TripTimeline";
 
 function Total({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="min-w-0 border border-[#e4e3df] bg-white px-2 py-1.5">
-      <div className="text-base font-bold leading-none">{value}</div>
+    <div className="min-w-0 rounded-[5px] border border-[#e4e3df] bg-white px-2 py-1.5">
+      <div className="text-base font-semibold leading-none tabular-nums">{value}</div>
       <div className="mt-1 truncate text-[10px] font-semibold uppercase text-[#77787b]">{label}</div>
     </div>
   );
@@ -52,12 +52,12 @@ export default function DriverPanel({ staffId, date, onClose }: { staffId: numbe
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {tel && (
-            <a href={tel} aria-label="Call" className="inline-flex h-9 w-9 items-center justify-center border border-[#d8d7d2] bg-white">
+            <a href={tel} aria-label="Call" className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
               <Phone size={15} />
             </a>
           )}
           {onClose && (
-            <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-9 w-9 items-center justify-center border border-[#d8d7d2] bg-white">
+            <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
               <X size={15} />
             </button>
           )}
@@ -65,10 +65,10 @@ export default function DriverPanel({ staffId, date, onClose }: { staffId: numbe
       </div>
 
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Period">
-        <button type="button" aria-pressed={mode === "day"} onClick={() => setMode("day")} className={`min-h-[34px] border px-3 text-xs font-semibold ${mode === "day" ? "border-black bg-black text-white" : "border-[#d8d7d2] bg-white"}`}>
+        <button type="button" aria-pressed={mode === "day"} onClick={() => setMode("day")} className={`min-h-[34px] rounded-[5px] border px-3 text-xs font-semibold ${mode === "day" ? "border-black bg-black text-white" : "border-[#d8d7d2] bg-white hover:bg-[#efefed]"}`}>
           Selected day
         </button>
-        <button type="button" aria-pressed={mode === "history"} onClick={() => setMode("history")} data-testid="panel-history" className={`min-h-[34px] border px-3 text-xs font-semibold ${mode === "history" ? "border-black bg-black text-white" : "border-[#d8d7d2] bg-white"}`}>
+        <button type="button" aria-pressed={mode === "history"} onClick={() => setMode("history")} data-testid="panel-history" className={`min-h-[34px] rounded-[5px] border px-3 text-xs font-semibold ${mode === "history" ? "border-black bg-black text-white" : "border-[#d8d7d2] bg-white hover:bg-[#efefed]"}`}>
           History
         </button>
         {mode === "history" && (
@@ -122,7 +122,7 @@ export default function DriverPanel({ staffId, date, onClose }: { staffId: numbe
                 const trip = b.trip ?? {};
                 const isOpen = expanded === b.batch_id;
                 return (
-                  <div key={b.batch_id} className="border border-[#e4e3df] bg-[#fafaf8]" data-testid={`panel-trip-${b.batch_id}`}>
+                  <div key={b.batch_id} className="rounded-[6px] border border-[#e4e3df] bg-[#fafaf8]" data-testid={`panel-trip-${b.batch_id}`}>
                     <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? "" : b.batch_id)} className="flex min-h-[44px] w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left">
                       <span className="min-w-0">
                         <span className="font-mono text-sm font-bold">{String(b.vehicle ?? "-")}</span>

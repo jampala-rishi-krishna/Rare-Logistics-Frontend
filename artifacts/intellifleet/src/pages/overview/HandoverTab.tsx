@@ -47,12 +47,12 @@ export default function HandoverTab({ filter }: { filter: TopFilter }) {
       ) : query.isError ? (
         <ErrorNote error={query.error} onRetry={() => void query.refetch()} />
       ) : rows.length === 0 ? (
-        <Empty>No outstanding invoice copies.</Empty>
+        <Empty>{state ? "No matching invoice handovers found." : "All caught up. No outstanding invoice handovers."}</Empty>
       ) : (
-        <div className="overflow-x-auto border border-[#e4e3df] bg-white">
+        <div className="overflow-x-auto rounded-[6px] border border-[#e4e3df] bg-white">
           <table className="w-full min-w-[820px] border-collapse" data-testid="handover-table">
             <thead>
-              <tr className="border-b border-[#e4e3df]">
+              <tr className="border-b border-[#e4e3df] bg-[#fafaf8]">
                 {["SO", "Invoice / DR no.", "Customer", "Status", "Held by", "Since", "Note"].map((h) => (
                   <th key={h} className={head}>
                     {h}

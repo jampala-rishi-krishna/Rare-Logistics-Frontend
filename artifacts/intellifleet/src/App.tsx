@@ -2378,7 +2378,6 @@ function AppShell({
             </div>
             {isAdmin && [
               ["/admin/users", "Admin", Settings],
-              ["/admin/settings", "Settings", SlidersHorizontal],
             ].map(([href, label, Icon]) => (
               <Link
                 data-testid={`nav-${String(label).toLowerCase()}`}
@@ -2507,6 +2506,16 @@ function AppShell({
               <LivePhtClock />
             </div>
             {isAdmin && <RoleSwitcher role="Admin" />}
+            {isAdmin && (
+              <Link
+                href="/admin/settings"
+                title="Settings"
+                aria-label="Open settings"
+                className="grid h-10 w-10 place-items-center rounded border border-[#d8d7d2] bg-white hover:bg-[#efefed]"
+              >
+                <Settings size={16} />
+              </Link>
+            )}
             <button
               data-testid="button-logout"
               onClick={doLogout}
@@ -7220,9 +7229,11 @@ function App() {
                         <DataTablePage kind="fleet" />
                       </Route>
                       <Route path="/app/fleet-health">
-                        <AppShell title="Fleet Health">
-                          <FleetHealthPage />
-                        </AppShell>
+                        <RoleGate allowed={SECTION_ROLES.fleetHealth}>
+                          <AppShell title="Fleet Health">
+                            <FleetHealthPage />
+                          </AppShell>
+                        </RoleGate>
                       </Route>
                       <Route path="/app/routes">
                         <DataTablePage kind="routes" />

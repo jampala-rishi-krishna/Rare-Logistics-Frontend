@@ -5,8 +5,9 @@ export const SECTION_ROLES = {
   // Logistics officers validate invoices; dispatchers get a read-only view of the same screens.
   officer: ["logistics_officer", "admin", "dispatcher"],
   app: ["admin", "dispatcher", "planner", "warehouse"],
-  // Driver Overview lives inside /app but is not for warehouse users.
-  driverOverview: ["admin", "dispatcher", "planner"],
+  // Driver Overview and Fleet Health are admin-only operational workspaces.
+  driverOverview: ["admin"],
+  fleetHealth: ["admin"],
   admin: ["admin"],
   warehouse: ["warehouse", "admin", "dispatcher", "planner"],
   portal: ["client", "admin"],
@@ -15,6 +16,7 @@ export const SECTION_ROLES = {
 // Nav entries that only some roles of the /app section may see (href -> allowed roles).
 export const NAV_ROLES: Record<string, readonly string[]> = {
   "/app/driver-overview": SECTION_ROLES.driverOverview,
+  "/app/fleet-health": SECTION_ROLES.fleetHealth,
 };
 
 // Roles that may open the officer screens but not act on them.
