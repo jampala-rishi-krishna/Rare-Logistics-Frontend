@@ -160,10 +160,42 @@ export const EVENT_LABEL: Record<string, string> = {
   handover_submitted: "Handover submitted",
   officer_validated: "Officer validated",
   trip_closed: "Trip closed",
+  order_unassigned: "Unassigned by dispatch",
 };
 
 export function eventLabel(type: string): string {
   return EVENT_LABEL[type] ?? type.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+// What the order had reached when dispatch unassigned it (trip_events.result.previous_state).
+export const UNASSIGNED_FROM: Record<string, string> = {
+  assigned: "was assigned",
+  acknowledged: "was acknowledged",
+  trip_started: "trip had started",
+  checked_in: "was checked in",
+  delivered: "was delivered",
+};
+
+/** Tolerant one-line view of an audit / activity event. Unknown types fall back to a readable label; an
+ * "order_unassigned" event adds the state it was removed from and the dispatcher's name (actor_name). */
+export function activityParts(
+  e: { type?: string | null; so_number?: string | null; actor_name?: unknown; previous_state?: unknown; order_type?: unknown },
+  fallbackActor?: string | null,
+): { label: string; so: string | null; detail: string | null; actor: string | null } {
+  const type = String(e.type ?? "event");
+  const actorName = typeof e.actor_name === "string" && e.actor_name.trim() ? e.actor_name.trim() : null;
+  const actor = actorName ?? (fallbackActor && fallbackActor.trim() ? fallbackActor.trim() : null);
+  if (type === "order_unassigned") {
+    const prev = typeof e.previous_state === "string" ? e.previous_state : "";
+    const detail = prev ? UNASSIGNED_FROM[prev] ?? `was ${prev.replaceAll("_", " ")}` : null;
+    return { label: eventLabel(type), so: e.so_number ?? null, detail, actor };
+  }
+  return { label: eventLabel(type), so: e.so_number ?? null, detail: null, actor };
+}
+
+/** "Unassigned by dispatch · SO26-18449 · was acknowledged · Rishi" (time is shown separately). */
+export function activityText(parts: ReturnType<typeof activityParts>, sep = " · "): string {
+  return [parts.label, parts.so, parts.detail, parts.actor].filter(Boolean).join(sep);
 }
 
 export const DELIVERED_OUTCOME = "Delivered";

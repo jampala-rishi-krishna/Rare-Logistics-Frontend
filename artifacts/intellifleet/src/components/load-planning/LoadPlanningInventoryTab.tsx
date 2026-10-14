@@ -28,6 +28,8 @@ import { OrderTypeBadge } from "./OrderTypeBadge";
 import { TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
 import TransferOrdersTab, { TRANSFER_ORDERS_KEY } from "./TransferOrdersTab";
 import ConfirmedEmailDialog from "./ConfirmedEmailDialog";
+import UnassignConfirmDialog from "./UnassignConfirmDialog";
+import { confirmRequiredOrders, planUnassign, skippedText, type UnassignPlan, type UnassignPreviewOrder } from "@/lib/unassignConfirm";
 import { describeCounts, orderTypesParam, countByType, type TypeFilter } from "@/lib/orderMerge";
 import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
 
@@ -342,6 +344,9 @@ function SalesOrdersView({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [confirmUnassign, setConfirmUnassign] = useState(false);
   const [bulkUnassigning, setBulkUnassigning] = useState(false);
+  // Unassign guard: the one dialog for acknowledged / started / checked-in (confirm) and delivered (blocked) orders.
+  const [unassignGuard, setUnassignGuard] = useState<{ plan: Extract<UnassignPlan, { kind: "dialog" }>; single?: inventoryApi.SalesOrderSummary } | null>(null);
+  const [unassignPreviewing, setUnassignPreviewing] = useState(false);
   const initial = tomorrowPht();
   const [from, setFrom] = useState(initial);
   const [to, setTo] = useState(initial);
@@ -567,36 +572,99 @@ function SalesOrdersView({
       setBulkAcknowledging(false);
     }
   };
-  const unassign = async (order: inventoryApi.SalesOrderSummary) => {
-    if (!window.confirm(`Unassign ${order.salesorder_number ?? order.id}?`)) return;
+  /** Preview what unassigning would undo. null = preview unavailable: keep the current flow (the unassign call still guards with a 409). */
+  const previewUnassignPlan = async (ids: string[]): Promise<UnassignPlan | null> => {
     try {
-      await inventoryApi.unassignSalesOrder(order.id);
+      const preview = await inventoryApi.previewUnassign(ids);
+      return planUnassign(ids, preview?.orders ?? []);
+    } catch {
+      return null;
+    }
+  };
+  const runSingleUnassign = async (order: inventoryApi.SalesOrderSummary, confirm: boolean) => {
+    setBulkUnassigning(true);
+    try {
+      await inventoryApi.unassignSalesOrder(order.id, { confirm });
+      setUnassignGuard(null);
       setSyncMessage(`Unassigned ${order.salesorder_number ?? order.id}.`);
       await refetchOrderLists(client, [order.id]);
     } catch (error: any) {
-      setSyncMessage(error?.message || "The sales order could not be unassigned.");
+      // Race: the crew acknowledged / started after the preview -> show the same confirmation.
+      const rows = confirmRequiredOrders(error);
+      const plan = rows ? planUnassign([order.id], rows) : null;
+      if (plan?.kind === "dialog") {
+        setUnassignGuard({ plan, single: order });
+      } else {
+        setUnassignGuard(null);
+        setSyncMessage(error?.message || "The sales order could not be unassigned.");
+      }
+    } finally {
+      setBulkUnassigning(false);
     }
+  };
+  const unassign = async (order: inventoryApi.SalesOrderSummary) => {
+    setUnassignPreviewing(true);
+    const plan = await previewUnassignPlan([order.id]);
+    setUnassignPreviewing(false);
+    if (plan?.kind === "dialog") {
+      setUnassignGuard({ plan, single: order });
+      return;
+    }
+    if (!window.confirm(`Unassign ${order.salesorder_number ?? order.id}?`)) return;
+    await runSingleUnassign(order, false);
   };
   const selectedCounts = useMemo(() => {
     const picked = new Set(selectedOrderIds);
     return countByType((orders.data?.items ?? []).filter((order) => picked.has(String(order.id))));
   }, [selectedOrderIds, orders.data]);
-  const bulkUnassign = async () => {
+  const orderNumberOf = (id: string) => {
+    const hit = (orders.data?.items ?? []).find((order) => String(order.id) === String(id));
+    return hit?.salesorder_number || id;
+  };
+  /** Bulk unassign. `ids` excludes blocked (delivered) orders; `excluded` = those blocked rows, reported in the message. */
+  const bulkUnassign = async (ids: string[] = selectedOrderIds, confirm = false, excluded: UnassignPreviewOrder[] = []) => {
     setBulkUnassigning(true);
     setSyncMessage("");
     try {
-      const result = await inventoryApi.bulkUnassignOrders(selectedOrderIds);
+      const result = await inventoryApi.bulkUnassignOrders(ids, { confirm });
       setConfirmUnassign(false);
+      setUnassignGuard(null);
       setSelectedOrderIds([]);
-      const skipped = result.skipped?.length ? ` ${result.skipped.length} skipped.` : "";
-      setSyncMessage(`Unassigned ${result.count} order${result.count === 1 ? "" : "s"} (${describeCounts(result.count_by_type ?? {}) || "none"}).${skipped}`);
+      const notDone = [
+        ...excluded.map((row) => ({ id: row.number || row.id, reason: row.reason })),
+        ...(result.skipped ?? []).map((row) => ({ id: orderNumberOf(row.id), reason: row.reason })),
+      ];
+      setSyncMessage(`Unassigned ${result.count} order${result.count === 1 ? "" : "s"} (${describeCounts(result.count_by_type ?? {}) || "none"}).${skippedText(notDone)}`);
       await refetchOrderLists(client, result.unassigned ?? []);
     } catch (error: any) {
       setConfirmUnassign(false);
-      setSyncMessage(error?.message || "The selected orders could not be unassigned.");
+      // Race: an order moved on after the preview -> show the same confirmation from detail.orders.
+      const rows = confirmRequiredOrders(error);
+      const plan = rows ? planUnassign(ids, [...excluded, ...rows]) : null;
+      if (plan?.kind === "dialog") {
+        setUnassignGuard({ plan });
+      } else {
+        setUnassignGuard(null);
+        setSyncMessage(error?.message || "The selected orders could not be unassigned.");
+      }
     } finally {
       setBulkUnassigning(false);
     }
+  };
+  /** "Unassign selected": preview first; only orders already in progress / delivered get the extra dialog. */
+  const openBulkUnassign = async () => {
+    setUnassignPreviewing(true);
+    const plan = await previewUnassignPlan(selectedOrderIds);
+    setUnassignPreviewing(false);
+    if (plan?.kind === "dialog") setUnassignGuard({ plan });
+    else setConfirmUnassign(true);
+  };
+  const confirmGuardedUnassign = () => {
+    if (!unassignGuard) return;
+    const { plan, single } = unassignGuard;
+    if (!plan.ids.length) return;
+    if (single) void runSingleUnassign(single, plan.needsConfirm);
+    else void bulkUnassign(plan.ids, plan.needsConfirm, plan.blockedRows);
   };
   useEffect(() => {
     setPage(1);
@@ -634,8 +702,8 @@ function SalesOrdersView({
         headerActions={
           assignmentScope ? (
             <>
-              <button onClick={() => setConfirmUnassign(true)} disabled={bulkUnassigning || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
-                {bulkUnassigning ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Unassign selected ({selectedOrderIds.length})
+              <button onClick={() => void openBulkUnassign()} disabled={bulkUnassigning || unassignPreviewing || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
+                {bulkUnassigning || unassignPreviewing ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Unassign selected ({selectedOrderIds.length})
               </button>
               <button onClick={() => setEmailOpen(true)} disabled={!visibleOrderIds.length} className={dangerButtonClass} data-testid="confirmed-email-button">
                 <Mail size={14} /> Email
@@ -1001,12 +1069,20 @@ function SalesOrdersView({
               <button type="button" onClick={() => setConfirmUnassign(false)} disabled={bulkUnassigning} className={buttonClass}>
                 Cancel
               </button>
-              <button type="button" onClick={bulkUnassign} disabled={bulkUnassigning} className={dangerButtonClass}>
+              <button type="button" onClick={() => void bulkUnassign()} disabled={bulkUnassigning} className={dangerButtonClass}>
                 {bulkUnassigning && <Loader2 size={14} className="animate-spin" />} Unassign
               </button>
             </div>
           </section>
         </div>
+      )}
+      {unassignGuard && (
+        <UnassignConfirmDialog
+          plan={unassignGuard.plan}
+          busy={bulkUnassigning}
+          onCancel={() => setUnassignGuard(null)}
+          onConfirm={confirmGuardedUnassign}
+        />
       )}
     </div>
   );

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   DEFAULT_STALE_MINUTES,
+  activityParts,
+  activityText,
   blankItem,
   buildTemplatePayload,
   displayValue,
@@ -221,4 +223,21 @@ test("app-only flag round-trips through the editor and the payload", () => {
   assert.equal(editor.appOnly, true);
   assert.equal(buildTemplatePayload("delivery_checkout", "T", [editor]).items[0].app_only, true);
   assert.equal(blankItem("delivery_checkout", []).appOnly, true); // anything added in Settings is not in the Zoho form
+});
+
+test("order_unassigned activity: label, SO, previous state, dispatcher name", () => {
+  const e = { type: "order_unassigned", at: "2026-10-14T06:02:00Z", actor_name: "Rishi", so_id: "1", so_number: "SO26-18449", order_type: "SO", previous_state: "acknowledged" };
+  const p = activityParts(e);
+  assert.deepEqual(p, { label: "Unassigned by dispatch", so: "SO26-18449", detail: "was acknowledged", actor: "Rishi" });
+  assert.equal(activityText(p), "Unassigned by dispatch · SO26-18449 · was acknowledged · Rishi");
+  assert.equal(activityParts({ ...e, previous_state: "trip_started" }).detail, "trip had started");
+  assert.equal(activityParts({ ...e, previous_state: "some_new_state" }).detail, "was some new state");
+  assert.equal(activityParts({ ...e, actor_name: "", previous_state: null }, "Fallback").actor, "Fallback");
+  assert.equal(activityText(activityParts({ type: "order_unassigned", so_number: null })), "Unassigned by dispatch");
+});
+
+test("other / unknown activity types stay tolerant", () => {
+  assert.equal(activityText(activityParts({ type: "trip_started", so_number: null })), "Trip started");
+  assert.equal(activityText(activityParts({ type: "brand_new_thing", so_number: "SO1" }), " - "), "Brand new thing - SO1");
+  assert.equal(activityParts({ type: null }).label, "Event");
 });

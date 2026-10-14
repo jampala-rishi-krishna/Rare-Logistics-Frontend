@@ -1,4 +1,7 @@
 import { api } from "./client";
+import type { UnassignPreview } from "@/lib/unassignConfirm";
+
+export type { UnassignPreview, UnassignPreviewOrder } from "@/lib/unassignConfirm";
 
 export interface Branch {
   id: string;
@@ -165,11 +168,18 @@ export function assignSalesOrder(
   });
 }
 
-export function unassignSalesOrder(id: string) {
+/** `confirm: true` = the dispatcher accepted the unassign-preview warning (acknowledged / trip started / checked in).
+ * Without it the server answers 409 `confirm_required` when an order needs confirmation, and 409 `delivered` when blocked. */
+export function unassignSalesOrder(id: string, options: { confirm?: boolean } = {}) {
   return api.post<{ success: boolean; salesorder_id: string; assignment_status: string }>(
     `/api/load-planning/assignments/${encodeURIComponent(id)}/unassign`,
-    {},
+    { confirm: Boolean(options.confirm) },
   );
+}
+
+/** What unassigning these orders would undo: acknowledged / trip started / checked in (needs confirm) or delivered (blocked). Read-only. */
+export function previewUnassign(orderIds: string[]) {
+  return api.post<UnassignPreview>("/api/load-planning/assignments/unassign-preview", { order_ids: orderIds }, undefined, 60000);
 }
 
 export function optimizeAssignedStops(vehicleId: string) {
@@ -279,8 +289,8 @@ export interface BulkUnassignResult {
   skipped: { id: string; reason: string }[];
 }
 
-export function bulkUnassignOrders(orderIds: string[]) {
-  return api.post<BulkUnassignResult>("/api/load-planning/assignments/bulk-unassign", { order_ids: orderIds }, undefined, 60000);
+export function bulkUnassignOrders(orderIds: string[], options: { confirm?: boolean } = {}) {
+  return api.post<BulkUnassignResult>("/api/load-planning/assignments/bulk-unassign", { order_ids: orderIds, confirm: Boolean(options.confirm) }, undefined, 60000);
 }
 
 export interface ConfirmedEmailPreview {

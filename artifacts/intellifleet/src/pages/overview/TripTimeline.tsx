@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, MapPin } from "lucide-react";
 import * as overviewApi from "@/services/api/overview";
 import { personName } from "@/lib/officer";
-import { displayValue, formatDuration, isPhotoValue, stateLabel } from "@/lib/overview";
+import { activityParts, activityText, displayValue, formatDuration, isPhotoValue, stateLabel } from "@/lib/overview";
 import { formatMeters, gpsReason, hasGps } from "@/lib/overviewView";
 import { Chip, ErrorNote, Skeleton, fmtDateTime, fmtTime } from "./shared";
 
@@ -236,16 +236,21 @@ export function RecentActivityCard({ events }: { events: overviewApi.Timeline["e
         <p className="text-[13px] text-[#55565a]">No activity recorded yet.</p>
       ) : (
         <ul className="grid gap-2.5">
-          {recent.map((e, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1d4ed8]" aria-hidden="true" />
-              <div className="min-w-0 flex-1 text-[13px]">
-                <span className="font-semibold">{label(e.type)}</span>
-                {e.so_number && <span className="ml-1.5 font-mono text-[11px] text-[#77787b]">{e.so_number}</span>}
-              </div>
-              <span className="shrink-0 text-[11px] text-[#77787b]">{fmtTime(e.at)}</span>
-            </li>
-          ))}
+          {recent.map((e, i) => {
+            const unassigned = e.type === "order_unassigned";
+            const p = activityParts(e, personName(e.by));
+            return (
+              <li key={i} className="flex items-start gap-2.5" data-testid={unassigned ? "activity-unassigned" : undefined}>
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unassigned ? "bg-[#86000B]" : "bg-[#1d4ed8]"}`} aria-hidden="true" />
+                <div className="min-w-0 flex-1 text-[13px]">
+                  <span className="font-semibold">{unassigned ? p.label : label(e.type)}</span>
+                  {e.so_number && <span className="ml-1.5 font-mono text-[11px] text-[#77787b]">{e.so_number}</span>}
+                  {unassigned && (p.detail || p.actor) && <span className="ml-1.5 text-[11px] text-[#77787b]">{[p.detail, p.actor].filter(Boolean).join(" · ")}</span>}
+                </div>
+                <span className="shrink-0 text-[11px] text-[#77787b]">{fmtTime(e.at)}</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
@@ -294,9 +299,15 @@ export default function TripTimeline({ batchId }: { batchId: string }) {
               {t.events.map((e, i) => (
                 <li key={i} className="flex flex-wrap justify-between gap-2">
                   <span>
-                    {e.type.replaceAll("_", " ")}
-                    {e.so_number ? ` - ${e.so_number}` : ""}
-                    {personName(e.by) ? ` - ${personName(e.by)}` : ""}
+                    {e.type === "order_unassigned" ? (
+                      activityText(activityParts(e, personName(e.by)), " - ")
+                    ) : (
+                      <>
+                        {e.type.replaceAll("_", " ")}
+                        {e.so_number ? ` - ${e.so_number}` : ""}
+                        {personName(e.by) ? ` - ${personName(e.by)}` : ""}
+                      </>
+                    )}
                   </span>
                   <span className="text-[#77787b]">{fmtDateTime(e.at)}</span>
                 </li>
