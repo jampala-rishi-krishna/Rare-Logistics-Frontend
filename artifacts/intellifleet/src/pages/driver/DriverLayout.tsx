@@ -6,7 +6,8 @@ import { subscribeDropped, subscribeResults, useOfflineQueue } from "@/lib/offli
 import type { QueueEntry } from "@/lib/offlineQueue";
 import { syncBadge } from "@/lib/syncStatus";
 import { DICTS, getLang, useT } from "./i18n";
-import { useAlertsQuery } from "./queries";
+import { useToday } from "./queries";
+import { ordersToAcknowledge } from "@/lib/tripNav";
 import { ToastHost, showToast } from "./shared";
 import type { DriverScope } from "./shared";
 import { BottomNav, C, Icon, OutlineButton, Page, PrimaryButton, Sheet, SheetTitle, TextButton } from "./ui";
@@ -106,7 +107,9 @@ function SyncRow({ onOpen, confirmedAt }: { onOpen: () => void; confirmedAt: num
 // Tabs (Today / History / Profile) get the bottom nav; the trip screen passes no tab and owns the bottom with its own bar.
 export default function DriverLayout({ scope, tab, children, testId }: { scope: DriverScope; tab?: Tab; children: ReactNode; testId?: string }) {
   const queryClient = useQueryClient();
-  const alerts = useAlertsQuery(scope);
+  const today = useToday(scope);
+  const queue = useOfflineQueue();
+  const ackBadge = ordersToAcknowledge(today.data?.data.batches, queue.entries);
   const [panelOpen, setPanelOpen] = useState(false);
   const [confirmedAt, setConfirmedAt] = useState<number | null>(null);
 
@@ -139,7 +142,7 @@ export default function DriverLayout({ scope, tab, children, testId }: { scope: 
     <Page testId={testId}>
       <SyncRow onOpen={() => setPanelOpen(true)} confirmedAt={confirmedAt} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>{children}</div>
-      {tab && <BottomNav active={tab} adminDriverId={scope.adminDriverId} badge={alerts.data?.unread ?? 0} />}
+      {tab && <BottomNav active={tab} adminDriverId={scope.adminDriverId} badge={ackBadge} />}
       <SyncSheet open={panelOpen} onClose={() => setPanelOpen(false)} />
       <ToastHost />
     </Page>

@@ -1,6 +1,6 @@
 // Layout run of every screen / step of the simplified driver app at 360, 390 and 430 px (mocked API only, e2e/flowMock.ts):
 //   - no horizontal scroll: document.scrollingElement.scrollWidth <= innerWidth
-//   - scrolled to the bottom, the fixed bottom bar (3-tab nav or the trip action bar) does not cover the last content element
+//   - scrolled to the bottom, the fixed bottom bar (4-tab nav or the trip action bar) does not cover the last content element
 //   - no button whose text has the same colour as its background
 //   - sheets: no sideways scroll, last control reachable
 // Tap targets under 48 px are printed as a note (not a failure). Run:
@@ -63,7 +63,11 @@ const SCREENS: Screen[] = [
     },
   },
   { name: "history", path: "/driver/history", ready: "[data-testid=driver-trip-h-1]", flow: newFlow },
-  { name: "profile", path: "/driver/profile", ready: "[data-testid=driver-alerts]", flow: newFlow },
+  { name: "profile", path: "/driver/profile", ready: "[data-testid=driver-profile-header]", flow: newFlow },
+  { name: "acknowledge-tab", path: "/driver/acknowledge", ready: `[data-testid=driver-ack-trip-button-${BATCH}]`, flow: newFlow },
+  { name: "acknowledge-tab-all-done", path: "/driver/acknowledge", ready: "[data-testid=driver-all-acked]", flow: () => ackAll(newFlow()) },
+  { name: "alerts-page", path: "/driver/alerts", ready: "[data-testid=driver-alert-assigned]", flow: newFlow },
+  { name: "today-delivered", path: "/driver/today", ready: "[data-testid=driver-card-delivered]", flow: () => ended(newFlow()) },
 ];
 
 async function open(screen: Screen, width: number): Promise<{ page: Page; close: () => Promise<void> }> {
@@ -130,7 +134,6 @@ describe("old driver URLs redirect to the new screens", () => {
     [`/driver/assignment/${BATCH}/checkout/so-1`, `/driver/trip/${BATCH}`],
     [`/driver/assignment/${BATCH}/handover`, `/driver/trip/${BATCH}`],
     ["/driver/trips", "/driver/history"],
-    ["/driver/alerts", "/driver/profile"],
     [`/driver/issues/new?batch=${BATCH}`, `/driver/trip/${BATCH}`],
     ["/driver/issues", "/driver/today"],
   ];

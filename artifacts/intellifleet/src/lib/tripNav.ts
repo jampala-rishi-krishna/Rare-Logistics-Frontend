@@ -1,7 +1,7 @@
 // Pure navigation / derived-view helpers for the one-page driver trip screen: href builders, which step the
 // big button is on, the current stop, Google Maps directions, check-in distance notices and old-URL redirects.
 import { withDriverParams } from "./driver.ts";
-import type { BatchDetail, DispatchChange, DriverOrder, RouteStop } from "./tripTypes.ts";
+import type { AlertItem, Batch, BatchDetail, DispatchChange, DriverOrder, RouteStop } from "./tripTypes.ts";
 import type { EffectiveBatch, EffectiveOrder } from "./tripState.ts";
 
 const enc = encodeURIComponent;
@@ -11,13 +11,17 @@ export function tripPath(batchId: string, adminDriverId: string | null, extra: R
   return withDriverParams(`/driver/trip/${enc(batchId)}`, { ...extra, driver_id: adminDriverId });
 }
 
+// The Acknowledge tab (the only place orders are acknowledged), optionally for one date and scrolled to one trip.
+export function acknowledgePath(adminDriverId: string | null, opts: { batch?: string | null; date?: string | null } = {}): string {
+  return withDriverParams("/driver/acknowledge", { date: opts.date ?? null, batch: opts.batch ?? null, driver_id: adminDriverId });
+}
+
 // Kept as an alias: older code and alert links call it the assignment page.
 export const assignmentPath = tripPath;
 
 // Old driver URLs (bookmarks, alert links) -> the new screens, so nothing 404s.
 //   /driver/assignment/:id[/anything]  -> /driver/trip/:id
 //   /driver/trips, /driver/history     -> /driver/history
-//   /driver/alerts                     -> /driver/profile (alerts list lives there)
 //   /driver/issues/new?batch=:id       -> /driver/trip/:id ; /driver/issues[...] -> /driver/today
 //   anything else under /driver        -> /driver/today
 // Query params other than the ones consumed here (driver_id, from) are kept.
@@ -31,7 +35,6 @@ export function legacyRedirect(pathname: string, search: string): string {
   const assignment = /^\/driver\/(?:assignment|trip)\/([^/]+)/.exec(pathname);
   if (assignment) return withDriverParams(`/driver/trip/${assignment[1]}`, keep());
   if (/^\/driver\/(trips|history)\b/.test(pathname)) return withDriverParams("/driver/history", keep());
-  if (/^\/driver\/alerts\b/.test(pathname)) return withDriverParams("/driver/profile", keep());
   if (/^\/driver\/issues\b/.test(pathname)) {
     const batch = params.get("batch");
     return batch ? withDriverParams(`/driver/trip/${enc(batch)}`, keep()) : withDriverParams("/driver/today", keep());
@@ -121,4 +124,34 @@ export function farWarningFor(batch: BatchDetail | null | undefined, soId: strin
   const order = batch?.orders.find((o) => String(o.id) === soId);
   const notice = checkinNotice(order?.workflow?.stop);
   return notice?.far ? notice.text : null;
+}
+
+// Orders still to acknowledge today (the Acknowledge tab badge): every pending trip's not-yet-acknowledged orders, minus
+// trips whose one-tap acknowledge is already queued on this phone.
+export function ordersToAcknowledge(batches: Array<Pick<Batch, "batch_id" | "trip">> | null | undefined, queue: Array<{ batch_id: string; kind: string; status: string }> = []): number {
+  let n = 0;
+  for (const b of batches ?? []) {
+    const trip = b.trip;
+    if (!trip || trip.status !== "pending") continue;
+    const queued = queue.some((q) => q.batch_id === b.batch_id && q.kind === "acknowledge_all" && (q.status === "pending" || q.status === "syncing"));
+    if (!queued) n += Math.max(trip.total - trip.acknowledged, 0);
+  }
+  return n;
+}
+
+// Where tapping an alert goes. New-assignment / "acknowledge needed" alerts open the Acknowledge tab (on that trip);
+// anything else follows the alert's own link (old links are redirected by the router).
+export function alertTarget(alert: Pick<AlertItem, "type" | "title" | "body" | "link">, adminDriverId: string | null = null): string {
+  const m = /\/driver\/(?:assignment|trip)\/([^/?#]+)/.exec(alert.link ?? "");
+  const batch = m ? decodeURIComponent(m[1]) : null;
+  const text = `${alert.title ?? ""} ${alert.body ?? ""}`;
+  if (alert.type === "assigned" || /acknowledg/i.test(text)) return acknowledgePath(adminDriverId, { batch });
+  return alert.link || "/driver/today";
+}
+
+// "2026-10-14" shifted by n days ("" when not a date).
+export function shiftYmd(ymd: string, days: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return "";
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days)).toISOString().slice(0, 10);
 }

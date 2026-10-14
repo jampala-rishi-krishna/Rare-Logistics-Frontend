@@ -3,16 +3,19 @@ import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as driverApi from "@/services/api/driver";
 import { firstName, formatQty, telHref, withDriverParams } from "@/lib/driver";
+import { acknowledgePath, alertTarget } from "@/lib/tripNav";
 import { tripPath } from "@/lib/tripNav";
+import type { TripInfo } from "@/lib/tripTypes";
 import type { AlertItem, Batch, CrewMember, DriverMe } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
 import { dayLabel, useLang, useT } from "./i18n";
 import type { Dict } from "./i18n";
-import { useAlertsQuery, useTemplatesQuery, useToday } from "./queries";
+import { useAlertsQuery, useToday } from "./queries";
 import { ErrorState, MissingDriverNotice, OfflineNote, errorText, useDriverMe, useDriverScope } from "./shared";
 import type { DriverScope } from "./shared";
-import { ConfirmSheet, DispatchBanners, checklistOf, chipOfTrip, useTripActions } from "./tripFlow";
-import { Avatar, Banner, C, Chip, RoundButton, Skeleton } from "./ui";
+import { ConfirmSheet, DispatchBanners, chipOfTrip, useTripActions } from "./tripFlow";
+import { Avatar, Banner, C, Chip, Icon, RoundButton, Skeleton } from "./ui";
+import type { ChipTone } from "./ui";
 
 const FINISHED = new Set(["returned", "handover_submitted", "closed"]);
 
@@ -68,31 +71,37 @@ function routeLine(batch: Batch, warehouse: string | null | undefined): string |
   return warehouse ? `${warehouse} → ${uniq.join(", ")}` : uniq.join(" → ");
 }
 
-function TripCard({ batch, scope, me, index, total, active, waitFor, checklistOn }: { batch: Batch; scope: DriverScope; me: DriverMe | undefined; index: number; total: number; active: boolean; waitFor: number | null; checklistOn: boolean }) {
+// Today's chip: a trip whose stops are all done reads "Delivered" (or "Closed ✓"); "Waiting for officer" stays inside the trip screen.
+function todayChip(t: Dict, trip: TripInfo | null | undefined): { tone: ChipTone; label: string } | null {
+  if (trip?.status === "returned" || trip?.status === "handover_submitted") return { tone: "green", label: t.chipDelivered };
+  if (trip?.status === "closed") return { tone: "green", label: t.chipClosed };
+  return chipOfTrip(t, trip);
+}
+
+export function deliveredCount(b: Pick<Batch, "progress" | "trip">): number {
+  return b.progress?.delivered ?? b.trip?.stops_done ?? 0;
+}
+
+function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: Batch; scope: DriverScope; me: DriverMe | undefined; index: number; total: number; active: boolean; waitFor: number | null }) {
   const t = useT();
   const [, setLocation] = useLocation();
   const actions = useTripActions(scope, batch.batch_id);
   const [startOpen, setStartOpen] = useState(false);
   const href = tripPath(batch.batch_id, scope.adminDriverId);
-  const chip = waitFor !== null ? { tone: "grey" as const, label: t.afterTrip(waitFor) } : chipOfTrip(t, batch.trip);
+  const chip = waitFor !== null ? { tone: "grey" as const, label: t.afterTrip(waitFor) } : todayChip(t, batch.trip);
   const status = batch.trip?.status ?? "pending";
-  const acked = batch.trip ? batch.trip.acknowledged >= batch.trip.total && batch.trip.total > 0 : false;
+  const left = batch.trip ? Math.max(batch.trip.total - batch.trip.acknowledged, 0) : 0;
+  const finished = isFinished(batch);
   const crew = !scope.isAdmin && Boolean(batch.trip);
   const partners = partnersOf(batch, me);
   const tripNo = batch.trip_number ?? index + 1;
 
-  let button: { label: string; testId: string; run: () => void } | null = null;
-  if (active && crew) {
-    if (status === "pending" && !acked)
-      button = {
-        label: t.haveOrders,
-        testId: "driver-card-action-acknowledge",
-        run: () => {
-          if (checklistOn) setLocation(withDriverParams(href, { do: "ack" }));
-          else void actions.acknowledgeAll(batch.so_count);
-        },
-      };
-    else if (status === "pending") button = { label: t.startTrip, testId: "driver-card-action-start", run: () => setStartOpen(true) };
+  // Acknowledging happens only in the Acknowledge tab: the card just takes the driver there (to this trip).
+  let button: { label: string; testId: string; run: () => void; secondary?: boolean } | null = null;
+  if (crew && status === "pending" && left > 0)
+    button = { label: t.acknowledgeOrdersN(left), testId: "driver-card-action-acknowledge", secondary: !active, run: () => setLocation(acknowledgePath(scope.adminDriverId, { batch: batch.batch_id })) };
+  else if (active && crew) {
+    if (status === "pending") button = { label: t.startTrip, testId: "driver-card-action-start", run: () => setStartOpen(true) };
     else if (status === "on_trip") button = { label: t.continueTrip, testId: "driver-card-action-continue", run: () => setLocation(href) };
   }
 
@@ -117,6 +126,12 @@ function TripCard({ batch, scope, me, index, total, active, waitFor, checklistOn
         )}
       </div>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6, overflowWrap: "anywhere" }}>{batch.vehicle}</div>
+      {finished && (
+        <div data-testid="driver-card-delivered" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 16, fontWeight: 700, color: C.green }}>
+          <Icon name="check" size={20} color={C.green} width={2.4} />
+          {t.deliveredOf(deliveredCount(batch), batch.so_count)}
+        </div>
+      )}
       <Stats batch={batch} t={t} route={routeLine(batch, me?.warehouse)} />
       {partners.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }} onClick={(e) => e.stopPropagation()}>
@@ -134,7 +149,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor, checklistOn
             e.stopPropagation();
             button?.run();
           }}
-          style={{ width: "100%", height: 56, marginTop: 16, borderRadius: 14, border: 0, background: C.ink, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, fontFamily: "inherit", opacity: actions.busy ? 0.6 : 1, cursor: "pointer" }}
+          style={{ width: "100%", height: 56, marginTop: 16, borderRadius: 14, border: button.secondary ? `1.5px solid ${C.ink}` : 0, background: button.secondary ? "#FFFFFF" : C.ink, color: button.secondary ? C.ink : "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, fontFamily: "inherit", opacity: actions.busy ? 0.6 : 1, cursor: "pointer" }}
         >
           {actions.busy ? t.gettingLocation : button.label}
         </button>
@@ -176,7 +191,7 @@ function AlertBanner({ alerts, scope }: { alerts: AlertItem[]; scope: DriverScop
       testId="driver-alert-banner"
       onClick={() => {
         markRead.mutate([first.key]);
-        if (first.link) setLocation(first.link);
+        setLocation(alertTarget(first, scope.adminDriverId));
       }}
       onDismiss={() => markRead.mutate([first.key])}
       dismissLabel={t.dismiss}
@@ -194,7 +209,6 @@ export default function DriverToday() {
   const scope = useDriverScope();
   const me = useDriverMe(scope);
   const today = useToday(scope);
-  const templates = useTemplatesQuery(scope);
   const alerts = useAlertsQuery(scope);
 
   const data = today.data?.data;
@@ -202,10 +216,9 @@ export default function DriverToday() {
   const dispatchTel = telHref(me.data?.dispatch_phone);
   const batches = data?.batches ?? [];
   const stops = batches.reduce((n, b) => n + (b.so_count ?? 0), 0);
-  const done = batches.reduce((n, b) => n + (b.trip?.stops_done ?? b.progress?.stops_done ?? 0), 0);
+  const done = batches.reduce((n, b) => n + deliveredCount(b), 0);
+  const unread = alerts.data?.unread ?? 0;
   const firstOpen = batches.findIndex((b) => !isFinished(b));
-  const flag = data?.acknowledge_checklist_enabled ?? templates.data?.data.acknowledge_checklist_enabled;
-  const checklistOn = Boolean(checklistOf(flag, templates.data?.data.acknowledge_checklist));
 
   return (
     <DriverLayout scope={scope} tab="today" testId="driver-today">
@@ -219,7 +232,19 @@ export default function DriverToday() {
             </div>
           </div>
         </div>
-        {dispatchTel && !scope.isAdmin && <RoundButton icon="phone" label={t.callDispatch} href={dispatchTel} size={48} testId="driver-call-dispatch" />}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          {!scope.isAdmin && (
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <RoundButton icon="bell" label={t.openAlerts(unread)} href={withDriverParams("/driver/alerts", { driver_id: scope.adminDriverId })} size={48} testId="driver-bell" />
+              {unread > 0 && (
+                <span data-testid="driver-unread" aria-hidden="true" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, background: C.so, color: "#FFFFFF", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box", pointerEvents: "none" }}>
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
+            </span>
+          )}
+          {dispatchTel && !scope.isAdmin && <RoundButton icon="phone" label={t.callDispatch} href={dispatchTel} size={48} testId="driver-call-dispatch" />}
+        </div>
       </div>
 
       {scope.missingDriverId ? (
@@ -275,7 +300,6 @@ export default function DriverToday() {
                       total={batches.length}
                       active={i === firstOpen}
                       waitFor={firstOpen >= 0 && i > firstOpen && !isFinished(b) && (b.trip?.status ?? "pending") === "pending" ? (batches[firstOpen].trip_number ?? firstOpen + 1) : null}
-                      checklistOn={checklistOn}
                     />
                   ))}
                 </div>

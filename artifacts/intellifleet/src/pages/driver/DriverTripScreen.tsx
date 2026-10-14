@@ -4,7 +4,7 @@
 // Opened from History (?from=history) or by an admin (?driver_id=) it is read-only.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useParams, useSearchParams } from "wouter";
+import { useLocation, useParams, useSearchParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, MapPinOff, PackageX, PackageOpen, Snowflake, TrafficCone, Truck, UserX, CircleHelp } from "lucide-react";
 import * as driverApi from "@/services/api/driver";
@@ -15,7 +15,7 @@ import { buildCheckoutAnswers, checkoutItemsForOrder, initialCheckoutForm, isIte
 import type { FieldErrors, FormValue, FormValues } from "@/lib/tripForms";
 import { newIdempotencyKey } from "@/lib/tripActions";
 import { isRemovedByDispatch } from "@/lib/offlineQueue";
-import { actionsEnabled, currentStop, directionsUrl, stopState, tripStep } from "@/lib/tripNav";
+import { acknowledgePath, actionsEnabled, currentStop, directionsUrl, stopState, tripStep } from "@/lib/tripNav";
 import { deriveBatchState } from "@/lib/tripState";
 import type { EffectiveBatch, EffectiveOrder } from "@/lib/tripState";
 import type { AutoHandover, BatchDetail, DriverOrder, DriverToday, RouteInfo, Templates } from "@/lib/tripTypes";
@@ -27,7 +27,7 @@ import { useAssignmentQuery, useRouteQuery, useTemplatesQuery } from "./queries"
 import { ErrorState, MissingDriverNotice, OfflineNote, errorText, showToast, useDriverMe, useDriverScope } from "./shared";
 import type { DriverScope } from "./shared";
 import { FieldLabel, PhotoTiles, TemplateField, fieldInput } from "./fields";
-import { ChecklistSheet, ConfirmSheet, DispatchBanners, checklistOf, handoverKey, tripChip, useTripActions } from "./tripFlow";
+import { ConfirmSheet, DispatchBanners, handoverKey, tripChip, useTripActions } from "./tripFlow";
 import { PersonRow, partnersOf } from "./DriverToday";
 import { ActionBar, Banner, C, Chip, FieldError, Icon, NumberDot, OutlineButton, Pill, PrimaryButton, RoundButton, Sheet, SheetTitle, Skeleton, TextButton, TypeBadge } from "./ui";
 
@@ -623,12 +623,12 @@ function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn }: { 
 
 // ---------- the screen ----------
 
-type SheetName = "start" | "deliver" | "end" | "problem" | "checklist" | null;
+type SheetName = "start" | "deliver" | "end" | "problem" | null;
 
 function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline, savedAt }: { batch: BatchDetail; state: EffectiveBatch; scope: DriverScope; readOnly: boolean; backHref: string; backLabel: string; offline: boolean; savedAt: number | null }) {
   const t = useT();
   const me = useDriverMe(scope);
-  const [params, setParams] = useSearchParams();
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const actions = useTripActions(scope, batch.batch_id);
   const templates = useTemplatesQuery(scope);
@@ -639,33 +639,14 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
   const current = currentStop(state.orders);
   const tpl: Templates | undefined = templates.data?.data;
   const photoOn = Boolean(batch.photo_storage_enabled ?? tpl?.photo_storage_enabled);
-  const checklist = checklistOf(batch.acknowledge_checklist_enabled ?? tpl?.acknowledge_checklist_enabled, tpl?.acknowledge_checklist);
   const busy = actions.busy || !actions.ready;
   const today = queryClient.getQueryData<Cached<DriverToday>>(["driver-today", scope.adminDriverId])?.data;
   const changes = [...(batch.dispatch_changes ?? []), ...(today?.dispatch_changes ?? []).filter((c) => !(batch.dispatch_changes ?? []).some((b) => b.at === c.at && b.so_id === c.so_id))];
-
-  // ?do=ack from the Today card (checklist on): open the checklist once.
-  useEffect(() => {
-    if (params.get("do") === "ack" && step === "acknowledge" && !readOnly && checklist) {
-      setSheet("checklist");
-      const next = new URLSearchParams(params);
-      next.delete("do");
-      setParams(next, { replace: true });
-    }
-  }, [params, step, readOnly, checklist, setParams]);
 
   // The Delivered sheet's order was removed by dispatch while open: close it and say so.
   useEffect(() => {
     if (sheet === "deliver" && (!current || current.stopStatus !== "checked_in")) setSheet(null);
   }, [sheet, current]);
-
-  const ackAll = async () => {
-    if (checklist) {
-      setSheet("checklist");
-      return;
-    }
-    await actions.acknowledgeAll(state.total);
-  };
 
   const routeStop = current ? (route.data?.data as RouteInfo | undefined)?.stops.find((s) => String(s.so_id) === current.so_id) ?? null : null;
   const navUrl = current ? directionsUrl(current.order, routeStop) : null;
@@ -676,8 +657,9 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
   } else if (step === "acknowledge") {
     bar = (
       <>
-        <PrimaryButton icon="check" disabled={busy} onClick={() => void ackAll()} testId="driver-ack-all">
-          {actions.busy ? t.gettingLocation : t.haveAll(state.total)}
+        {/* Acknowledging happens only in the Acknowledge tab: this button takes the driver there, on this trip. */}
+        <PrimaryButton icon="check" onClick={() => setLocation(acknowledgePath(scope.adminDriverId, { batch: batch.batch_id }))} testId="driver-ack-all">
+          {t.acknowledgeOrders}
         </PrimaryButton>
         <TextButton onClick={() => setSheet("problem")} testId="driver-problem">
           {t.problemWithOrder}
@@ -791,20 +773,6 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
               window.scrollTo(0, 0);
             }}
           />
-          {checklist && (
-            <ChecklistSheet
-              open={sheet === "checklist"}
-              template={checklist}
-              photoStorage={photoOn}
-              orderIds={state.orders.filter((o) => !o.acked && !o.ackPending).map((o) => o.so_id)}
-              busy={actions.busy}
-              onClose={() => setSheet(null)}
-              onDone={async (answers, blobs) => {
-                await actions.acknowledgeAll(state.total, { templateId: checklist.id, answers, blobs });
-                setSheet(null);
-              }}
-            />
-          )}
           {sheet === "deliver" && current && tpl && (
             <DeliveredSheet
               key={current.so_id}

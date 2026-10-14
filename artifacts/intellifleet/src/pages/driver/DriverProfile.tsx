@@ -1,16 +1,13 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import * as authApi from "@/services/api/auth";
-import * as driverApi from "@/services/api/driver";
 import { clearStoredSessionId } from "@/services/api/client";
-import { MIN_PASSWORD_LENGTH, formatDateTimeShort, telHref } from "@/lib/driver";
+import { MIN_PASSWORD_LENGTH, telHref } from "@/lib/driver";
 import { useOfflineQueue } from "@/lib/offlineRuntime";
-import type { AlertItem } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
 import { useLang, useT } from "./i18n";
-import { useAlertsQuery } from "./queries";
 import { ErrorState, MissingDriverNotice, errorText, useDriverMe, useDriverScope } from "./shared";
 import { fieldInput } from "./fields";
 import { Avatar, C, FieldError, Icon, PrimaryButton, Sheet, SheetTitle, Skeleton, TextButton } from "./ui";
@@ -70,59 +67,11 @@ function PasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }
   );
 }
 
-function Alerts({ alerts, unread }: { alerts: AlertItem[]; unread: number }) {
-  const t = useT();
-  const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
-  const markRead = useMutation({
-    mutationFn: (input: { keys?: string[]; all?: boolean }) => driverApi.markAlertsRead(input),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["driver-alerts"] }),
-  });
-  if (alerts.length === 0) return null;
-  return (
-    <div data-testid="driver-alerts" style={{ margin: "14px 20px 0", background: C.card, borderRadius: 18, overflow: "hidden" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${C.muted}` }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
-          <Icon name="bell" size={20} />
-          {t.alerts}
-          {unread > 0 && <span style={{ minWidth: 22, height: 22, padding: "0 6px", borderRadius: 11, background: C.so, color: "#FFFFFF", fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>{unread}</span>}
-        </span>
-        {unread > 0 && (
-          <button type="button" onClick={() => markRead.mutate({ all: true })} style={{ minHeight: 44, border: 0, background: "transparent", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: C.sub }}>
-            {t.markAllRead}
-          </button>
-        )}
-      </div>
-      {alerts.slice(0, 15).map((a, i) => (
-        <button
-          key={a.key}
-          type="button"
-          data-testid={`driver-alert-${a.type}`}
-          data-read={a.read ? "true" : "false"}
-          onClick={() => {
-            if (!a.read) markRead.mutate({ keys: [a.key] });
-            if (a.link) setLocation(a.link);
-          }}
-          style={{ display: "flex", width: "100%", gap: 10, alignItems: "flex-start", padding: "12px 16px", border: 0, borderTop: i === 0 ? 0 : `1px solid ${C.muted}`, background: "#FFFFFF", fontFamily: "inherit", color: C.ink, textAlign: "left", cursor: "pointer" }}
-        >
-          <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 7, background: a.read ? "transparent" : C.so, flexShrink: 0 }} />
-          <span style={{ minWidth: 0, flex: 1 }}>
-            <span style={{ display: "block", fontSize: 15, fontWeight: a.read ? 500 : 700, overflowWrap: "anywhere" }}>{a.title}</span>
-            {a.body && <span style={{ display: "block", fontSize: 14, color: C.sub, overflowWrap: "anywhere" }}>{a.body}</span>}
-            {a.at && <span style={{ display: "block", fontSize: 12, color: C.sub, marginTop: 2 }}>{formatDateTimeShort(a.at)}</span>}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export default function DriverProfile() {
   const t = useT();
   const [lang, setLang] = useLang();
   const scope = useDriverScope();
   const me = useDriverMe(scope);
-  const alerts = useAlertsQuery(scope);
   const queue = useOfflineQueue();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -222,7 +171,6 @@ export default function DriverProfile() {
               </button>
             </div>
           )}
-          {!scope.isAdmin && <Alerts alerts={alerts.data?.alerts ?? []} unread={alerts.data?.unread ?? 0} />}
           <div style={{ height: 20 }} />
           <PasswordSheet open={pwOpen} onClose={() => setPwOpen(false)} />
         </>

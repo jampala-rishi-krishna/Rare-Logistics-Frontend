@@ -1,7 +1,8 @@
 // The simplified driver app, tapped like a driver at 360 px against the stateful fake in e2e/flowMock.ts (2 SOs + 1 TO):
-// Sign in -> Today -> Acknowledge (ONE call) -> Start trip (+sheet) -> per stop Reached -> Delivered sheet (photo) -> End trip (+sheet)
+// Sign in -> Today -> "Acknowledge orders (3)" -> Acknowledge tab "Acknowledge 3 orders" (ONE call) -> Today -> Start trip (+sheet) -> per stop Reached -> Delivered sheet (photo) -> End trip (+sheet)
 // -> "Give the signed invoice copies" / Waiting for officer -> Closed. Plus: dispatch removed an order (banner, 409 order_removed
-// online and from the offline queue), Not fully delivered / Problem sheets, Tagalog, History read-only, Profile.
+// online and from the offline queue), Not fully delivered / Problem sheets, Tagalog, History read-only, Profile, the Alerts page
+// (bell on Today), the delivered Today card and past dates on the Acknowledge tab.
 // Screenshots: e2e/screenshots/driver-simplified/. Run:
 //   node --experimental-strip-types --no-warnings --test e2e/driver.flow.test.ts
 import assert from "node:assert/strict";
@@ -70,7 +71,7 @@ async function addPhoto(page: Page, tap: (sel: string, label: string) => Promise
 }
 
 describe("simplified driver flow at 360 px", () => {
-  it("sign in -> acknowledge (one call) -> start -> 3 stops delivered -> end -> waiting for officer -> closed; counts the taps", async () => {
+  it("sign in -> acknowledge tab (one call) -> start -> 3 stops delivered -> end -> waiting for officer -> closed; counts the taps", async () => {
     const flow = newFlow();
     const s = await session(flow, { session: null });
     const { page } = s;
@@ -89,7 +90,9 @@ describe("simplified driver flow at 360 px", () => {
     await tap("[data-testid=driver-login-submit]", "Sign in");
     await page.waitForURL("**/driver/today");
     await page.waitForSelector("[data-testid=driver-card-action-acknowledge]");
-    assert.equal((await page.textContent("[data-testid=driver-card-action-acknowledge]"))?.trim(), "Acknowledge");
+    assert.equal((await page.textContent("[data-testid=driver-card-action-acknowledge]"))?.trim(), "Acknowledge orders (3)");
+    await page.waitForSelector("[data-testid=driver-ack-badge]");
+    assert.equal((await page.textContent("[data-testid=driver-ack-badge]"))?.trim(), "3", "Acknowledge tab badge = orders still to acknowledge");
     assert.equal((await page.textContent("[data-testid=kpi-stops]"))?.match(/^\d+/)?.[0], "3");
     await snap(page, "02-today");
 
@@ -99,20 +102,39 @@ describe("simplified driver flow at 360 px", () => {
     await installFlow(peek, flow);
     await peek.goto(`${BASE}/driver/trip/${BATCH}`);
     await peek.waitForSelector("[data-testid=driver-ack-all]");
+    assert.equal((await peek.textContent("[data-testid=driver-ack-all]"))?.trim(), "Acknowledge orders");
     for (const no of ["SO-TEST-1001", "SO-TEST-1002", "TO-TEST-0003"]) assert.equal(await peek.locator(`[data-testid=driver-order-${no}]`).count(), 1, `${no} listed`);
     await snap(peek, "03-trip-acknowledge");
     assert.deepEqual(peekRecorder.unexpected, []);
     assert.equal(flow.log.length, 0, "looking at the trip sends nothing");
     await peek.close();
 
-    // Acknowledge: ONE tap, ONE call, every order
-    await tap("[data-testid=driver-card-action-acknowledge]", "Acknowledge (Today card)");
-    await page.waitForSelector("[data-testid=driver-card-action-start]");
+    // The card only opens the Acknowledge tab on this trip; acknowledging is ONE tap there, ONE call, every order
+    await tap("[data-testid=driver-card-action-acknowledge]", "Acknowledge orders (Today card)");
+    await page.waitForURL(`**/driver/acknowledge?batch=${BATCH}`);
+    assert.equal(flow.log.length, 0, "opening the Acknowledge tab sends nothing");
+    const groupButton = `[data-testid=driver-ack-trip-button-${BATCH}]`;
+    await page.waitForSelector(groupButton);
+    assert.equal((await page.textContent(groupButton))?.trim(), "Acknowledge 3 orders");
+    for (const no of ["SO-TEST-1001", "SO-TEST-1002", "TO-TEST-0003"]) assert.equal(await page.getAttribute(`[data-testid=driver-ack-order-${no}]`, "data-acked"), "false");
+    await snap(page, "18-acknowledge-tab");
+    await tap(groupButton, "Acknowledge 3 orders (Acknowledge tab)");
+    await page.waitForSelector("[data-testid=driver-all-acked]");
+    await page.waitForSelector(groupButton, { state: "detached" });
+    assert.match((await page.textContent("[data-testid=driver-all-acked]")) ?? "", /All orders acknowledged ✓/);
+    assert.match((await page.textContent("[data-testid=driver-ack-order-SO-TEST-1001] [data-testid=driver-acked-line]")) ?? "", /Acknowledged ✓ 07:00 · by Alex Driver/);
+    await page.waitForSelector("[data-testid=driver-ack-badge]", { state: "detached" });
+    await snap(page, "19-acknowledge-tab-all-done");
     assert.equal(flow.log.filter((l) => l === "acknowledge-all").length, 1, "acknowledge-all called once");
     assert.equal(flow.log.filter((l) => l === "acknowledge").length, 0, "no per-order acknowledge calls");
     assert.ok(flow.orders.every((o) => o.ack), "all 3 orders (2 SO + 1 TO) acknowledged by that one call");
     const ackBody = flow.posts.find((p) => p.path.endsWith("/acknowledge-all"))?.body ?? {};
     assert.ok(typeof ackBody.idempotency_key === "string" && ackBody.client_ts, "idempotency key + client time sent");
+
+    // Back to Today: the card no longer mentions acknowledging, it is Start trip now
+    await tap("[data-testid=driver-nav-today]", "Today tab");
+    await page.waitForSelector("[data-testid=driver-card-action-start]");
+    assert.equal(await page.locator("[data-testid=driver-card-action-acknowledge]").count(), 0);
 
     // Start trip + confirm sheet
     await tap("[data-testid=driver-card-action-start]", "Start trip (Today card)");
@@ -185,20 +207,85 @@ describe("simplified driver flow at 360 px", () => {
     assert.deepEqual(flow.log.filter((l) => l !== "upload"), ["acknowledge-all", "start", "check-in", "check-out", "check-in", "check-out", "check-in", "check-out", "end"]);
     assert.equal(flow.uploads, 3);
     console.log(`\n[driver flow] taps from sign-in to End trip confirm (typing and Navigate excluded): ${taps.length}\n  ${taps.map((t, i) => `${i + 1}. ${t}`).join("\n  ")}\n`);
-    assert.equal(taps.length, 18);
+    assert.equal(taps.length, 20);
     await s.done();
   });
 
-  it("the trip screen's Acknowledge also acknowledges every order with one call", async () => {
+  it("the trip screen's Acknowledge orders opens the Acknowledge tab on that trip; the tab acknowledges with one call", async () => {
     const flow = newFlow();
     const s = await session(flow);
     await s.page.goto(`${BASE}/driver/trip/${BATCH}`);
     await s.page.waitForSelector("[data-testid=driver-ack-all]");
-    assert.equal((await s.page.textContent("[data-testid=driver-ack-all]"))?.trim(), "Acknowledge");
+    assert.equal((await s.page.textContent("[data-testid=driver-ack-all]"))?.trim(), "Acknowledge orders");
     await s.page.click("[data-testid=driver-ack-all]");
-    await s.page.waitForSelector("[data-testid=driver-start-trip]");
+    await s.page.waitForURL(`**/driver/acknowledge?batch=${BATCH}`);
+    assert.deepEqual(flow.log, [], "the trip screen itself acknowledges nothing");
+    await s.page.click(`[data-testid=driver-ack-trip-button-${BATCH}]`);
+    await s.page.waitForSelector("[data-testid=driver-all-acked]");
     assert.deepEqual(flow.log, ["acknowledge-all"]);
     assert.ok(flow.orders.every((o) => o.ack));
+    await s.page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await s.page.waitForSelector("[data-testid=driver-start-trip]");
+    await s.done();
+  });
+
+  it("Acknowledge tab: a past date shows that day's orders read-only with who acknowledged", async () => {
+    const flow = newFlow();
+    const day = "2026-10-12";
+    const h1 = { ...d.detailOnTrip, batch_id: "h-1", delivery_date: day, vehicle: "TRK-1001", trip: { ...d.detailOnTrip.trip, status: "closed" } };
+    const s = await session(flow, { detail: { "h-1": h1 }, history: (q) => ({ ...d.historyAll, batches: d.historyAll.batches.filter((b) => b.delivery_date >= (q.get("from") ?? "") && b.delivery_date <= (q.get("to") ?? "9")) }) });
+    const { page } = s;
+    await page.goto(`${BASE}/driver/acknowledge`);
+    await page.waitForSelector(`[data-testid=driver-ack-trip-${BATCH}]`);
+    await page.click("[data-testid=driver-ack-date-yesterday]");
+    await page.waitForURL(`**/driver/acknowledge?date=${day}`);
+    await page.waitForSelector("[data-testid=driver-ack-trip-h-1] [data-testid=driver-acked-line]");
+    const hist = s.recorder.calls.find((c) => c.path === "/api/driver/history");
+    assert.ok(hist, "past dates come from /api/driver/history (one day) + /api/driver/assignments/{id}");
+    assert.ok(s.recorder.calls.some((c) => c.path === "/api/driver/assignments/h-1"));
+    assert.equal(await page.locator("[data-testid^=driver-ack-trip-button-]").count(), 0, "read-only: no Acknowledge button on a past date");
+    assert.equal(await page.locator("[data-testid=driver-ack-trip-h-1] [data-testid=driver-acked-line]").count(), 5);
+    await page.waitForSelector("[data-testid=driver-all-acked]");
+    await snap(page, "20-acknowledge-tab-yesterday");
+    assert.deepEqual(flow.log, []);
+    await s.done();
+  });
+
+  it("Today: a delivered trip reads Delivered with 'N of N delivered', never Waiting for officer; Done counts delivered stops", async () => {
+    const flow = ended(newFlow());
+    const s = await session(flow);
+    const { page } = s;
+    await page.goto(`${BASE}/driver/today`);
+    await page.waitForSelector("[data-testid=driver-card-delivered]");
+    assert.equal((await page.textContent("[data-testid=driver-trip-chip]"))?.trim(), "Delivered");
+    assert.match((await page.textContent("[data-testid=driver-card-delivered]")) ?? "", /3 of 3 delivered/);
+    assert.doesNotMatch((await page.textContent(`[data-testid=driver-batch-${BATCH}]`)) ?? "", /Waiting for officer|acknowledg/i);
+    assert.match((await page.textContent("[data-testid=kpi-done]")) ?? "", /^3/);
+    await snap(page, "21-today-delivered");
+    flow.trip = "closed";
+    await bringToFront(page);
+    await page.waitForFunction(() => document.querySelector("[data-testid=driver-trip-chip]")?.textContent?.trim() === "Closed ✓", null, { timeout: 30_000 });
+    await s.done();
+  });
+
+  it("Alerts: bell with the unread count on Today opens the Alerts page; an assignment alert opens the Acknowledge tab", async () => {
+    const flow = newFlow();
+    const s = await session(flow);
+    const { page } = s;
+    await page.goto(`${BASE}/driver/today`);
+    await page.waitForSelector("[data-testid=driver-bell]");
+    await page.waitForSelector("[data-testid=driver-unread]");
+    assert.equal((await page.textContent("[data-testid=driver-unread]"))?.trim(), "3");
+    await page.click("[data-testid=driver-bell]");
+    await page.waitForURL("**/driver/alerts");
+    await page.waitForSelector("[data-testid=driver-alerts] [data-testid=driver-alert-assigned]");
+    assert.equal(await page.locator("[data-testid=driver-alerts] [data-testid^=driver-alert-]").count(), d.alerts.alerts.length);
+    assert.equal(await page.getAttribute("[data-testid=driver-alerts-back]", "href"), "/driver/today");
+    assert.equal(await page.getAttribute("[data-testid=driver-alerts-back]", "aria-label"), "Back to today");
+    await snap(page, "22-alerts-page");
+    await page.click("[data-testid=driver-alert-assigned]");
+    await page.waitForURL("**/driver/acknowledge?batch=b-2");
+    assert.ok(s.recorder.calls.some((c) => c.method === "POST" && c.path === "/api/driver/alerts/read"), "tapping an unread alert marks it read");
     await s.done();
   });
 
@@ -298,7 +385,8 @@ describe("simplified driver flow at 360 px", () => {
     await snap(page, "14-profile-tagalog");
     await page.click("[data-testid=driver-nav-today]");
     await page.waitForSelector("[data-testid=driver-card-action-acknowledge]");
-    assert.equal((await page.textContent("[data-testid=driver-card-action-acknowledge]"))?.trim(), "Kumpirmahin");
+    assert.equal((await page.textContent("[data-testid=driver-card-action-acknowledge]"))?.trim(), "Kumpirmahin ang orders (3)");
+    assert.match((await page.textContent("[data-testid=driver-nav-acknowledge]")) ?? "", /Kumpirmahin$/);
     await s.done();
   });
 
@@ -320,16 +408,18 @@ describe("simplified driver flow at 360 px", () => {
     await s.done();
   });
 
-  it("Profile: language toggle and the alerts list", async () => {
+  it("Profile: language toggle; no alerts list and no unread badge on the Profile tab", async () => {
     const flow = newFlow();
     const s = await session(flow);
     const { page } = s;
     await page.goto(`${BASE}/driver/profile`);
-    await page.waitForSelector("[data-testid=driver-alerts]");
+    await page.waitForSelector("[data-testid=driver-profile-header]");
     assert.equal(await page.locator("[data-testid=driver-lang-en][aria-pressed=true]").count(), 1);
     assert.equal(await page.locator("[data-testid=driver-lang-tl]").count(), 1);
-    assert.equal(await page.locator("[data-testid=driver-alerts] [data-testid^=driver-alert-]").count(), d.alerts.alerts.length);
-    assert.equal((await page.textContent("[data-testid=driver-unread]"))?.trim(), "3");
+    await page.waitForTimeout(500);
+    assert.equal(await page.locator("[data-testid=driver-alerts], [data-testid^=driver-alert-]").count(), 0, "alerts moved to their own page");
+    assert.equal(await page.locator("[data-testid=driver-nav-profile] [data-testid=driver-unread]").count(), 0);
+    assert.equal(await page.locator("[data-testid=driver-nav-acknowledge]").count(), 1, "4 tabs: Today, Acknowledge, History, Profile");
     await snap(page, "13-profile");
     await s.done();
   });

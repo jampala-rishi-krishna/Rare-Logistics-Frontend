@@ -106,6 +106,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M20 20v-4h-4" />
     </>
   ),
+  clipboardCheck: (
+    <>
+      <path d="M9 4h6v3H9z" />
+      <path d="M9 5H6v16h12V5h-3" />
+      <path d="M9 14l2 2 4-4" />
+    </>
+  ),
   warehouse: (
     <>
       <path d="M3 21V9l9-5 9 5v12" />
@@ -168,17 +175,19 @@ export function ActionBar({ children }: { children: ReactNode }) {
   );
 }
 
-export type Tab = "today" | "history" | "profile";
+export type Tab = "today" | "acknowledge" | "history" | "profile";
 
+// Badge = orders still to acknowledge (on the Acknowledge tab).
 export function BottomNav({ active, adminDriverId, badge = 0 }: { active: Tab; adminDriverId: string | null; badge?: number }) {
   const t = useT();
   const items: Array<{ tab: Tab; href: string; icon: IconName; label: string }> = [
     { tab: "today", href: "/driver/today", icon: "home", label: t.tabToday },
+    { tab: "acknowledge", href: "/driver/acknowledge", icon: "clipboardCheck", label: t.tabAck },
     { tab: "history", href: "/driver/history", icon: "clock", label: t.tabHistory },
     { tab: "profile", href: "/driver/profile", icon: "user", label: t.tabProfile },
   ];
   return (
-    <FixedBottom style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", padding: `8px 0 ${SAFE_BOTTOM(22)}`, boxSizing: "border-box" }}>
+    <FixedBottom style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", padding: `8px 0 ${SAFE_BOTTOM(22)}`, boxSizing: "border-box" }}>
       {items.map((it) => {
         const on = it.tab === active;
         const color = on ? C.ink : C.navOff;
@@ -188,17 +197,17 @@ export function BottomNav({ active, adminDriverId, badge = 0 }: { active: Tab; a
             href={withDriverParams(it.href, { driver_id: adminDriverId })}
             data-testid={`driver-nav-${it.tab}`}
             aria-current={on ? "page" : undefined}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 0", fontSize: 13, fontWeight: on ? 700 : 400, color, textDecoration: "none", minHeight: 48 }}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 0", fontSize: 13, fontWeight: on ? 700 : 400, color, textDecoration: "none", minHeight: 48, minWidth: 0 }}
           >
             <span style={{ position: "relative", display: "inline-flex" }}>
               <Icon name={it.icon} color={color} width={on ? 2.2 : 2} />
-              {it.tab === "profile" && badge > 0 && (
-                <span data-testid="driver-unread" style={{ position: "absolute", top: -4, right: -10, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: C.so, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>
+              {it.tab === "acknowledge" && badge > 0 && (
+                <span data-testid="driver-ack-badge" style={{ position: "absolute", top: -4, right: -10, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: C.so, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>
                   {badge > 9 ? "9+" : badge}
                 </span>
               )}
             </span>
-            {it.label}
+            <span style={{ maxWidth: "100%", padding: "0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", boxSizing: "border-box" }}>{it.label}</span>
           </Link>
         );
       })}

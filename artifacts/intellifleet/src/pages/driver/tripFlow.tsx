@@ -99,7 +99,7 @@ export function ConfirmSheet({ open, title, sub, confirmLabel, icon, busy, onCon
 
 // Checklist shown before the one-tap acknowledge, only when an admin turned it on. The same answers are recorded for
 // every order of the trip (one check for the truck, not one per order).
-export function ChecklistSheet({ open, template, photoStorage, orderIds, busy, onClose, onDone }: { open: boolean; template: Template; photoStorage: boolean; orderIds: string[]; busy: boolean; onClose: () => void; onDone: (answers: Record<string, unknown>, blobs: QueueBlob[]) => void }) {
+export function ChecklistSheet({ open, template, photoStorage, orderIds, busy, confirmLabel, onClose, onDone }: { open: boolean; template: Template; photoStorage: boolean; orderIds: string[]; busy: boolean; confirmLabel?: string; onClose: () => void; onDone: (answers: Record<string, unknown>, blobs: QueueBlob[]) => void }) {
   const t = useT();
   const items = useMemo(() => usableItems(template.items, photoStorage), [template, photoStorage]);
   const [form, setForm] = useState<AckForm>(() => initialAckForm(items));
@@ -126,7 +126,7 @@ export function ChecklistSheet({ open, template, photoStorage, orderIds, busy, o
         <input type="text" value={form.general_note} onChange={(e) => setForm((f) => ({ ...f, general_note: e.target.value }))} style={fieldInput} />
       </label>
       <PrimaryButton icon="check" height={62} fontSize={19} disabled={busy} onClick={submit} testId="driver-checklist-confirm">
-        {busy ? t.gettingLocation : t.haveAll(orderIds.length)}
+        {busy ? t.gettingLocation : (confirmLabel ?? t.acknowledgeNOrders(orderIds.length))}
       </PrimaryButton>
       <TextButton onClick={onClose} disabled={busy}>
         {t.cancel}

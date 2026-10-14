@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { actionsEnabled, changeKey, checkinNotice, currentStop, directionsUrl, farWarningFor, legacyRedirect, stopState, tripPath, tripStep, visibleChanges } from "./tripNav.ts";
+import { acknowledgePath, actionsEnabled, alertTarget, changeKey, ordersToAcknowledge, shiftYmd, checkinNotice, currentStop, directionsUrl, farWarningFor, legacyRedirect, stopState, tripPath, tripStep, visibleChanges } from "./tripNav.ts";
 import type { EffectiveOrder } from "./tripState.ts";
 import type { BatchDetail, DispatchChange } from "./tripTypes.ts";
 
@@ -17,7 +17,6 @@ test("legacyRedirect sends every old driver URL to a live screen", () => {
   assert.equal(legacyRedirect("/driver/assignment/b1/handover", ""), "/driver/trip/b1");
   assert.equal(legacyRedirect("/driver/assignment/b1", "?from=history"), "/driver/trip/b1?from=history");
   assert.equal(legacyRedirect("/driver/trips", ""), "/driver/history");
-  assert.equal(legacyRedirect("/driver/alerts", ""), "/driver/profile");
   assert.equal(legacyRedirect("/driver/issues/new", "?batch=b%202&so=1"), "/driver/trip/b%202");
   assert.equal(legacyRedirect("/driver/issues", ""), "/driver/today");
   assert.equal(legacyRedirect("/driver/whatever", ""), "/driver/today");
@@ -99,4 +98,31 @@ test("visibleChanges filters by batch, hides dismissed, newest first", () => {
   assert.deepEqual(visibleChanges(list, "b1", new Set()).map((x) => x.at), ["2026-10-14T03:00:00Z", "2026-10-14T01:00:00Z"]);
   assert.equal(visibleChanges(list, null, new Set([changeKey(list[1])])).length, 2);
   assert.deepEqual(visibleChanges(undefined, null, new Set()), []);
+});
+
+test("acknowledgePath keeps date / trip / driver_id", () => {
+  assert.equal(acknowledgePath(null), "/driver/acknowledge");
+  assert.equal(acknowledgePath("7", { batch: "b 1", date: "2026-10-13" }), "/driver/acknowledge?date=2026-10-13&batch=b+1&driver_id=7");
+});
+
+test("ordersToAcknowledge counts pending trips only and skips a queued acknowledge-all", () => {
+  const b = (batch_id: string, status: string, total: number, acknowledged: number) => ({ batch_id, trip: { status, total, acknowledged } }) as never;
+  const batches = [b("a", "pending", 3, 1), b("b", "pending", 2, 0), b("c", "on_trip", 4, 4), { batch_id: "d", trip: null } as never];
+  assert.equal(ordersToAcknowledge(batches), 4);
+  assert.equal(ordersToAcknowledge(batches, [{ batch_id: "b", kind: "acknowledge_all", status: "pending" }]), 2);
+  assert.equal(ordersToAcknowledge(batches, [{ batch_id: "b", kind: "acknowledge_all", status: "needs_attention" }]), 4);
+  assert.equal(ordersToAcknowledge(undefined), 0);
+});
+
+test("alertTarget: assignment / acknowledge alerts open the Acknowledge tab on that trip", () => {
+  assert.equal(alertTarget({ type: "assigned", title: "New trip", body: "", link: "/driver/assignment/b-9" }), "/driver/acknowledge?batch=b-9");
+  assert.equal(alertTarget({ type: "changed", title: "Please acknowledge 2 orders", body: "", link: "/driver/trip/b-2" }, "5"), "/driver/acknowledge?batch=b-2&driver_id=5");
+  assert.equal(alertTarget({ type: "validated", title: "Invoices checked", body: "", link: "/driver/trip/b-2" }), "/driver/trip/b-2");
+  assert.equal(alertTarget({ type: "issue", title: "Reply", body: "", link: "" }), "/driver/today");
+});
+
+test("shiftYmd", () => {
+  assert.equal(shiftYmd("2026-10-01", -1), "2026-09-30");
+  assert.equal(shiftYmd("2026-12-31", 1), "2027-01-01");
+  assert.equal(shiftYmd("x", 1), "");
 });
