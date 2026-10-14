@@ -1,0 +1,62 @@
+TASK: Simplify and redesign the Driver App. Logistics says the current app is too complicated for our drivers (not tech-savvy): too many screens, too many buttons, too many unrelated openings. Make it as simple as Uber Driver: ONE trip screen, ONE big button that changes with each step. Use your frontend-design skill. Build end to end, then report back.
+
+KEEP: the backend state machine, permissions, idempotency, offline queue, GPS capture and every data point Driver Overview needs (times, GPS, invoice/DR, photos, outcomes). Same data, far fewer taps. Keep the existing colour tokens (black primary, white cards, grey background, amber/green status chips), but go bolder Uber-style: big type, big buttons, lots of white space.
+
+DESIGN RULES (apply everywhere)
+- Max 1 primary action visible at any time: a full-width black button fixed at the bottom, within thumb reach, at least 56px tall, label in large text with an icon.
+- Short plain words, no jargon. Example labels: "I have the orders", "Start trip", "Navigate", "I'm here", "Delivered", "End trip".
+- Add a language toggle in Profile: English / Tagalog. All driver labels must be translatable; use simple Tagalog, not formal.
+- No screen needs reading paragraphs. Use icons + numbers + 3–5 word labels.
+- Everything shows on the trip screen; no navigating into sub-pages to find information.
+- Confirmations are a single bottom sheet, never a new page.
+
+NEW STRUCTURE (replace the current pages)
+Bottom nav, 3 tabs only: Today · History · Profile.
+- Remove the Alerts tab: show alerts as a banner at the top of Today, plus the bell count on Profile.
+- Remove: route map section, "All stops", "View trip timeline", "Stops and directions", the separate route page, the separate acknowledge pages, the separate checkout page, the separate handover page, the Issues tab. Keep their data and backend endpoints; only the UI goes.
+- "Problem?" = one small text button on the trip screen that opens a bottom sheet: pick a reason (icons) + optional photo + optional note, then send. It goes to driver_issues as now.
+
+TODAY TAB
+- Greeting + date.
+- One big card per trip: truck plate, "Trip 1 of 2", status chip, orders, kg, packs, pickup warehouse → delivery areas, helper name with a call icon.
+- Tap the card = open the trip screen. The card's button does the next step directly.
+- "Call dispatch" stays as one icon button at the top.
+
+TRIP SCREEN (everything on one page)
+Top: plate, status chip, progress "2 of 5 delivered", helper (tap to call).
+Middle: the ordered stop list. Each stop row shows: number, SO/TO badge, customer name, short address, items count + kg/packs, and its state (Waiting / Here / Delivered / Problem). The current stop is highlighted and expanded with: contact (tap to call), full address, notes, item lines.
+Bottom: ONE big button that changes:
+1. "I have all 5 orders" → ONE tap acknowledges ALL orders in the trip. No checklist; the form template stays only if admin turns it on later in Settings, and it's OFF by default. Records who, when and GPS per SO, the same as now.
+2. "Start trip" → bottom sheet "Start trip now?" [Start].
+3. Current stop: two buttons side by side: [Navigate] (opens Google Maps to this stop) and [I'm here] (check-in, one tap, GPS + time).
+4. "Delivered" → bottom sheet with ONLY:
+   - Invoice/DR number (numeric keypad; prefilled if known; for a TO, the TO# is filled automatically and not editable).
+   - Proof photo (big camera button; required when photo storage is configured; if not configured, show a small "Photo not available" note and allow submit).
+   - [Delivered] button. A small link "Not fully delivered?" switches to: Partial / Failed + reason chips + optional photo.
+   That one sheet = check-out. Then it auto-advances to the next stop.
+5. After the last stop: "End trip, back at warehouse" → confirm sheet.
+6. After End trip: the screen shows "Give the signed invoice copies to the Logistics Officer" with the list of invoice/DR numbers, then "Waiting for officer". NO driver handover form. The handover record is created automatically at End trip with all SOs; the officer validates in the officer screen as now. Then the trip shows "Closed ✓".
+
+UNASSIGN / CHANGES FROM DISPATCH
+- When dispatch unassigns an order or a whole trip, it must disappear from the driver app right away:
+  - The driver app refetches every 20–30s while visible, on app focus/resume, and immediately after any action.
+  - Show a banner "Dispatch removed SO26-18449 from your trip" / "Trip removed by dispatch".
+  - If the driver is mid-action offline, the queued action for a removed order fails safely with the message "This order was removed by dispatch".
+- On the main platform (Load Planning / Confirmed Orders unassign, single and bulk): if any selected order was acknowledged or its trip has started, show a confirmation dialog listing each one, e.g. "SO26-18449: acknowledged by Albert Atienza at 13:20" / "Trip started 13:24, stop checked in". [Cancel] [Unassign anyway].
+  - After OK, unassign as normal and record an audit event (who, when, previous state) visible in Driver Overview.
+  - If the stop is already checked out (delivered), block unassign for that order and say why.
+- Driver Overview shows these unassign events in the timeline.
+
+HISTORY TAB
+Simple list of past trips (date, plate, delivered X of Y, closed/waiting). Tap = a read-only version of the same trip screen.
+
+PROFILE TAB
+Name, phone, warehouse, language toggle, call dispatch, change password, logout. Alerts list here too, if any.
+
+QUALITY
+- Test at 360 / 390 / 430px: no horizontal scroll, the bottom button never covers content, safe-area padding.
+- Count taps for a 3-stop trip from login to End trip and report the before/after number. Target: acknowledge 1 + start 2 (tap + confirm) + per stop (I'm here 1 + Delivered sheet 2–3 incl. photo) + end 2.
+- Mocked tests: one-tap acknowledge writes all SOs; auto handover at End trip; unassign removes the order from the driver payload; acknowledged/started orders need the confirm dialog; delivered orders can't be unassigned; TO uses TO# with no invoice.
+- Playwright screenshots of the full flow at 360px with mocked APIs. Run the full suite plus tsc + build.
+
+DELIVERY: commit per feature, push backend first (wait for /health), then frontend. Report: screens removed/added, the tap count before vs after, files changed, and anything not done.

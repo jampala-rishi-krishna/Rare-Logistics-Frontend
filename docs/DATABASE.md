@@ -34,9 +34,9 @@ the only date-filtered Neon reads.
 | `trips` | One row per assignment batch (`batch_id` unique): status `pending/on_trip/returned/handover_submitted/closed`, start/end times + GPS, end distance | Created lazily by the first crew action on a batch; updated by start, end, and when the handover is closed. One write per crew action |
 | `so_acknowledgements` | One row per SO per trip: the checklist answers, template version, who/when/GPS | One INSERT per "Acknowledge" (idempotent: unique `(trip_id, so_id)`) |
 | `trip_stops` | One row per SO of a trip, frozen in delivery order when the trip starts: check-in (time, GPS, distance, `far` flag) and check-out (time, GPS, outcome, reason, form answers + template version) | INSERTed for every stop when the trip starts; UPDATEd by check-in and by check-out |
-| `trip_events` | Append-only audit log of every trip action (type, user, role, client time + server time, GPS) and the **idempotency ledger** (`idempotency_key` unique, stored `result`) | Exactly one INSERT per action, in the same transaction as the state change. Also read to detect replays and to build timelines / Driver Overview |
+| `trip_events` | Append-only audit log of every trip action (type, user, role, client time + server time, GPS) and the **idempotency ledger** (`idempotency_key` unique, stored `result`) | Exactly one INSERT per action (acknowledge-all: one per order; End trip: + `handover_submitted`; dispatcher unassign: `order_unassigned`), in the same transaction as the state change. Also read to detect replays and to build timelines / Driver Overview |
 | `trip_photos` | Metadata of uploaded photos and signatures (`storage_key`, content type, size, uploader, `upload_key`); the image bytes live in Cloudflare R2, never in Neon | One INSERT per upload (`POST /api/driver/uploads`, retry-safe by `upload_key`) |
-| `invoice_handovers` | The driver's invoice hand-over to a logistics officer (one per trip): status `pending/acknowledged/closed`, who/when/GPS, chosen officer | One INSERT when the crew submits the handover; UPDATEd when the officer validates (and closed when every invoice is received) |
+| `invoice_handovers` | The driver's invoice hand-over to a logistics officer (one per trip): status `pending/acknowledged/closed`, who/when/GPS, chosen officer | One INSERT when the crew ends the trip (automatic handover, no officer chosen) or, for a trip ended before that, submits the old handover form; UPDATEd when the officer validates (and closed when every invoice is received) |
 | `invoice_handover_items` | One row per invoice (SO) in a handover: crew `handed_over` + note, officer `received/missing/discrepancy` + note + checked time | INSERTed with the handover; UPDATEd by officer validation and by "resolve" of a missing/discrepancy/pending invoice |
 | `driver_issues` | Issues a driver / helper reports from a trip, an order or the profile (migration `q7c8d9e0f1a2`, approved 2026-10-13): reference `IS-YYYYMMDD-nnnn`, reporter, optional batch / SO / vehicle, category, priority, description, `photo_ids` (trip_photos), status `submitted/acknowledged/in_progress/resolved/closed`, dispatch `response` | One INSERT per report (idempotent by the phone's `idempotency_key`); one UPDATE per dispatch response in Driver Overview > Issues (a repeat of the same reply writes nothing). Read: the reporter's own list, the open count in Today / Overview KPIs, the dispatch list |
 | `driver_alert_reads` | Read markers of the driver app's alerts (migration `q7c8d9e0f1a2`): `(user_id, alert_key)` unique. The alerts themselves are NOT stored: they are computed on read from assignments, trip events, officer validations and issue replies | One INSERT per alert marked read (a repeat writes nothing). Read with the alert list |
@@ -93,6 +93,35 @@ Data only (no schema change). Copies the active "Delivery time log" into the nex
 `delivery_photo` "Proof of delivery photo" is REQUIRED and shown only when the outcome is Delivered or Partially delivered; a new optional `failure_photo` is shown for Failed (a reason is required for Partially delivered / Failed).
 Skipped when the active template is no longer the seeded one (an admin saved their own). Photo bytes still live in R2; without `R2_*` the server cannot require a photo, so the app shows "Photo upload is not configured, contact admin" and still lets the crew save the departure.
 Editing the templates moved from Driver Overview to **Admin > Settings > Driver app forms** (admin only); it writes the same `form_templates` / `form_template_items` rows as before.
+
+## Driver app simplification (2026-10-14, no migration, no new table / column; write + read paths approved in Rishi's task)
+
+Every path below uses existing tables only (`trip_events.event_type` is free text, `result` / `payload` are JSONB).
+
+- **One-tap acknowledge** (`POST /api/driver/batches/{id}/acknowledge-all`, `services/trip_workflow.acknowledge_all`): ONE transaction
+  that INSERTs, per order not yet acknowledged, the same `so_acknowledgements` row + `trip_events` "acknowledged" row the single
+  endpoint writes. Only the first event carries the idempotency key and the stored response (replay = no write). The checklist is
+  OFF unless the active acknowledge template is non-draft with items (`form_templates.acknowledge_checklist_enabled`, cached in
+  memory per `trip_events.generation()`); while OFF the row stores `answers = []` and points at the active (draft) template.
+- **Automatic handover at End trip** (`POST /api/driver/batches/{id}/end`): in the SAME transaction as the trip end, INSERT one
+  `invoice_handovers` row (status `pending`, `officer_user_id` NULL = no officer chosen) + one `invoice_handover_items` row per order
+  of the trip (`invoice_no` = the Invoice / DR number typed at check-out; a TO's is its TO#), plus a second `trip_events` row
+  `handover_submitted` (no key). `POST .../handover` then returns the existing handover (no duplicate row).
+- **TO check-out**: the server stores the TO# as the `invoice_dr_number` answer in `trip_stops.form_answers` (client value ignored).
+- **Unassign audit** (`POST /api/load-planning/assignments/{id}/unassign`, `/bulk-unassign`): per unassigned order that belonged to
+  an assignment batch, ONE `trip_events` row `order_unassigned` (user = the dispatcher, gps / key NULL,
+  `result` = so_number, order_type, previous_state, acknowledged_by/at, trip_started_at, checked_in_at, by_name; `payload` = the
+  crew snapshot driver_id / helper_ids, delivery_date, remaining_in_batch), in the same commit as the unassign.
+  Reads for the decision: `trips`, `so_acknowledgements`, `trip_stops`, `users` of the SELECTED orders' batches only.
+- **Unassign preview** (`POST /api/load-planning/assignments/unassign-preview`): read-only; memory first, then `sales_orders` rows
+  only for ids not in memory, plus the same trip reads as above for the selected batches. No Zoho.
+- **Driver payload `dispatch_changes`** (`GET /api/driver/today`, `/assignments/{id}`): reads `trip_events` rows `order_unassigned`
+  of the last 3 days, only when the driver "Today" in-memory cache is rebuilt (an unassign bumps both generation counters, so the
+  removed order leaves the payload at once).
+- **Crew action on removed work**: when the batch / order is no longer the caller's, one indexed `trip_events` lookup (failure path
+  only) decides 409 `trip_removed` / `order_removed` instead of 404.
+- **Driver Overview timeline** (`GET /api/driver-overview/trips/{batch_id}`): its existing `trip_events` read now also returns the
+  `order_unassigned` rows (`events[]`), also for a batch whose every order was removed.
 
 ## Transfer orders in Load Planning (migration `s9e0f1a2b3c4`, pre-approved by Rishi 2026-10-13)
 
