@@ -37,6 +37,10 @@ export default function DriverPanel({ staffId, date, onClose, row }: { staffId: 
   const person = detail.data?.person;
   const totals = (detail.data?.totals ?? {}) as Record<string, number | null>;
   const batches = detail.data?.batches ?? [];
+  // Crew of the shown trips: the helpers assigned with this driver (or, when this person is a helper, the driver they ride with).
+  const uniq = (names: unknown[]) => [...new Set(names.filter((n): n is string => typeof n === "string" && n.trim() !== ""))];
+  const helperNames = uniq(batches.flatMap((b) => (b.role === "driver" && Array.isArray(b.helpers) ? (b.helpers as unknown[]) : [])));
+  const driverNames = uniq(batches.map((b) => (b.role === "helper" ? (b.driver as { name?: string } | undefined)?.name : null)));
   const tel = telHref(typeof person?.phone === "string" ? person.phone : null);
   const expanded = open ?? (mode === "day" && batches.length === 1 ? batches[0].batch_id : null);
 
@@ -54,6 +58,8 @@ export default function DriverPanel({ staffId, date, onClose, row }: { staffId: 
             <span className="capitalize">{String(person?.role ?? row?.role ?? "")}{person?.warehouse ? ` · ${String(person.warehouse)}` : ""}</span>
             {row && <span>Vehicle: <span className="font-mono font-semibold text-black">{row.vehicle ?? "—"}</span></span>}
             {row && (row.batch_count ?? 0) > 0 && <span>{row.batch_count} {row.batch_count === 1 ? "trip" : "trips"}</span>}
+            {helperNames.length > 0 && <span data-testid="panel-helpers">Helper{helperNames.length === 1 ? "" : "s"}: <span className="font-semibold text-black">{helperNames.join(", ")}</span></span>}
+            {driverNames.length > 0 && <span data-testid="panel-driver">Driver: <span className="font-semibold text-black">{driverNames.join(", ")}</span></span>}
           </div>
           {row && (
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#77787b]">
