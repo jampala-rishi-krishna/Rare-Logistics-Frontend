@@ -133,7 +133,7 @@ export default function TransferOrdersTab() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <EmptyState title="No orders found" hint={query ? "No transfer orders match this search. Try widening the dates." : "No transfer orders in this date range. Click Hard refresh to re-read Zoho."} />
+        <EmptyState title="No orders found" hint={query ? "No transfer orders match this search. Try widening the dates." : "No Draft TOs between Mets and Glacier for this date."} />
       ) : (
         <>
           <div className="grid gap-3 p-3 md:hidden">
