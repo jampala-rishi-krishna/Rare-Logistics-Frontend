@@ -37,6 +37,35 @@ export function Chip({ tone = "neutral", children }: { tone?: Tone; children: Re
   return <span className={`inline-flex items-center whitespace-nowrap rounded-[4px] border px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[tone]}`}>{children}</span>;
 }
 
+export function initials(name: string | null | undefined): string {
+  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : (parts[0][1] ?? "");
+  return (first + last).toUpperCase();
+}
+
+// Blue circular avatar with the person's initials.
+export function Avatar({ name, size = "md" }: { name: string | null | undefined; size?: "sm" | "md" }) {
+  const cls = size === "sm" ? "h-8 w-8 text-[11px]" : "h-11 w-11 text-sm";
+  return (
+    <span aria-hidden="true" className={`grid shrink-0 place-items-center rounded-full bg-[#1d4ed8] font-bold tracking-wide text-white ${cls}`}>
+      {initials(name)}
+    </span>
+  );
+}
+
+// Status chip with a leading dot (green for a live/positive state).
+export function StatusChip({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
+  const dot = tone === "info" || tone === "good" ? "bg-[#1e7b44]" : tone === "warn" ? "bg-[#d99a00]" : tone === "bad" ? "bg-[#c4291f]" : "bg-[#9b9ca0]";
+  return (
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${TONE_CLASS[tone]}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
 export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const status = (error as { status?: number } | null)?.status;
   const text = status === 403 ? "You do not have access to this data." : errorInfo(error).message;

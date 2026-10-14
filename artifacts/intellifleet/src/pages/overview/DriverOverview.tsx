@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Download, Search, Users } from "lucide-react";
 import * as overviewApi from "@/services/api/overview";
 import { STATUS_FILTERS, kpiCards, manilaDate } from "@/lib/overview";
 import type { KpiCard, Tone } from "@/lib/overview";
@@ -30,17 +30,20 @@ function Kpis({ cards, totals }: { cards: KpiCard[]; totals: { kg: string; note:
     <section className="grid gap-3 lg:grid-cols-3" aria-label="Key numbers" data-testid="kpi-strip">
       {groups.map((g) => (
         <div key={g} className="min-w-0 rounded-[8px] border border-[#e4e3df] bg-white p-3.5">
-          <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">
-            {g === "Drivers" ? "Drivers" : g === "Sales orders" ? "Sales orders" : "Handover and issues"}
-            {g === "Sales orders" && totals ? ` · ${totals.kg}` : ""}
+          <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">
+            {g === "Drivers" ? <Users size={14} className="shrink-0 text-[#1d4ed8]" aria-hidden /> : g === "Sales orders" ? <ClipboardList size={14} className="shrink-0 text-[#1d4ed8]" aria-hidden /> : <ClipboardCheck size={14} className="shrink-0 text-[#1d4ed8]" aria-hidden />}
+            <span>
+              {g === "Drivers" ? "Drivers" : g === "Sales orders" ? "Sales orders" : "Handover and issues"}
+              {g === "Sales orders" && totals ? ` · ${totals.kg}` : ""}
+            </span>
           </div>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
+          <div className="flex flex-wrap gap-y-3">
             {cards
               .filter((c) => c.group === g)
               .map((c) => (
-                <div key={c.id} data-testid={`kpi-${c.id}`} className="min-w-[64px]">
-                  <div className={`text-[22px] font-semibold leading-none tracking-tight tabular-nums ${TONE[c.tone]}`}>{c.value}</div>
-                  <div className="mt-1 text-[11px] font-medium text-[#55565a]">
+                <div key={c.id} data-testid={`kpi-${c.id}`} className="min-w-[72px] flex-1 border-l border-[#e4e3df] px-3 text-center first:border-l-0 first:pl-0">
+                  <div className={`text-[24px] font-semibold leading-none tracking-tight tabular-nums ${TONE[c.id === "drivers-active" ? "good" : c.tone]}`}>{c.value}</div>
+                  <div className="mt-1.5 text-[11px] font-medium text-[#77787b]">
                     {c.label}
                     {c.hint ? <span className="font-normal text-[#77787b]"> ({c.hint})</span> : null}
                   </div>

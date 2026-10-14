@@ -158,45 +158,103 @@ function OrderTimeline({ order }: { order: overviewApi.TimelineOrder }) {
   );
 }
 
-// Compact ordered stop list: completed / current / upcoming, from the same trip detail (no extra request).
-function StopsOverview({ orders }: { orders: overviewApi.TimelineOrder[] }) {
-  const sorted = [...orders].sort((a, b) => (a.stop?.sequence ?? 9999) - (b.stop?.sequence ?? 9999));
+export function useTrip(batchId: string) {
+  return useQuery({ queryKey: ["overview-trip", batchId], queryFn: () => overviewApi.getTrip(batchId), enabled: batchId !== "", refetchInterval: 15_000, refetchIntervalInBackground: false });
+}
+
+export function sortedOrders(orders: overviewApi.TimelineOrder[]) {
+  return [...orders].sort((a, b) => (a.stop?.sequence ?? 9999) - (b.stop?.sequence ?? 9999));
+}
+
+export function isDelivered(o: overviewApi.TimelineOrder) {
+  return (o.stop?.checkout?.outcome ?? "").toLowerCase().startsWith("delivered");
+}
+
+// "Trip stops" card: vertical timeline of completed / current / upcoming stops, from the trip detail (no extra request).
+export function StopsTimelineCard({ orders }: { orders: overviewApi.TimelineOrder[] }) {
+  const sorted = sortedOrders(orders);
   const firstOpen = sorted.findIndex((o) => !o.stop?.checkout);
   return (
-    <ol className="grid rounded-[8px] border border-[#e4e3df] bg-white px-3 py-2" aria-label="Trip stops" data-testid="trip-stops">
-      {sorted.map((o, i) => {
-        const done = Boolean(o.stop?.checkout);
-        const current = !done && i === firstOpen;
-        const out = o.stop?.checkout;
-        return (
-          <li key={o.so_id} className={`flex items-start gap-3 border-b border-[#efeeeb] py-2 last:border-b-0 ${!done && !current ? "opacity-70" : ""}`}>
-            <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${done ? "bg-[#1e7b44] text-white" : current ? "border-2 border-[#1d4ed8] text-[#1d4ed8]" : "border border-[#c9c8c3] text-[#77787b]"}`}>
-              {done ? <Check size={12} /> : o.stop?.sequence ?? i + 1}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-semibold">{o.customer_name ?? "—"}</div>
-              <div className="font-mono text-[11px] text-[#77787b]">
-                <OrderTypeBadge type={o.order_type} className="mr-1.5 align-middle" />
-                {o.so_number}
+    <section className="min-w-0 rounded-[8px] border border-[#e4e3df] bg-white p-4" aria-label="Trip stops" data-testid="trip-stops">
+      <h3 className="mb-3 text-sm font-bold">Trip stops</h3>
+      {sorted.length === 0 ? (
+        <p className="py-4 text-center text-sm text-[#55565a]">No stops on this trip yet.</p>
+      ) : (
+        <ol className="grid">
+          {sorted.map((o, i) => {
+            const done = Boolean(o.stop?.checkout);
+            const current = !done && i === firstOpen;
+            const out = o.stop?.checkout;
+            const last = i === sorted.length - 1;
+            const time = out?.at ?? o.stop?.checkin?.at ?? null;
+            return (
+              <li key={o.so_id} className="relative flex items-start gap-3 pb-4 last:pb-0">
+                {!last && <span className="absolute left-[13px] top-7 h-[calc(100%-1.75rem)] w-px bg-[#d8d7d2]" aria-hidden="true" />}
+                <span className={`relative z-[1] grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${done ? "bg-[#1e7b44] text-white" : current ? "border-2 border-[#1d4ed8] bg-white text-[#1d4ed8] ring-4 ring-[#1d4ed8]/10" : "border border-[#c9c8c3] bg-white text-[#77787b]"}`}>
+                  {done ? <Check size={14} /> : (o.stop?.sequence ?? i + 1)}
+                </span>
+                <div className={`min-w-0 flex-1 ${!done && !current ? "opacity-75" : ""}`}>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="truncate text-[13px] font-semibold">{o.customer_name ?? "—"}</span>
+                    {current && <span className="inline-flex items-center rounded-full border border-[#1d4ed8] bg-[#eef3fc] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Current stop</span>}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[#77787b]">
+                    <span>{o.order_type === "TO" ? "TO" : "SO"}: {o.so_number}</span>
+                    <OrderTypeBadge type={o.order_type} className="align-middle" />
+                  </div>
+                </div>
+                <div className="shrink-0 text-right text-[11px] text-[#77787b]">
+                  {time && <div className="font-semibold text-black">{fmtTime(time)}</div>}
+                  {out?.outcome ? <span className={outcomeText(out.outcome)}>{out.outcome}</span> : current ? <span>{o.stop?.checkin ? "At stop" : "Next stop"}</span> : <span>Upcoming</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function outcomeText(outcome: string | null | undefined) {
+  const t = outcomeTone(outcome);
+  return `font-medium ${t === "good" ? "text-[#1e7b44]" : t === "warn" ? "text-[#8a5a00]" : t === "bad" ? "text-[#c4291f]" : "text-[#55565a]"}`;
+}
+
+const label = (s: string) => {
+  const t = s.replaceAll("_", " ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+// "Recent activity" card from the trip's audit events (newest first).
+export function RecentActivityCard({ events }: { events: overviewApi.Timeline["events"] }) {
+  const recent = [...events].filter((e) => e.at).sort((a, b) => new Date(b.at as string).getTime() - new Date(a.at as string).getTime()).slice(0, 6);
+  return (
+    <section className="min-w-0 rounded-[8px] border border-[#e4e3df] bg-white p-4" aria-label="Recent activity" data-testid="recent-activity">
+      <h3 className="mb-3 text-sm font-bold">Recent activity</h3>
+      {recent.length === 0 ? (
+        <p className="text-[13px] text-[#55565a]">No activity recorded yet.</p>
+      ) : (
+        <ul className="grid gap-2.5">
+          {recent.map((e, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1d4ed8]" aria-hidden="true" />
+              <div className="min-w-0 flex-1 text-[13px]">
+                <span className="font-semibold">{label(e.type)}</span>
+                {e.so_number && <span className="ml-1.5 font-mono text-[11px] text-[#77787b]">{e.so_number}</span>}
               </div>
-            </div>
-            <div className="shrink-0 text-right text-[11px] text-[#77787b]">
-              {out?.outcome ? <Chip tone={outcomeTone(out.outcome)}>{out.outcome}</Chip> : current ? <Chip tone="info">{o.stop?.checkin ? "At stop" : "Next stop"}</Chip> : <Chip>Upcoming</Chip>}
-              <div className="mt-0.5">
-                {o.stop?.checkin?.at ? `Arr ${fmtTime(o.stop.checkin.at)}` : ""}
-                {out?.at ? ` · Dep ${fmtTime(out.at)}` : ""}
-              </div>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+              <span className="shrink-0 text-[11px] text-[#77787b]">{fmtTime(e.at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
 export default function TripTimeline({ batchId }: { batchId: string }) {
   const [showEvents, setShowEvents] = useState(false);
-  const query = useQuery({ queryKey: ["overview-trip", batchId], queryFn: () => overviewApi.getTrip(batchId), refetchInterval: 15_000, refetchIntervalInBackground: false });
+  const query = useTrip(batchId);
   if (query.isLoading) return <Skeleton className="h-24" />;
   if (query.isError || !query.data) return <ErrorNote error={query.error} onRetry={() => void query.refetch()} />;
   const t = query.data;
@@ -222,7 +280,6 @@ export default function TripTimeline({ batchId }: { batchId: string }) {
           <div>Back at warehouse: {typeof trip.end_distance_m === "number" ? `${formatMeters(trip.end_distance_m as number)} from the warehouse` : "-"}</div>
         </div>
       </div>
-      {t.orders.length > 0 && <StopsOverview orders={t.orders} />}
       {t.orders.length > 0 && <h4 className="-mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">Stop details</h4>}
       {t.orders.map((o) => (
         <OrderTimeline key={o.so_id} order={o} />

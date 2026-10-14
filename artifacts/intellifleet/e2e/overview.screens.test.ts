@@ -85,6 +85,8 @@ describe("Driver Overview at 1440", () => {
   it("selecting a driver opens the panel with the per-SO timeline: arrived, departed, GPS, distance, invoice, outcome, time at site", async () => {
     const { page, close } = await open(OVERVIEW, "[data-testid=live-list]");
     await page.click("[data-testid=live-row-103]");
+    await page.waitForSelector("[data-testid=trip-stops]");
+    await page.click("[data-testid=panel-tab-orders]");
     await page.waitForSelector("[data-testid=timeline-so-SO-TEST-3001]");
     await shot(page, "overview-2-driver-panel-timeline");
     const panel = (await page.textContent("[data-testid=driver-panel]")) ?? "";
@@ -100,7 +102,9 @@ describe("Driver Overview at 1440", () => {
     assert.match(panel, /Reason: Store closed/);
     assert.match(panel, /Time at site: 20 min/);
     assert.match(panel, /Trip length/);
+    await page.click("[data-testid=panel-tab-issues]");
     assert.equal(await page.locator("[data-testid=panel-issues]").count(), 1); // Casey's open issue
+    await page.click("[data-testid=panel-tab-orders]");
     await page.waitForSelector("[data-testid=timeline-photo]");
     assert.ok((await page.locator("[data-testid=timeline-photo] img").count()) >= 1, "the proof-of-delivery photo is a thumbnail");
     await page.locator("[data-testid=timeline-photo]").first().click();
@@ -205,6 +209,8 @@ describe("Driver Overview at 1440", () => {
   it("works at a 1024px desktop width without horizontal scroll", async () => {
     const { page, close } = await open(OVERVIEW, "[data-testid=live-list]", { role: "admin" }, 1024, 800);
     await page.click("[data-testid=live-row-103]");
+    await page.waitForSelector("[data-testid=trip-stops]");
+    await page.click("[data-testid=panel-tab-orders]");
     await page.waitForSelector("[data-testid=timeline-so-SO-TEST-3001]");
     await shot(page, "overview-9-1024");
     assert.equal(await horizontalOverflow(page), 0);

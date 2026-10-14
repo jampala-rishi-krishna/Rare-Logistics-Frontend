@@ -5,7 +5,7 @@ import * as overviewApi from "@/services/api/overview";
 import { progressLabel, progressPct, stateTone, staleLabel, timeAgo } from "@/lib/overview";
 import { matchesSearch } from "@/lib/overviewView";
 import { formatKgPartial } from "@/lib/kgDisplay";
-import { Chip, Empty, ErrorNote, Skeleton } from "./shared";
+import { Avatar, Chip, Empty, ErrorNote, Skeleton, StatusChip } from "./shared";
 import DriverPanel from "./DriverPanel";
 
 export interface TopFilter {
@@ -23,7 +23,7 @@ function Row({ row, selected, onSelect }: { row: overviewApi.BoardRow; selected:
   const kg = formatKgPartial(row.kg ?? null, row.kg_unknown_lines ?? 0, 1);
   return (
     <li>
-      <button type="button" onClick={onSelect} aria-pressed={selected} data-testid={`live-row-${row.staff_id}`} className={`block w-full rounded-[8px] border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${selected ? "border-black bg-[#fafaf8] shadow-[inset_3px_0_0_#000]" : "border-[#e4e3df] bg-white hover:border-[#b8b7b2] hover:bg-[#fafaf8]"}`}>
+      <button type="button" onClick={onSelect} aria-pressed={selected} data-testid={`live-row-${row.staff_id}`} className={`block w-full rounded-[8px] border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/30 ${selected ? "border-[#1d4ed8] bg-[#f5f8fe] shadow-[inset_3px_0_0_#1d4ed8]" : "border-[#e4e3df] bg-white hover:border-[#b8b7b2] hover:bg-[#fafaf8]"}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-bold">{row.name}</div>
@@ -33,7 +33,7 @@ function Row({ row, selected, onSelect }: { row: overviewApi.BoardRow; selected:
               {(row.batch_count ?? 0) > 1 ? ` · ${row.batch_count} trips` : ""}
             </div>
           </div>
-          <Chip tone={stateTone(row.state)}>{row.state_label ?? row.state}</Chip>
+          <StatusChip tone={stateTone(row.state)}>{row.state_label ?? row.state}</StatusChip>
         </div>
         {row.state !== "idle" && (
           <div className="mt-2">
@@ -44,7 +44,7 @@ function Row({ row, selected, onSelect }: { row: overviewApi.BoardRow; selected:
               <span>{kg.text}</span>
             </div>
             <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#e4e3df]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-              <div className="h-1 rounded-full bg-[#1e7b44]" style={{ width: `${pct}%` }} />
+              <div className="h-1 rounded-full bg-[#16a34a]" style={{ width: `${pct}%` }} />
             </div>
             {kg.note && <div className="mt-0.5 text-[10px] text-[#8a5a00]">{kg.note}</div>}
           </div>
