@@ -24,12 +24,12 @@ export default function HandoverTab({ filter }: { filter: TopFilter }) {
   const rows = sortHardCopies(query.data?.rows ?? []).filter(
     (r) => (!state || r.state === state) && (!needle || [r.so_number, r.invoice_no, r.holder, r.customer_name].some((v) => String(v ?? "").toLowerCase().includes(needle))),
   );
-  const head = "px-2 py-2 text-left text-[11px] font-bold uppercase text-[#77787b]";
-  const cell = "px-2 py-2 align-top text-sm";
+  const head = "whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[#77787b]";
+  const cell = "px-3 py-2.5 align-middle text-[13px]";
   return (
     <section className="grid gap-3" data-testid="handover-tab">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-2 text-xs font-semibold">
+      <div className="flex flex-wrap items-center gap-3 rounded-[8px] border border-[#e4e3df] bg-white p-2.5">
+        <label className="flex items-center gap-2 text-[11px] font-medium text-[#55565a]">
           Show
           <select value={state} onChange={(e) => setState(e.target.value)} className={`${inputClass} !w-auto`} data-testid="handover-filter">
             {FILTERS.map(([v, l]) => (
@@ -40,16 +40,16 @@ export default function HandoverTab({ filter }: { filter: TopFilter }) {
             ))}
           </select>
         </label>
-        {query.data && <span className="text-xs text-[#55565a]">{query.data.total} hard copies outstanding</span>}
+        {query.data && <span className="ml-auto text-xs font-medium text-[#55565a]">{query.data.total} hard copies outstanding</span>}
       </div>
       {query.isLoading ? (
         <Skeleton className="h-40" />
       ) : query.isError ? (
         <ErrorNote error={query.error} onRetry={() => void query.refetch()} />
       ) : rows.length === 0 ? (
-        <Empty>{state ? "No matching invoice handovers found." : "All caught up. No outstanding invoice handovers."}</Empty>
+        <Empty>{state || needle ? "No matching invoices found." : "All caught up. No outstanding invoice handovers."}</Empty>
       ) : (
-        <div className="overflow-x-auto rounded-[6px] border border-[#e4e3df] bg-white">
+        <div className="overflow-x-auto rounded-[8px] border border-[#e4e3df] bg-white">
           <table className="w-full min-w-[820px] border-collapse" data-testid="handover-table">
             <thead>
               <tr className="border-b border-[#e4e3df] bg-[#fafaf8]">
@@ -62,19 +62,19 @@ export default function HandoverTab({ filter }: { filter: TopFilter }) {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={`${r.batch_id}-${r.so_number}-${i}`} className="border-b border-[#efeeeb]">
+                <tr key={`${r.batch_id}-${r.so_number}-${i}`} className="border-b border-[#efeeeb] hover:bg-[#fafaf8]">
                   <td className={`${cell} font-mono`}><OrderTypeBadge type={r.order_type} className="mr-1.5 align-middle" />{r.so_number}</td>
-                  <td className={`${cell} font-mono font-semibold`}>{r.invoice_no ?? "—"}</td>
+                  <td className={`${cell} font-mono text-sm font-bold`}>{r.invoice_no ?? "—"}</td>
                   <td className={cell}>{r.customer_name}</td>
                   <td className={cell}>
-                    <Chip tone={HARD_COPY_TONE[r.state] ?? "neutral"}>{r.state_label}</Chip>
+                    <Chip tone={r.state === "with_driver" ? "info" : HARD_COPY_TONE[r.state] ?? "neutral"}>{r.state_label}</Chip>
                   </td>
-                  <td className={`${cell} font-semibold`}>{r.holder ?? "-"}</td>
+                  <td className={`${cell} font-semibold`}>{r.holder ?? "—"}</td>
                   <td className={cell}>
                     {fmtDateTime(r.since)}
                     <div className="text-xs text-[#77787b]">{timeAgo(r.since)}</div>
                   </td>
-                  <td className={`${cell} max-w-[240px] break-words text-xs`}>{r.note ?? ""}</td>
+                  <td className={`${cell} max-w-[240px] text-xs text-[#55565a]`}><span className="line-clamp-2 break-words" title={r.note ?? undefined}>{r.note || "—"}</span></td>
                 </tr>
               ))}
             </tbody>

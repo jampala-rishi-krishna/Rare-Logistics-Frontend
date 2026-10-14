@@ -12,14 +12,14 @@ export function useSessionRole() {
 }
 
 export function fmtTime(value: string | null | undefined): string {
-  if (!value) return "-";
+  if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit" }).format(d);
 }
 
 export function fmtDateTime(value: string | null | undefined): string {
-  if (!value) return "-";
+  if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(d);
@@ -53,13 +53,18 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-[6px] border border-[#e4e3df] bg-white p-6 text-center text-sm text-[#55565a]">{children}</div>;
+export function Empty({ children, title }: { children?: ReactNode; title?: string }) {
+  return (
+    <div className="rounded-[8px] border border-[#e4e3df] bg-white px-6 py-8 text-center text-sm text-[#55565a]">
+      {title && <div className="text-sm font-semibold text-black">{title}</div>}
+      {children && <div className={title ? "mt-1 text-[13px]" : ""}>{children}</div>}
+    </div>
+  );
 }
 
-export const inputClass = "min-h-[38px] w-full rounded-[5px] border border-[#d8d7d2] bg-white px-2.5 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10";
-export const buttonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 rounded-[5px] border border-[#d8d7d2] bg-white px-3 text-sm font-semibold transition hover:bg-[#efefed] focus:outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-40";
-export const primaryButtonClass = "inline-flex min-h-[38px] items-center justify-center gap-2 rounded-[5px] bg-black px-4 text-sm font-semibold text-white transition hover:bg-[#242424] focus:outline-none focus:ring-2 focus:ring-black/20 disabled:opacity-40";
+export const inputClass = "h-9 w-full rounded-[6px] border border-[#d8d7d2] bg-white px-2.5 text-[13px] outline-none transition focus:border-black focus:ring-2 focus:ring-black/10";
+export const buttonClass = "inline-flex h-9 items-center justify-center gap-2 rounded-[6px] border border-[#d8d7d2] bg-white px-3 text-[13px] font-semibold transition hover:bg-[#efefed] focus:outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-40";
+export const primaryButtonClass = "inline-flex h-9 items-center justify-center gap-2 rounded-[6px] bg-black px-4 text-[13px] font-semibold text-white transition hover:bg-[#242424] focus:outline-none focus:ring-2 focus:ring-black/20 disabled:opacity-40";
 
 export function Skeleton({ className = "h-10" }: { className?: string }) {
   return <div className={`animate-pulse rounded-[4px] bg-[#e4e3df] ${className}`} />;

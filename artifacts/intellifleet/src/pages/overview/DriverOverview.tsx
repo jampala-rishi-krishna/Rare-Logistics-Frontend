@@ -29,8 +29,8 @@ function Kpis({ cards, totals }: { cards: KpiCard[]; totals: { kg: string; note:
   return (
     <section className="grid gap-3 lg:grid-cols-3" aria-label="Key numbers" data-testid="kpi-strip">
       {groups.map((g) => (
-        <div key={g} className="min-w-0 rounded-[6px] border border-[#e4e3df] bg-white p-3">
-          <div className="mb-2 text-[10px] font-bold uppercase text-[#77787b]">
+        <div key={g} className="min-w-0 rounded-[8px] border border-[#e4e3df] bg-white p-3.5">
+          <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">
             {g === "Drivers" ? "Drivers" : g === "Sales orders" ? "Sales orders" : "Handover and issues"}
             {g === "Sales orders" && totals ? ` · ${totals.kg}` : ""}
           </div>
@@ -39,15 +39,15 @@ function Kpis({ cards, totals }: { cards: KpiCard[]; totals: { kg: string; note:
               .filter((c) => c.group === g)
               .map((c) => (
                 <div key={c.id} data-testid={`kpi-${c.id}`} className="min-w-[64px]">
-                  <div className={`text-[22px] font-semibold leading-none tabular-nums ${TONE[c.tone]}`}>{c.value}</div>
-                  <div className="mt-0.5 text-[10px] font-semibold text-[#55565a]">
+                  <div className={`text-[22px] font-semibold leading-none tracking-tight tabular-nums ${TONE[c.tone]}`}>{c.value}</div>
+                  <div className="mt-1 text-[11px] font-medium text-[#55565a]">
                     {c.label}
                     {c.hint ? <span className="font-normal text-[#77787b]"> ({c.hint})</span> : null}
                   </div>
                 </div>
               ))}
           </div>
-          {g === "Sales orders" && totals?.note && <div className="mt-1 text-[10px] text-[#8a5a00]">{totals.note}</div>}
+          {g === "Sales orders" && totals?.note && <div className="mt-1.5 text-[11px] text-[#8a5a00]">{totals.note}</div>}
         </div>
       ))}
     </section>
@@ -80,25 +80,25 @@ export default function DriverOverview() {
 
   return (
     <div className="grid min-w-0 gap-3" data-testid="driver-overview">
-      <div className="flex flex-wrap items-end gap-2 rounded-[6px] border border-[#e4e3df] bg-white p-2.5" role="search" aria-label="Filters">
+      <div className="flex flex-wrap items-end gap-2 rounded-[8px] border border-[#e4e3df] bg-white p-2.5" role="search" aria-label="Filters">
         <div className="flex items-end gap-1">
-          <button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))} className="inline-flex h-[38px] w-9 items-center justify-center rounded-[5px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
+          <button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))} className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
             <ChevronLeft size={16} />
           </button>
-          <label className="grid gap-1 text-[11px] font-semibold">
+          <label className="grid gap-1 text-[11px] font-medium text-[#55565a]">
             Date (Manila)
             <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className={`${inputClass} !w-auto`} data-testid="top-date" />
           </label>
-          <button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))} className="inline-flex h-[38px] w-9 items-center justify-center rounded-[5px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
+          <button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))} className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#d8d7d2] bg-white hover:bg-[#efefed]">
             <ChevronRight size={16} />
           </button>
           {date !== today && (
-            <button type="button" onClick={() => setDate(today)} className="h-[38px] rounded-[5px] border border-[#d8d7d2] bg-white px-3 text-sm font-semibold hover:bg-[#efefed]">
+            <button type="button" onClick={() => setDate(today)} className="h-9 rounded-[6px] border border-[#d8d7d2] bg-white px-3 text-[13px] font-semibold hover:bg-[#efefed]">
               Today
             </button>
           )}
         </div>
-        <label className="grid gap-1 text-[11px] font-semibold">
+        <label className="grid gap-1 text-[11px] font-medium text-[#55565a]">
           Warehouse
           <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className={`${inputClass} !w-auto`} data-testid="top-warehouse">
             <option value="">All</option>
@@ -106,7 +106,7 @@ export default function DriverOverview() {
             <option value="GLACIER">GLACIER</option>
           </select>
         </label>
-        <label className="grid gap-1 text-[11px] font-semibold">
+        <label className="grid gap-1 text-[11px] font-medium text-[#55565a]">
           Status
           <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${inputClass} !w-auto`} data-testid="top-status">
             {STATUS_FILTERS.map((s) => (
@@ -116,21 +116,21 @@ export default function DriverOverview() {
             ))}
           </select>
         </label>
-        <label className="relative grid min-w-[200px] flex-1 gap-1 text-[11px] font-semibold">
+        <label className="relative grid min-w-[220px] flex-[1_1_220px] gap-1 text-[11px] font-semibold">
           Search driver, truck or SO
-          <Search size={14} className="pointer-events-none absolute bottom-3 left-2.5 text-[#77787b]" />
+          <Search size={14} className="pointer-events-none absolute bottom-2.5 left-2.5 text-[#77787b]" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, plate or SO number" className={`${inputClass} pl-8`} data-testid="top-search" />
         </label>
       </div>
 
       {summary.isLoading ? <Skeleton className="h-16" /> : summary.isError ? <ErrorNote error={summary.error} onRetry={() => void summary.refetch()} /> : <Kpis cards={cards} totals={kg ? { kg: kg.text, note: kg.note } : null} />}
 
-      <div role="tablist" aria-label="Driver Overview sections" className="flex flex-wrap gap-1 border-b border-[#e4e3df]">
+      <div role="tablist" aria-label="Driver Overview sections" className="flex flex-wrap items-center gap-x-1 border-b border-[#e4e3df]">
         {TABS.map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`tab-${id}`} onClick={() => setTab(id)} className={`inline-flex min-h-[42px] items-center gap-1.5 border-b-2 px-3 text-sm font-semibold transition ${tab === id ? "border-black text-black" : "border-transparent text-[#77787b] hover:text-black"}`}>
+          <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`tab-${id}`} onClick={() => setTab(id)} className={id === "export" ? `mb-1 ml-auto inline-flex h-8 items-center gap-1.5 rounded-[6px] border px-3 text-[13px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20 ${tab === id ? "border-black bg-black text-white" : "border-[#d8d7d2] bg-white text-black hover:bg-[#efefed]"}` : `-mb-px inline-flex h-10 items-center gap-1.5 border-b-2 px-3 text-[13px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20 ${tab === id ? "border-black text-black" : "border-transparent text-[#77787b] hover:text-black"}`}>
             {id === "export" ? <Download size={14} /> : null}
             {label}
-            {id === "issues" && (k?.issues_open ?? 0) > 0 ? <span className="ml-1.5 rounded-full bg-[#8a5a00] px-1.5 text-[10px] text-white">{k?.issues_open}</span> : null}
+            {id === "issues" && (k?.issues_open ?? 0) > 0 ? <span className="ml-1 rounded-full bg-[#8a5a00] px-1.5 text-[10px] text-white">{k?.issues_open}</span> : null}
           </button>
         ))}
       </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { useQuery } from "@tanstack/react-query";
-import { Camera, MapPin } from "lucide-react";
+import { Check, MapPin } from "lucide-react";
 import * as overviewApi from "@/services/api/overview";
 import { personName } from "@/lib/officer";
 import { displayValue, formatDuration, isPhotoValue, stateLabel } from "@/lib/overview";
@@ -158,6 +158,42 @@ function OrderTimeline({ order }: { order: overviewApi.TimelineOrder }) {
   );
 }
 
+// Compact ordered stop list: completed / current / upcoming, from the same trip detail (no extra request).
+function StopsOverview({ orders }: { orders: overviewApi.TimelineOrder[] }) {
+  const sorted = [...orders].sort((a, b) => (a.stop?.sequence ?? 9999) - (b.stop?.sequence ?? 9999));
+  const firstOpen = sorted.findIndex((o) => !o.stop?.checkout);
+  return (
+    <ol className="grid rounded-[8px] border border-[#e4e3df] bg-white px-3 py-2" aria-label="Trip stops" data-testid="trip-stops">
+      {sorted.map((o, i) => {
+        const done = Boolean(o.stop?.checkout);
+        const current = !done && i === firstOpen;
+        const out = o.stop?.checkout;
+        return (
+          <li key={o.so_id} className={`flex items-start gap-3 border-b border-[#efeeeb] py-2 last:border-b-0 ${!done && !current ? "opacity-70" : ""}`}>
+            <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${done ? "bg-[#1e7b44] text-white" : current ? "border-2 border-[#1d4ed8] text-[#1d4ed8]" : "border border-[#c9c8c3] text-[#77787b]"}`}>
+              {done ? <Check size={12} /> : o.stop?.sequence ?? i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-semibold">{o.customer_name ?? "—"}</div>
+              <div className="font-mono text-[11px] text-[#77787b]">
+                <OrderTypeBadge type={o.order_type} className="mr-1.5 align-middle" />
+                {o.so_number}
+              </div>
+            </div>
+            <div className="shrink-0 text-right text-[11px] text-[#77787b]">
+              {out?.outcome ? <Chip tone={outcomeTone(out.outcome)}>{out.outcome}</Chip> : current ? <Chip tone="info">{o.stop?.checkin ? "At stop" : "Next stop"}</Chip> : <Chip>Upcoming</Chip>}
+              <div className="mt-0.5">
+                {o.stop?.checkin?.at ? `Arr ${fmtTime(o.stop.checkin.at)}` : ""}
+                {out?.at ? ` · Dep ${fmtTime(out.at)}` : ""}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export default function TripTimeline({ batchId }: { batchId: string }) {
   const [showEvents, setShowEvents] = useState(false);
   const query = useQuery({ queryKey: ["overview-trip", batchId], queryFn: () => overviewApi.getTrip(batchId), refetchInterval: 15_000, refetchIntervalInBackground: false });
@@ -168,7 +204,7 @@ export default function TripTimeline({ batchId }: { batchId: string }) {
   const assigned = (t.batch as { assigned_at?: string | null }).assigned_at;
   return (
     <div className="grid gap-3" data-testid={`trip-${batchId}`}>
-      <div className="border border-[#e4e3df] bg-white p-3 text-sm">
+      <div className="rounded-[8px] border border-[#e4e3df] bg-white p-3 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono font-bold">{String(t.batch.vehicle ?? "-")}</span>
           <Chip tone="info">{trip.chip_label ?? stateLabel(String(trip.status ?? ""))}</Chip>
@@ -186,6 +222,8 @@ export default function TripTimeline({ batchId }: { batchId: string }) {
           <div>Back at warehouse: {typeof trip.end_distance_m === "number" ? `${formatMeters(trip.end_distance_m as number)} from the warehouse` : "-"}</div>
         </div>
       </div>
+      {t.orders.length > 0 && <StopsOverview orders={t.orders} />}
+      {t.orders.length > 0 && <h4 className="-mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">Stop details</h4>}
       {t.orders.map((o) => (
         <OrderTimeline key={o.so_id} order={o} />
       ))}

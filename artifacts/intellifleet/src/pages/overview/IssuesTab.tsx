@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as overviewApi from "@/services/api/overview";
 import { timeAgo } from "@/lib/overview";
 import { PRIORITY_TONE } from "@/lib/overviewView";
-import { Chip, Empty, ErrorNote, Skeleton, buttonClass, inputClass, primaryButtonClass } from "./shared";
+import { Chip, Empty, ErrorNote, Skeleton, inputClass, primaryButtonClass } from "./shared";
 import type { TopFilter } from "./LiveTab";
 
 const SHOW: Array<[string, string]> = [
@@ -26,7 +26,7 @@ function IssueCard({ issue, statuses }: { issue: overviewApi.IssueRow; statuses:
   });
   const label = (s: string) => s.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
   return (
-    <article className="border border-[#e4e3df] bg-white p-3" data-testid={`issue-${issue.reference}`}>
+    <article className="rounded-[8px] border border-[#e4e3df] bg-white p-3.5" data-testid={`issue-${issue.reference}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-sm font-bold">{issue.reference}</span>
         <Chip tone={PRIORITY_TONE[issue.priority] ?? "neutral"}>{issue.priority}</Chip>
@@ -72,9 +72,9 @@ export default function IssuesTab({ filter }: { filter: TopFilter }) {
   const list = (issues.data?.issues ?? []).filter((i) => !needle || [i.reference, i.category, i.description, i.reporter.name, i.vehicle, i.so_number].some((v) => String(v ?? "").toLowerCase().includes(needle)));
   return (
     <section className="grid gap-3" data-testid="issues-tab">
-      <div className="inline-flex w-fit flex-wrap items-center rounded-[6px] border border-[#d8d7d2] bg-white p-1" role="group" aria-label="Show issues">
+      <div className="inline-flex w-fit flex-wrap items-center gap-0.5 rounded-[8px] border border-[#d8d7d2] bg-[#f2f2ef] p-0.5" role="group" aria-label="Show issues">
         {SHOW.map(([v, l]) => (
-          <button key={v} type="button" aria-pressed={show === v} onClick={() => setShow(v)} className={`${buttonClass} !min-h-[32px] !border-transparent !px-3 !text-xs ${show === v ? "!bg-black !text-white" : "!bg-white"}`}>
+          <button key={v} type="button" aria-pressed={show === v} onClick={() => setShow(v)} className={`h-8 rounded-[6px] px-3 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 ${show === v ? "bg-white text-black shadow-sm" : "text-[#55565a] hover:text-black"}`}>
             {l}
           </button>
         ))}
@@ -84,7 +84,7 @@ export default function IssuesTab({ filter }: { filter: TopFilter }) {
       ) : issues.isError ? (
         <ErrorNote error={issues.error} onRetry={() => void issues.refetch()} />
       ) : list.length === 0 ? (
-        <Empty>No issues to show. Operational exceptions will appear here when they are reported.</Empty>
+        <Empty title="No issues to show.">{needle ? "No issues match the search." : show === "resolved" || show === "closed" ? "No issues are in this state. Try All to see other states." : "Operational exceptions will appear here when they are reported."}</Empty>
       ) : (
         <div className="grid gap-3 xl:grid-cols-2">
           {list.map((i) => (

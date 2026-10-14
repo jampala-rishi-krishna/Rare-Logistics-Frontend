@@ -22,21 +22,21 @@ export default function TripsTab({ filter }: { filter: TopFilter }) {
     refetchIntervalInBackground: false,
   });
   const rows = (trips.data?.trips ?? []).filter((t) => (!filter.status || t.state === filter.status) && matchesSearch({ name: t.driver_name ?? "", vehicle: t.vehicle, so_numbers: [] }, filter.search));
-  const head = "px-2 py-2 text-left text-[11px] font-bold uppercase text-[#77787b]";
-  const cell = "px-2 py-2 align-top text-sm";
+  const head = "whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[#77787b]";
+  const cell = "px-3 py-2 align-middle text-[13px]";
   return (
     <section className="grid gap-3" data-testid="trips-tab">
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="grid gap-1 text-xs font-semibold">
+      <div className="flex flex-wrap items-end gap-3 rounded-[8px] border border-[#e4e3df] bg-white p-2.5">
+        <label className="grid gap-1 text-[11px] font-medium text-[#55565a]">
           From
-          <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={inputClass} data-testid="trips-from" />
+          <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} !w-auto`} data-testid="trips-from" />
         </label>
-        <label className="grid gap-1 text-xs font-semibold">
+        <label className="grid gap-1 text-[11px] font-medium text-[#55565a]">
           To
-          <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={inputClass} data-testid="trips-to" />
+          <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={`${inputClass} !w-auto`} data-testid="trips-to" />
         </label>
         {trips.data && (
-          <span className="pb-2 text-xs text-[#55565a]">
+          <span className="ml-auto pb-2 text-xs font-medium text-[#55565a]">
             {rows.length} of {trips.data.total} trips
           </span>
         )}
@@ -49,7 +49,7 @@ export default function TripsTab({ filter }: { filter: TopFilter }) {
       ) : rows.length === 0 ? (
         <Empty>No trips found for this date range.</Empty>
       ) : (
-        <div className="overflow-x-auto rounded-[6px] border border-[#e4e3df] bg-white">
+        <div className="overflow-x-auto rounded-[8px] border border-[#e4e3df] bg-white">
           <table className="w-full min-w-[900px] border-collapse" data-testid="trips-table">
             <thead>
               <tr className="border-b border-[#e4e3df] bg-[#fafaf8]">
@@ -66,14 +66,14 @@ export default function TripsTab({ filter }: { filter: TopFilter }) {
                 const isOpen = open === t.batch_id;
                 return (
                   <Fragment key={t.batch_id}>
-                    <tr className="h-[54px] cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8]" onClick={() => setOpen(isOpen ? null : t.batch_id)} data-testid={`trip-row-${t.batch_id}`}>
+                    <tr className="h-[52px] cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8]" onClick={() => setOpen(isOpen ? null : t.batch_id)} data-testid={`trip-row-${t.batch_id}`}>
                       <td className={cell}>{t.date}</td>
                       <td className={cell}>
-                        <div className="font-semibold">{t.driver_name ?? "-"}</div>
-                        <div className="text-xs text-[#77787b]">{t.helpers.filter(Boolean).join(", ")}</div>
+                        <div className="font-semibold">{t.driver_name ?? "—"}</div>
+                        {t.helpers.filter(Boolean).length > 0 && <div className="text-xs text-[#77787b]">Helper: {t.helpers.filter(Boolean).join(", ")}</div>}
                       </td>
                       <td className={`${cell} font-mono`}>
-                        {t.vehicle ?? "-"}
+                        {t.vehicle ?? "—"}
                         {t.trips_on_date > 1 ? <div className="font-sans text-xs text-[#77787b]">Trip {t.trip_number} of {t.trips_on_date}</div> : null}
                       </td>
                       <td className={cell}>
