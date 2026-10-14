@@ -1,209 +1,286 @@
-import { useEffect, useRef } from "react";
-import { Link } from "wouter";
-import { AlertTriangle, ChevronRight, Phone } from "lucide-react";
-import { browserPollDeps, formatLongDate, greeting, startVisibilityPolling, telHref, withDriverParams } from "@/lib/driver";
-import { primaryAction, routeText, stopProgress, tripLabel } from "@/lib/tripCards";
-import { useOfflineQueue } from "@/lib/offlineRuntime";
-import type { Batch, DaySummary } from "@/lib/tripTypes";
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as driverApi from "@/services/api/driver";
+import { firstName, formatQty, telHref, withDriverParams } from "@/lib/driver";
+import { tripPath } from "@/lib/tripNav";
+import type { AlertItem, Batch, CrewMember, DriverMe } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
-import { useToday } from "./queries";
-import { ChipBadge, ErrorState, KgValue, MissingDriverNotice, OfflineNote, PacksValue, Skeleton, errorText, useDriverMe, useDriverScope } from "./shared";
+import { dayLabel, useLang, useT } from "./i18n";
+import type { Dict } from "./i18n";
+import { useAlertsQuery, useTemplatesQuery, useToday } from "./queries";
+import { ErrorState, MissingDriverNotice, OfflineNote, errorText, useDriverMe, useDriverScope } from "./shared";
+import type { DriverScope } from "./shared";
+import { ConfirmSheet, DispatchBanners, checklistOf, chipOfTrip, useTripActions } from "./tripFlow";
+import { Avatar, Banner, C, Chip, RoundButton, Skeleton } from "./ui";
 
-const POLL_MS = 60_000;
+const FINISHED = new Set(["returned", "handover_submitted", "closed"]);
 
-function Tile({ label, value, warn = false, testId }: { label: string; value: number | string; warn?: boolean; testId: string }) {
+export function isFinished(batch: Pick<Batch, "trip">): boolean {
+  return Boolean(batch.trip && FINISHED.has(batch.trip.status));
+}
+
+// The other crew member(s) of a trip, from the point of view of the signed-in person (driver sees helpers, helper sees driver).
+export function partnersOf(batch: Pick<Batch, "crew" | "helpers">, me: Pick<DriverMe, "driver_id" | "staff_id" | "role"> | null | undefined): CrewMember[] {
+  const crew: CrewMember[] = batch.crew && batch.crew.length > 0 ? batch.crew : (batch.helpers ?? []).map((h) => ({ id: h.id, name: h.name, role: "helper", phone: h.phone }));
+  const myIds = new Set([me?.driver_id, me?.staff_id].filter((x) => x !== undefined && x !== null).map(String));
+  const others = crew.filter((p) => !myIds.has(String(p.id)));
+  return others.length > 0 ? others : crew.filter((p) => p.role !== (me?.role ?? "driver"));
+}
+
+export function PersonRow({ person, t }: { person: CrewMember; t: Dict }) {
+  const tel = telHref(person.phone);
   return (
-    <div data-testid={testId} className={`min-w-0 border bg-white px-3 py-3 ${warn ? "border-[#e6c36a]" : "border-[#e4e3df]"}`}>
-      <div className="flex items-center gap-1 text-2xl font-bold leading-none">
-        {warn && Number(value) > 0 && <AlertTriangle size={18} className="text-[#a16819]" aria-hidden="true" />}
-        {value}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 14, background: C.soft }}>
+      <div style={{ fontSize: 15, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ color: C.sub }}>{person.role === "driver" ? t.driver : t.helper}</span> <b>{person.name}</b>
       </div>
-      <div className="mt-1.5 text-[10px] font-semibold uppercase leading-tight text-[#77787b]">{label}</div>
+      {tel && <RoundButton icon="phone" label={t.callPerson(person.name)} href={tel} testId="driver-call-crew" />}
     </div>
   );
 }
 
-function Kpis({ summary }: { summary: DaySummary }) {
+function Stats({ batch, t, route }: { batch: Batch; t: Dict; route: string | null }) {
   return (
-    <section aria-label="Today at a glance" className="mb-5 grid grid-cols-4 gap-2" data-testid="driver-kpis">
-      <Tile testId="kpi-assigned" label="Assigned" value={summary.assigned} />
-      <Tile testId="kpi-completed" label="Completed" value={summary.completed} />
-      <Tile testId="kpi-remaining" label="Remaining" value={summary.remaining} />
-      <Tile testId="kpi-attention" label="Attention" value={summary.needs_attention} warn />
-    </section>
+    <div style={{ display: "flex", flexWrap: "wrap", columnGap: 18, rowGap: 4, marginTop: 10, fontSize: 15 }}>
+      <span>
+        <b>{batch.so_count}</b> {t.orders(batch.so_count)}
+      </span>
+      {Number.isFinite(batch.total_kg) && batch.total_kg > 0 && (
+        <span data-testid="driver-kg">
+          <b>{formatQty(Math.round(batch.total_kg * 10) / 10)}</b> kg
+        </span>
+      )}
+      {batch.total_packs !== null && batch.total_packs !== undefined && (
+        <span data-testid="driver-packs">
+          <b>{formatQty(batch.total_packs)}</b> {t.packs(batch.total_packs)}
+        </span>
+      )}
+      {route && <span style={{ color: C.sub }}>{route}</span>}
+    </div>
   );
 }
 
-function BatchCard({ batch, adminDriverId, pendingCount }: { batch: Batch; adminDriverId: string | null; pendingCount: number }) {
-  const href = withDriverParams(`/driver/assignment/${encodeURIComponent(batch.batch_id)}`, { driver_id: adminDriverId });
-  const action = primaryAction(batch);
-  const route = routeText(batch);
-  const label = tripLabel(batch);
-  const progress = stopProgress(batch);
-  const people = batch.crew && batch.crew.length > 0 ? batch.crew : (batch.helpers ?? []).map((h) => ({ id: h.id, name: h.name, role: "helper", phone: h.phone }));
+function routeLine(batch: Batch, warehouse: string | null | undefined): string | null {
+  const areas = [batch.first_area, batch.last_area].filter((a): a is string => Boolean(a));
+  const uniq = [...new Set(areas)];
+  if (uniq.length === 0) return warehouse ?? null;
+  return warehouse ? `${warehouse} → ${uniq.join(", ")}` : uniq.join(" → ");
+}
+
+function TripCard({ batch, scope, me, index, total, active, waitFor, checklistOn }: { batch: Batch; scope: DriverScope; me: DriverMe | undefined; index: number; total: number; active: boolean; waitFor: number | null; checklistOn: boolean }) {
+  const t = useT();
+  const [, setLocation] = useLocation();
+  const actions = useTripActions(scope, batch.batch_id);
+  const [startOpen, setStartOpen] = useState(false);
+  const href = tripPath(batch.batch_id, scope.adminDriverId);
+  const chip = waitFor !== null ? { tone: "grey" as const, label: t.afterTrip(waitFor) } : chipOfTrip(t, batch.trip);
+  const status = batch.trip?.status ?? "pending";
+  const acked = batch.trip ? batch.trip.acknowledged >= batch.trip.total && batch.trip.total > 0 : false;
+  const crew = !scope.isAdmin && Boolean(batch.trip);
+  const partners = partnersOf(batch, me);
+  const tripNo = batch.trip_number ?? index + 1;
+
+  let button: { label: string; testId: string; run: () => void } | null = null;
+  if (active && crew) {
+    if (status === "pending" && !acked)
+      button = {
+        label: t.haveOrders,
+        testId: "driver-card-action-acknowledge",
+        run: () => {
+          if (checklistOn) setLocation(withDriverParams(href, { do: "ack" }));
+          else void actions.acknowledgeAll(batch.so_count);
+        },
+      };
+    else if (status === "pending") button = { label: t.startTrip, testId: "driver-card-action-start", run: () => setStartOpen(true) };
+    else if (status === "on_trip") button = { label: t.continueTrip, testId: "driver-card-action-continue", run: () => setLocation(href) };
+  }
+
   return (
-    <article className="overflow-hidden border border-[#d8d7d2] bg-white" data-testid={`driver-batch-${batch.batch_id}`}>
-      <Link href={href} className="block p-4" aria-label={`Open ${batch.vehicle}${label ? `, ${label}` : ""}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">{label ? `Vehicle · ${label}` : "Vehicle"}</div>
-            <div className="font-mono text-xl font-bold">{batch.vehicle}</div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {batch.trip ? <ChipBadge chip={batch.trip.chip} label={batch.trip.chip_label} /> : null}
-            <ChevronRight size={20} className="text-[#77787b]" />
-          </div>
-        </div>
-        {pendingCount > 0 && <div className="mt-2 inline-flex border border-[#e6c36a] bg-[#fff6dd] px-2 py-1 text-xs font-bold text-[#6b4a00]">Pending sync ({pendingCount})</div>}
-        <div className="mt-3 grid grid-cols-3 gap-3 border-y border-[#efeeeb] py-3 text-sm">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Orders</div>
-            <div className="font-semibold">{batch.so_count}</div>
-          </div>
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Total</div>
-            <KgValue kg={batch.total_kg} unknownLines={batch.kg_unknown_lines} className="font-semibold" />
-          </div>
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Packs</div>
-            <div className="font-semibold">
-              <PacksValue packs={batch.total_packs} />
-            </div>
-          </div>
-        </div>
-        {route && (
-          <div className="mt-3">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77787b]">Route</div>
-            <div className="mt-0.5 break-words text-sm font-semibold">{route}</div>
-          </div>
+    <article
+      data-testid={`driver-batch-${batch.batch_id}`}
+      role="link"
+      tabIndex={0}
+      aria-label={`${batch.vehicle}, ${t.tripNofM(tripNo, total)}`}
+      onClick={() => setLocation(href)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") setLocation(href);
+      }}
+      style={{ display: "block", background: C.card, borderRadius: 20, padding: 18, color: C.ink, cursor: "pointer" }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <div style={{ fontSize: 13, color: C.sub, fontWeight: 500 }}>{t.tripNofM(tripNo, total)}</div>
+        {chip && (
+          <Chip tone={chip.tone} testId="driver-trip-chip">
+            {chip.label}
+          </Chip>
         )}
-        {progress && (
-          <div className="mt-3" data-testid="driver-card-progress">
-            <div className="flex items-center justify-between text-xs font-semibold">
-              <span>
-                {progress.done} of {progress.total} orders done
-              </span>
-              <span>{progress.percent}%</span>
-            </div>
-            <div className="mt-1 h-1.5 w-full bg-[#e4e3df]">
-              <div className="h-1.5 bg-[#33673B]" style={{ width: `${progress.percent}%` }} />
-            </div>
-          </div>
-        )}
-      </Link>
-      {people.length > 0 && (
-        <ul className="border-t border-[#efeeeb] px-4 py-1 text-sm">
-          {people.map((p) => {
-            const tel = telHref(p.phone);
-            return (
-              <li key={String(p.id)} className="flex min-h-[48px] items-center justify-between gap-3">
-                <span className="min-w-0 truncate">
-                  <span className="capitalize text-[#77787b]">{p.role}</span> {p.name}
-                </span>
-                {tel && (
-                  <a href={tel} aria-label={`Call ${p.name}`} className="inline-flex h-12 w-12 shrink-0 items-center justify-center">
-                    <Phone size={18} />
-                  </a>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6, overflowWrap: "anywhere" }}>{batch.vehicle}</div>
+      <Stats batch={batch} t={t} route={routeLine(batch, me?.warehouse)} />
+      {partners.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }} onClick={(e) => e.stopPropagation()}>
+          {partners.map((p) => (
+            <PersonRow key={String(p.id)} person={p} t={t} />
+          ))}
+        </div>
       )}
-      <div className="border-t border-[#efeeeb] p-3">
-        {action.actionable ? (
-          <Link href={href} data-testid={`driver-card-action-${action.kind}`} className="inline-flex min-h-[52px] w-full items-center justify-center bg-black px-4 text-base font-bold !text-white">
-            {action.label}
-          </Link>
-        ) : (
-          <div data-testid="driver-card-action-wait" className="flex min-h-[52px] items-center justify-center border border-[#e6c36a] bg-[#fff6dd] px-4 text-sm font-bold text-[#6b4a00]">
-            {action.label}
-          </div>
-        )}
+      {button && (
+        <button
+          type="button"
+          data-testid={button.testId}
+          disabled={actions.busy || !actions.ready}
+          onClick={(e) => {
+            e.stopPropagation();
+            button?.run();
+          }}
+          style={{ width: "100%", height: 56, marginTop: 16, borderRadius: 14, border: 0, background: C.ink, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, fontFamily: "inherit", opacity: actions.busy ? 0.6 : 1, cursor: "pointer" }}
+        >
+          {actions.busy ? t.gettingLocation : button.label}
+        </button>
+      )}
+      <div onClick={(e) => e.stopPropagation()}>
+        <ConfirmSheet
+          open={startOpen}
+          testId="driver-start-sheet"
+          title={t.startTripNow}
+          sub={t.startHint(batch.so_count)}
+          confirmLabel={t.start}
+          icon="play"
+          busy={actions.busy}
+          onClose={() => setStartOpen(false)}
+          onConfirm={async () => {
+            const out = await actions.start();
+            setStartOpen(false);
+            if (out && (out.status === "done" || out.status === "queued")) setLocation(href);
+          }}
+        />
       </div>
     </article>
   );
 }
 
+function AlertBanner({ alerts, scope }: { alerts: AlertItem[]; scope: DriverScope }) {
+  const t = useT();
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const markRead = useMutation({
+    mutationFn: (keys: string[]) => driverApi.markAlertsRead({ keys }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["driver-alerts"] }),
+  });
+  const unread = alerts.filter((a) => !a.read);
+  if (unread.length === 0 || scope.isAdmin) return null;
+  const first = unread[0];
+  return (
+    <Banner
+      testId="driver-alert-banner"
+      onClick={() => {
+        markRead.mutate([first.key]);
+        if (first.link) setLocation(first.link);
+      }}
+      onDismiss={() => markRead.mutate([first.key])}
+      dismissLabel={t.dismiss}
+    >
+      {first.title}
+      {first.body ? `: ${first.body}` : ""}
+      {unread.length > 1 ? ` · ${t.moreAlerts(unread.length - 1)}` : ""}
+    </Banner>
+  );
+}
+
 export default function DriverToday() {
+  const t = useT();
+  const [lang] = useLang();
   const scope = useDriverScope();
   const me = useDriverMe(scope);
-  const enabled = !scope.sessionLoading && !scope.missingDriverId;
   const today = useToday(scope);
-  const queue = useOfflineQueue();
-
-  // Poll every 60s only while the tab is visible; refetch right away when it becomes visible.
-  const refetchRef = useRef(today.refetch);
-  refetchRef.current = today.refetch;
-  useEffect(() => {
-    if (!enabled) return;
-    return startVisibilityPolling(() => void refetchRef.current(), POLL_MS, browserPollDeps());
-  }, [enabled]);
+  const templates = useTemplatesQuery(scope);
+  const alerts = useAlertsQuery(scope);
 
   const data = today.data?.data;
   const name = me.data?.name ?? data?.driver.name ?? null;
-  const dispatchHref = telHref(me.data?.dispatch_phone);
-  const pendingFor = (batchId: string) => queue.entries.filter((e) => e.batch_id === batchId && (e.status === "pending" || e.status === "syncing")).length;
+  const dispatchTel = telHref(me.data?.dispatch_phone);
+  const batches = data?.batches ?? [];
+  const stops = batches.reduce((n, b) => n + (b.so_count ?? 0), 0);
+  const done = batches.reduce((n, b) => n + (b.trip?.stops_done ?? b.progress?.stops_done ?? 0), 0);
+  const firstOpen = batches.findIndex((b) => !isFinished(b));
+  const flag = data?.acknowledge_checklist_enabled ?? templates.data?.data.acknowledge_checklist_enabled;
+  const checklistOn = Boolean(checklistOf(flag, templates.data?.data.acknowledge_checklist));
 
   return (
-    <DriverLayout scope={scope} name={name}>
+    <DriverLayout scope={scope} tab="today" testId="driver-today">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "20px 20px 8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <Avatar name={name} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: C.sub }}>{dayLabel(me.data?.today ?? data?.date ?? null, lang)}</div>
+            <div data-testid="driver-greeting" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {t.hi(firstName(name))}
+            </div>
+          </div>
+        </div>
+        {dispatchTel && !scope.isAdmin && <RoundButton icon="phone" label={t.callDispatch} href={dispatchTel} size={48} testId="driver-call-dispatch" />}
+      </div>
+
       {scope.missingDriverId ? (
-        <MissingDriverNotice />
+        <div style={{ padding: "16px 20px" }}>
+          <MissingDriverNotice />
+        </div>
       ) : (
         <>
-          <section className="mb-4">
-            {me.data ? (
-              <>
-                <h1 className="text-2xl font-bold leading-tight" data-testid="driver-greeting">
-                  {greeting(me.data.now, me.data.name)}
-                </h1>
-                <p className="mt-1 text-sm text-[#55565a]">{formatLongDate(me.data.today)}</p>
-              </>
-            ) : me.isError ? (
-              <h1 className="text-2xl font-bold leading-tight">Today</h1>
-            ) : (
-              <div className="grid gap-2">
-                <Skeleton className="h-8 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-              </div>
-            )}
-          </section>
-
-          <OfflineNote offline={Boolean(today.data?.offline)} savedAt={today.data?.saved_at} />
-          {data?.summary && data.batches.length > 0 && <Kpis summary={data.summary} />}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "8px 20px 0" }}>
+            {scope.isAdmin && <Banner tone="blue">{t.adminReadOnly}</Banner>}
+            <DispatchBanners changes={data?.dispatch_changes} batchId={null} />
+            <AlertBanner alerts={alerts.data?.alerts ?? []} scope={scope} />
+            <OfflineNote offline={Boolean(today.data?.offline)} savedAt={today.data?.saved_at} />
+          </div>
 
           {today.isLoading ? (
-            <div className="grid gap-3" aria-busy="true">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-48 w-full" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px" }} aria-busy="true">
+              <Skeleton height={80} radius={16} />
+              <Skeleton height={200} radius={20} />
             </div>
           ) : today.isError && !data ? (
-            <ErrorState message={errorText(today.error)} onRetry={() => void today.refetch()} />
-          ) : data && data.batches.length === 0 ? (
-            <div className="border border-[#e4e3df] bg-white p-6 text-center" data-testid="driver-empty-today">
-              <p className="text-base font-semibold">No assignments yet today.</p>
-              <p className="mt-1 text-sm text-[#55565a]">New assignments from dispatch appear here and in Alerts.</p>
-              {dispatchHref && (
-                <a href={dispatchHref} data-testid="driver-call-dispatch" className="mt-4 inline-flex min-h-[52px] items-center justify-center gap-2 bg-black px-6 text-sm font-semibold !text-white">
-                  <Phone size={16} />
-                  Call dispatch
-                </a>
-              )}
+            <div style={{ padding: "16px 20px" }}>
+              <ErrorState message={errorText(today.error)} onRetry={() => void today.refetch()} />
             </div>
           ) : (
-            <div className="grid gap-3">
-              <h2 className="text-base font-bold">Today&apos;s assignments</h2>
-              {today.isError && <p className="text-xs text-[#86000B]">Could not refresh just now. Showing the last loaded assignments.</p>}
-              {data?.batches.map((batch) => (
-                <BatchCard key={batch.batch_id} batch={batch} adminDriverId={scope.adminDriverId} pendingCount={pendingFor(batch.batch_id)} />
-              ))}
-              {dispatchHref && (
-                <a href={dispatchHref} data-testid="driver-call-dispatch" className="inline-flex min-h-[52px] items-center justify-center gap-2 border border-black bg-white px-6 text-sm font-semibold">
-                  <Phone size={16} />
-                  Call dispatch
-                </a>
+            <>
+              <div data-testid="driver-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, padding: "16px 20px 4px" }}>
+                {[
+                  [batches.length, t.trips, "kpi-trips"],
+                  [stops, t.stops, "kpi-stops"],
+                  [done, t.done, "kpi-done"],
+                ].map(([value, label, id]) => (
+                  <div key={String(id)} data-testid={String(id)} style={{ background: C.card, borderRadius: 16, padding: 14, minWidth: 0 }}>
+                    <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
+                    <div style={{ fontSize: 13, color: C.sub }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              {batches.length === 0 ? (
+                <div data-testid="driver-empty-today" style={{ margin: "16px 20px 0", background: C.card, borderRadius: 20, padding: 24, textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{t.noTripsToday}</div>
+                  <div style={{ fontSize: 14, color: C.sub, marginTop: 4 }}>{t.noTripsHint}</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px" }}>
+                  {batches.map((b, i) => (
+                    <TripCard
+                      key={b.batch_id}
+                      batch={b}
+                      scope={scope}
+                      me={me.data}
+                      index={i}
+                      total={batches.length}
+                      active={i === firstOpen}
+                      waitFor={firstOpen >= 0 && i > firstOpen && !isFinished(b) && (b.trip?.status ?? "pending") === "pending" ? (batches[firstOpen].trip_number ?? firstOpen + 1) : null}
+                      checklistOn={checklistOn}
+                    />
+                  ))}
+                </div>
               )}
-            </div>
+            </>
           )}
         </>
       )}

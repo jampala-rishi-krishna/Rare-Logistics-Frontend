@@ -89,6 +89,37 @@ export interface Batch {
   ended_at?: string | null;
 }
 
+// Today's unassign events for this crew member's batches (API contract section 3).
+export interface DispatchChange {
+  kind: "order_removed" | "trip_removed" | string;
+  batch_id: string;
+  so_id: string | null;
+  so_number: string | null;
+  at: string;
+}
+
+// Flags the driver app needs (top level of /today and /assignments/{id}, or in /templates).
+export interface DriverFlags {
+  acknowledge_checklist_enabled?: boolean;
+  photo_storage_enabled?: boolean;
+}
+
+// Handover created automatically at End trip (API contract section 2).
+export interface AutoHandoverItem {
+  so_id: string | number;
+  so_number: string;
+  order_type: "SO" | "TO" | string;
+  invoice_no: string | null;
+  customer_name: string;
+  status: string;
+}
+
+export interface AutoHandover {
+  id: number | string;
+  status: string;
+  items: AutoHandoverItem[];
+}
+
 export interface OrderLine {
   name: string;
   quantity: number;
@@ -137,6 +168,10 @@ export interface DriverOrder {
   order_type?: "SO" | "TO" | "PO" | null;
   order_reference?: string | null;
   destination_warehouse?: string | null;
+  source_warehouse?: string | null;
+  area?: string | null;
+  // Invoice/DR number to prefill at check-out: TO -> its TO number; SO -> known invoice number, else null.
+  invoice_no_prefill?: string | null;
   customer_name: string;
   contact: OrderContact | null;
   address_lines: string[];
@@ -158,8 +193,9 @@ export interface DriverOrder {
   checkout_prefill?: Record<string, unknown> | null;
 }
 
-export interface BatchDetail extends Batch {
+export interface BatchDetail extends Batch, DriverFlags {
   orders: DriverOrder[];
+  dispatch_changes?: DispatchChange[];
 }
 
 export interface DaySummary {
@@ -171,11 +207,12 @@ export interface DaySummary {
   trips: number;
 }
 
-export interface DriverToday {
+export interface DriverToday extends DriverFlags {
   date: string;
   driver: { id: number | string; name: string };
   summary?: DaySummary;
   batches: Batch[];
+  dispatch_changes?: DispatchChange[];
 }
 
 export type HistoryFilter = "all" | "completed" | "failed";
@@ -283,6 +320,7 @@ export interface Template {
 
 export interface Templates {
   photo_storage_enabled: boolean;
+  acknowledge_checklist_enabled?: boolean;
   acknowledge_checklist: Template;
   delivery_checkout: Template;
 }
@@ -346,6 +384,11 @@ export interface ActionResponse {
   replayed: boolean;
   done_by: DoneBy | null;
   batch: BatchDetail | null;
+  // End trip: the handover created in the same transaction.
+  handover?: AutoHandover | null;
+  // Acknowledge-all.
+  acknowledged?: Array<string | number>;
+  already_acknowledged?: Array<string | number>;
 }
 
 export interface AckAnswer {

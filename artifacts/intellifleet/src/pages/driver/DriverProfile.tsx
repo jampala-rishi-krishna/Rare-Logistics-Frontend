@@ -1,48 +1,46 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronRight, Lock, LogOut, MessageSquare, Phone } from "lucide-react";
+import { useLocation } from "wouter";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as authApi from "@/services/api/auth";
+import * as driverApi from "@/services/api/driver";
 import { clearStoredSessionId } from "@/services/api/client";
-import { telHref } from "@/lib/driver";
-import { validateNewPassword } from "@/lib/driver";
+import { MIN_PASSWORD_LENGTH, formatDateTimeShort, telHref } from "@/lib/driver";
 import { useOfflineQueue } from "@/lib/offlineRuntime";
+import type { AlertItem } from "@/lib/tripTypes";
 import DriverLayout from "./DriverLayout";
-import { Avatar, ErrorState, MissingDriverNotice, Skeleton, errorText, useDriverMe, useDriverScope } from "./shared";
+import { useLang, useT } from "./i18n";
+import { useAlertsQuery } from "./queries";
+import { ErrorState, MissingDriverNotice, errorText, useDriverMe, useDriverScope } from "./shared";
+import { fieldInput } from "./fields";
+import { Avatar, C, FieldError, Icon, PrimaryButton, Sheet, SheetTitle, Skeleton, TextButton } from "./ui";
 
-function InfoRow({ label, children, testId }: { label: string; children: ReactNode; testId?: string }) {
+function Row({ label, children, last = false, testId }: { label: string; children: ReactNode; last?: boolean; testId?: string }) {
   return (
-    <div className="flex min-h-[52px] items-center justify-between gap-3 border-b border-[#efeeeb] px-4 py-2 last:border-b-0" data-testid={testId}>
-      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-[#77787b]">{label}</span>
-      <span className="min-w-0 break-words text-right text-sm font-semibold">{children}</span>
+    <div data-testid={testId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: 16, borderBottom: last ? 0 : `1px solid ${C.muted}` }}>
+      <span style={{ color: C.sub, flexShrink: 0 }}>{label}</span>
+      <b style={{ textAlign: "right", minWidth: 0, overflowWrap: "anywhere" }}>{children}</b>
     </div>
   );
 }
 
-function ChangePassword() {
-  const [open, setOpen] = useState(false);
+function PasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
-  const input = "min-h-[48px] w-full border border-[#d8d7d2] bg-white px-3 text-base";
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     if (busy) return;
-    const problem = validateNewPassword(next, confirm);
-    if (problem) {
-      setError(problem);
-      return;
-    }
+    if (next.length < MIN_PASSWORD_LENGTH) return setError(t.pwShort);
+    if (next !== confirm) return setError(t.pwMismatch);
     setError("");
     setBusy(true);
     try {
       await authApi.changePassword(current, next);
-      setDone(true); // shown only after the server accepted the change
+      setDone(true); // only after the server accepted it
       setCurrent("");
       setNext("");
       setConfirm("");
@@ -52,50 +50,91 @@ function ChangePassword() {
       setBusy(false);
     }
   };
-
   return (
-    <div className="border-b border-[#efeeeb]">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="driver-change-password" className="flex min-h-[52px] w-full items-center gap-3 px-4 text-left text-sm font-semibold">
-        <Lock size={18} className="text-[#55565a]" />
-        <span className="flex-1">Change password</span>
-        <ChevronRight size={18} className={`text-[#77787b] transition-transform ${open ? "rotate-90" : ""}`} />
-      </button>
-      {open && (
-        <form onSubmit={submit} className="grid gap-3 px-4 pb-4">
-          <input type="password" autoComplete="current-password" placeholder="Current password" value={current} onChange={(e) => setCurrent(e.target.value)} className={input} />
-          <input type="password" autoComplete="new-password" placeholder="New password (8+ characters)" value={next} onChange={(e) => setNext(e.target.value)} className={input} />
-          <input type="password" autoComplete="new-password" placeholder="Confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={input} />
-          {error && (
-            <p role="alert" className="text-sm font-semibold text-[#86000B]">
-              {error}
-            </p>
-          )}
-          {done && (
-            <p role="status" data-testid="driver-password-changed" className="text-sm font-semibold text-[#33673B]">
-              Password changed.
-            </p>
-          )}
-          <button type="submit" disabled={busy || !current} className="min-h-[52px] bg-black text-sm font-bold !text-white disabled:opacity-40">
-            {busy ? "Saving..." : "Save new password"}
-          </button>
-        </form>
+    <Sheet open={open} onClose={onClose} busy={busy} testId="driver-password-sheet">
+      <SheetTitle>{t.changePassword}</SheetTitle>
+      <input type="password" autoComplete="current-password" placeholder={t.currentPassword} value={current} onChange={(e) => setCurrent(e.target.value)} style={fieldInput} />
+      <input type="password" autoComplete="new-password" placeholder={t.newPassword} value={next} onChange={(e) => setNext(e.target.value)} style={fieldInput} />
+      <input type="password" autoComplete="new-password" placeholder={t.confirmPassword} value={confirm} onChange={(e) => setConfirm(e.target.value)} style={fieldInput} />
+      <FieldError>{error}</FieldError>
+      {done && (
+        <div role="status" data-testid="driver-password-changed" style={{ fontSize: 15, fontWeight: 700, color: C.green }}>
+          {t.passwordChanged}
+        </div>
       )}
+      <PrimaryButton height={56} fontSize={17} disabled={busy || !current} onClick={() => void submit()}>
+        {busy ? t.saving : t.savePassword}
+      </PrimaryButton>
+      <TextButton onClick={onClose}>{t.close}</TextButton>
+    </Sheet>
+  );
+}
+
+function Alerts({ alerts, unread }: { alerts: AlertItem[]; unread: number }) {
+  const t = useT();
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const markRead = useMutation({
+    mutationFn: (input: { keys?: string[]; all?: boolean }) => driverApi.markAlertsRead(input),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["driver-alerts"] }),
+  });
+  if (alerts.length === 0) return null;
+  return (
+    <div data-testid="driver-alerts" style={{ margin: "14px 20px 0", background: C.card, borderRadius: 18, overflow: "hidden" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${C.muted}` }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
+          <Icon name="bell" size={20} />
+          {t.alerts}
+          {unread > 0 && <span style={{ minWidth: 22, height: 22, padding: "0 6px", borderRadius: 11, background: C.so, color: "#FFFFFF", fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>{unread}</span>}
+        </span>
+        {unread > 0 && (
+          <button type="button" onClick={() => markRead.mutate({ all: true })} style={{ minHeight: 44, border: 0, background: "transparent", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: C.sub }}>
+            {t.markAllRead}
+          </button>
+        )}
+      </div>
+      {alerts.slice(0, 15).map((a, i) => (
+        <button
+          key={a.key}
+          type="button"
+          data-testid={`driver-alert-${a.type}`}
+          data-read={a.read ? "true" : "false"}
+          onClick={() => {
+            if (!a.read) markRead.mutate({ keys: [a.key] });
+            if (a.link) setLocation(a.link);
+          }}
+          style={{ display: "flex", width: "100%", gap: 10, alignItems: "flex-start", padding: "12px 16px", border: 0, borderTop: i === 0 ? 0 : `1px solid ${C.muted}`, background: "#FFFFFF", fontFamily: "inherit", color: C.ink, textAlign: "left", cursor: "pointer" }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 7, background: a.read ? "transparent" : C.so, flexShrink: 0 }} />
+          <span style={{ minWidth: 0, flex: 1 }}>
+            <span style={{ display: "block", fontSize: 15, fontWeight: a.read ? 500 : 700, overflowWrap: "anywhere" }}>{a.title}</span>
+            {a.body && <span style={{ display: "block", fontSize: 14, color: C.sub, overflowWrap: "anywhere" }}>{a.body}</span>}
+            {a.at && <span style={{ display: "block", fontSize: 12, color: C.sub, marginTop: 2 }}>{formatDateTimeShort(a.at)}</span>}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
 
 export default function DriverProfile() {
+  const t = useT();
+  const [lang, setLang] = useLang();
   const scope = useDriverScope();
   const me = useDriverMe(scope);
+  const alerts = useAlertsQuery(scope);
   const queue = useOfflineQueue();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const [pwOpen, setPwOpen] = useState(false);
   const data = me.data;
   const dispatchTel = telHref(data?.dispatch_phone);
+  const isHelper = (data?.role ?? "driver") === "helper";
+  const partners = (data?.crew_today ?? []).filter((p) => String(p.id) !== String(data?.staff_id ?? data?.driver_id) && (isHelper ? p.role === "driver" : p.role !== "driver"));
 
   const logout = async () => {
     const waiting = queue.entries.filter((e) => e.status !== "done").length;
-    if (waiting > 0 && !window.confirm(`${waiting} action(s) are still saved on this phone and not synced. Log out anyway?`)) return;
+    if (waiting > 0 && !window.confirm(t.logoutUnsynced(waiting))) return;
     try {
       await authApi.logout();
     } catch {
@@ -106,80 +145,87 @@ export default function DriverProfile() {
     setLocation("/driver/login");
   };
 
+  const langBtn = (value: "en" | "tl", label: string) => (
+    <button
+      type="button"
+      aria-pressed={lang === value}
+      data-testid={`driver-lang-${value}`}
+      onClick={() => setLang(value)}
+      style={{ height: 40, padding: "0 16px", borderRadius: 20, border: 0, background: lang === value ? C.ink : "transparent", color: lang === value ? "#FFFFFF" : C.ink, fontFamily: "inherit", fontWeight: lang === value ? 700 : 500, cursor: "pointer" }}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <DriverLayout scope={scope} name={data?.name ?? null}>
+    <DriverLayout scope={scope} tab="profile" testId="driver-profile">
       {scope.missingDriverId ? (
-        <MissingDriverNotice />
+        <div style={{ padding: 20 }}>
+          <MissingDriverNotice />
+        </div>
       ) : me.isLoading ? (
-        <div className="grid gap-3" aria-busy="true">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-56 w-full" />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: 20 }} aria-busy="true">
+          <Skeleton height={64} />
+          <Skeleton height={170} />
         </div>
       ) : me.isError && !data ? (
-        <ErrorState message={errorText(me.error)} onRetry={() => void me.refetch()} />
+        <div style={{ padding: 20 }}>
+          <ErrorState message={errorText(me.error)} onRetry={() => void me.refetch()} />
+        </div>
       ) : data ? (
-        <div className="grid gap-4">
-          <section className="flex items-center gap-4 border border-[#e4e3df] bg-white p-4" data-testid="driver-profile-header">
+        <>
+          <div data-testid="driver-profile-header" style={{ padding: "28px 20px 18px", display: "flex", alignItems: "center", gap: 14 }}>
             <Avatar name={data.name} size={64} />
-            <div className="min-w-0">
-              <h1 className="break-words text-xl font-bold leading-tight">{data.name}</h1>
-              <div className="text-sm capitalize text-[#55565a]">
-                {data.role ?? "driver"}
-                {data.staff_id !== undefined ? ` · Staff ID ${data.staff_id}` : ""}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", overflowWrap: "anywhere" }}>{data.name}</div>
+              <div style={{ fontSize: 15, color: C.sub }} data-testid="profile-warehouse">
+                {t.role(data.role ?? "driver")}
+                {data.warehouse ? ` · ${data.warehouse}` : ""}
               </div>
             </div>
-          </section>
-
-          <section className="border border-[#e4e3df] bg-white" aria-label="Personal information">
-            <InfoRow label="Phone" testId="profile-phone">
+          </div>
+          <div style={{ margin: "0 20px", background: C.card, borderRadius: 18, overflow: "hidden" }}>
+            <Row label={t.phone} testId="profile-phone">
               {data.phone ?? "—"}
-            </InfoRow>
-            <InfoRow label="Email" testId="profile-email">
-              {data.email ?? "—"}
-            </InfoRow>
-            <InfoRow label="Warehouse" testId="profile-warehouse">
-              {data.warehouse ?? "—"}
-            </InfoRow>
-            <InfoRow label="Vehicle today" testId="profile-vehicle">
-              {data.vehicles_today && data.vehicles_today.length > 0 ? data.vehicles_today.join(", ") : "None assigned"}
-            </InfoRow>
-            <InfoRow label="Crew today" testId="profile-crew">
-              {data.crew_today && data.crew_today.length > 0 ? data.crew_today.map((p) => `${p.name} (${p.role})`).join(", ") : "—"}
-            </InfoRow>
-          </section>
-
+            </Row>
+            <Row label={t.truckToday} testId="profile-vehicle">
+              {data.vehicles_today && data.vehicles_today.length > 0 ? data.vehicles_today.join(", ") : t.none}
+            </Row>
+            <Row label={isHelper ? t.driverToday : t.helperToday} last testId="profile-crew">
+              {partners.length > 0 ? partners.map((p) => p.name).join(", ") : t.none}
+            </Row>
+          </div>
+          <div style={{ margin: "14px 20px 0", background: C.card, borderRadius: 18, padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700 }}>{t.language}</span>
+            <div style={{ display: "flex", background: C.bg, borderRadius: 22, padding: 4 }}>
+              {langBtn("en", t.english)}
+              {langBtn("tl", t.tagalog)}
+            </div>
+          </div>
           {!scope.isAdmin && (
-            <section className="border border-[#e4e3df] bg-white" aria-label="Help">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "14px 20px 0" }}>
               {dispatchTel ? (
-                <a href={dispatchTel} data-testid="profile-call-dispatch" className="flex min-h-[52px] items-center gap-3 border-b border-[#efeeeb] px-4 text-sm font-semibold">
-                  <Phone size={18} className="text-[#55565a]" />
-                  <span className="flex-1">Contact dispatcher</span>
-                  <span className="text-xs font-normal text-[#77787b]">{data.dispatch_phone}</span>
+                <a href={dispatchTel} data-testid="profile-call-dispatch" style={{ height: 56, borderRadius: 16, background: C.ink, color: "#FFFFFF", fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                  <Icon name="phone" size={20} color="#FFFFFF" />
+                  {t.callDispatch}
                 </a>
               ) : (
-                <div className="flex min-h-[52px] items-center gap-3 border-b border-[#efeeeb] px-4 text-sm text-[#77787b]" data-testid="profile-no-dispatch">
-                  <Phone size={18} />
-                  Dispatcher number not set up yet
+                <div data-testid="profile-no-dispatch" style={{ padding: "12px 14px", borderRadius: 14, background: C.amberBg, color: C.amber, fontSize: 14 }}>
+                  {t.noDispatchNumber}
                 </div>
               )}
-              <Link href="/driver/issues/new" data-testid="profile-report-issue" className="flex min-h-[52px] items-center gap-3 border-b border-[#efeeeb] px-4 text-sm font-semibold">
-                <AlertTriangle size={18} className="text-[#55565a]" />
-                <span className="flex-1">Report an issue</span>
-                <ChevronRight size={18} className="text-[#77787b]" />
-              </Link>
-              <Link href="/driver/issues" data-testid="profile-my-issues" className="flex min-h-[52px] items-center gap-3 border-b border-[#efeeeb] px-4 text-sm font-semibold">
-                <MessageSquare size={18} className="text-[#55565a]" />
-                <span className="flex-1">My reported issues</span>
-                <ChevronRight size={18} className="text-[#77787b]" />
-              </Link>
-              <ChangePassword />
-              <button type="button" onClick={() => void logout()} data-testid="driver-logout" className="flex min-h-[52px] w-full items-center gap-3 px-4 text-left text-sm font-semibold text-[#86000B]">
-                <LogOut size={18} />
-                Log out
+              <button type="button" data-testid="driver-change-password" onClick={() => setPwOpen(true)} style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: "#FFFFFF", color: C.ink, fontFamily: "inherit", fontSize: 16, fontWeight: 500, cursor: "pointer" }}>
+                {t.changePassword}
               </button>
-            </section>
+              <button type="button" data-testid="driver-logout" onClick={() => void logout()} style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: "#FFFFFF", color: C.so, fontFamily: "inherit", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
+                {t.logOut}
+              </button>
+            </div>
           )}
-        </div>
+          {!scope.isAdmin && <Alerts alerts={alerts.data?.alerts ?? []} unread={alerts.data?.unread ?? 0} />}
+          <div style={{ height: 20 }} />
+          <PasswordSheet open={pwOpen} onClose={() => setPwOpen(false)} />
+        </>
       ) : null}
     </DriverLayout>
   );

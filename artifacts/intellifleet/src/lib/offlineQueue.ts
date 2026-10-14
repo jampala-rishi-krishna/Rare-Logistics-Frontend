@@ -3,7 +3,15 @@
 import { classifyFailure } from "./tripErrors.ts";
 import type { ActionResponse } from "./tripTypes.ts";
 
-export type QueueKind = "acknowledge" | "start" | "check_in" | "check_out" | "end" | "handover";
+export type QueueKind = "acknowledge" | "acknowledge_all" | "start" | "check_in" | "check_out" | "end" | "handover";
+
+// Server codes that mean "dispatch removed this order / trip": retrying can never succeed, so a queued action
+// with one of these codes is dropped (not kept as needs_attention) and the crew is told why.
+export const REMOVED_BY_DISPATCH_CODES: ReadonlySet<string> = new Set(["order_removed", "trip_removed"]);
+
+export function isRemovedByDispatch(code: string | null | undefined): boolean {
+  return Boolean(code) && REMOVED_BY_DISPATCH_CODES.has(code as string);
+}
 export type QueueStatus = "pending" | "syncing" | "needs_attention" | "done";
 
 export interface QueueBlob {
@@ -99,7 +107,16 @@ export function applyUploads(body: Record<string, unknown>, blobs: QueueBlob[] |
     const photoId = uploaded[b.upload_key];
     if (photoId === undefined) continue;
     const answers = out.answers;
-    if (Array.isArray(answers)) {
+    const itemMatch = /^item:(.+)$/.exec(b.field_key);
+    if (answers && typeof answers === "object" && !Array.isArray(answers) && itemMatch && Object.values(answers).some(Array.isArray)) {
+      // acknowledge-all: answers keyed by so_id, each a checklist answer list -> fill the photo on every SO.
+      for (const list of Object.values(answers as Record<string, unknown>)) {
+        if (!Array.isArray(list)) continue;
+        for (const a of list as Array<Record<string, unknown>>) {
+          if (String(a.item_id) === itemMatch[1]) a.photo_id = photoId;
+        }
+      }
+    } else if (Array.isArray(answers)) {
       const m = /^item:(.+)$/.exec(b.field_key);
       if (!m) continue;
       for (const a of answers as Array<Record<string, unknown>>) {
@@ -128,6 +145,7 @@ export interface EnqueueInput {
 export interface SyncSummary {
   done: number;
   needs_attention: number;
+  dropped?: number;
   stopped: "offline" | "unauthorized" | null;
 }
 
@@ -139,6 +157,8 @@ export interface EngineDeps {
   onUnauthorized?: () => void;
   // Called after an entry is accepted by the server (2xx, already_done or replayed).
   onResult?: (entry: QueueEntry, response: ActionResponse) => void;
+  // Called when an entry is dropped because dispatch removed its order / trip (codes in REMOVED_BY_DISPATCH_CODES).
+  onDropped?: (entry: QueueEntry, info: { message: string; code: string | null }) => void;
 }
 
 export interface QueueEngine {
@@ -185,12 +205,17 @@ export function createQueueEngine(deps: EngineDeps): QueueEngine {
     emit();
   };
 
-  async function processEntry(entry: QueueEntry): Promise<"ok" | "attention" | "blocked" | "offline" | "unauthorized"> {
+  async function processEntry(entry: QueueEntry): Promise<"ok" | "attention" | "dropped" | "blocked" | "offline" | "unauthorized"> {
     let current: QueueEntry = { ...entry, status: "syncing", attempts: entry.attempts + 1, error: null };
     await replace(current);
 
-    const fail = async (err: unknown): Promise<"attention" | "blocked" | "offline" | "unauthorized"> => {
+    const fail = async (err: unknown): Promise<"attention" | "dropped" | "blocked" | "offline" | "unauthorized"> => {
       const { kind, info } = classifyFailure(err);
+      if (isRemovedByDispatch(info.code)) {
+        await remove(current.id);
+        deps.onDropped?.(current, { message: info.message, code: info.code });
+        return "dropped";
+      }
       if (kind === "unauthorized") {
         // Not the entry's fault: put it back untouched and stop.
         await replace({ ...current, status: "pending", attempts: entry.attempts, error: info.message });
@@ -231,7 +256,7 @@ export function createQueueEngine(deps: EngineDeps): QueueEngine {
   }
 
   async function runOnce(force: boolean): Promise<SyncSummary> {
-    const summary: SyncSummary = { done: 0, needs_attention: 0, stopped: null };
+    const summary: SyncSummary = { done: 0, needs_attention: 0, dropped: 0, stopped: null };
     const blocked = new Set<string>();
     const ordered = [...list].filter((e) => e.status === "pending").sort((a, b) => a.seq - b.seq);
     for (const entry of ordered) {
@@ -245,6 +270,7 @@ export function createQueueEngine(deps: EngineDeps): QueueEngine {
       const result = await processEntry(live);
       if (result === "ok") summary.done += 1;
       else if (result === "attention") summary.needs_attention += 1;
+      else if (result === "dropped") summary.dropped = (summary.dropped ?? 0) + 1;
       else if (result === "blocked") blocked.add(live.batch_id);
       else {
         summary.stopped = result === "offline" ? "offline" : "unauthorized";
@@ -310,7 +336,7 @@ export function createQueueEngine(deps: EngineDeps): QueueEngine {
           const next = rerun;
           rerun = null;
           const more = await runOnce(next.force);
-          summary = { done: summary.done + more.done, needs_attention: summary.needs_attention + more.needs_attention, stopped: more.stopped };
+          summary = { done: summary.done + more.done, needs_attention: summary.needs_attention + more.needs_attention, dropped: (summary.dropped ?? 0) + (more.dropped ?? 0), stopped: more.stopped };
         }
         rerun = null;
         return summary;

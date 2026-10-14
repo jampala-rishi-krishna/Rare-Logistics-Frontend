@@ -377,3 +377,50 @@ test("cachedFetch saves good responses and falls back to them offline", async ()
   await assert.rejects(() => cachedFetch(storage, "k", async () => { throw httpErr(404, "nope"); }));
   await assert.rejects(() => cachedFetch(storage, "missing", async () => { throw netErr(); }));
 });
+
+test("order_removed / trip_removed are final: the queued action is dropped and reported, others continue", async () => {
+  const dropped: Array<[string, string | null]> = [];
+  const storage = createMemoryStorage();
+  const posts: string[] = [];
+  const engine = createQueueEngine({
+    storage,
+    api: {
+      async post(_path, b) {
+        posts.push(String(b.idempotency_key));
+        if (b.idempotency_key === "k1") throw httpErr(409, { message: "This order was removed by dispatch", code: "order_removed" });
+        if (b.idempotency_key === "k2") throw httpErr(409, { message: "Trip removed by dispatch", code: "trip_removed" });
+        return OK;
+      },
+      async upload() {
+        return { photo_id: 1 };
+      },
+    },
+    onDropped: (e, info) => dropped.push([e.kind, info.code]),
+  });
+  await engine.enqueue(entryOf("b1", "check_in", "k1"));
+  await engine.enqueue(entryOf("b2", "acknowledge_all", "k2"));
+  await engine.enqueue(entryOf("b3", "start", "k3"));
+  const summary = await engine.sync();
+  assert.equal(summary.dropped, 2);
+  assert.equal(summary.needs_attention, 0);
+  assert.equal(summary.done, 1);
+  assert.equal(engine.getSnapshot().length, 0);
+  assert.equal(storage.entries.size, 0);
+  assert.deepEqual(dropped, [["check_in", "order_removed"], ["acknowledge_all", "trip_removed"]]);
+  // never resent
+  await engine.sync({ force: true });
+  assert.deepEqual(posts, ["k1", "k2", "k3"]);
+});
+
+test("applyUploads fills a checklist photo into every SO of an acknowledge-all body", () => {
+  const blob = new Blob(["x"]);
+  const out = applyUploads(
+    { answers: { s1: [{ item_id: 7, photo_id: null }, { item_id: 8, photo_id: null }], s2: [{ item_id: 7, photo_id: null }] } },
+    [{ field_key: "item:7", upload_key: "u1", blob, filename: "a.jpg" }],
+    { u1: 55 },
+  );
+  const answers = out.answers as Record<string, Array<Record<string, unknown>>>;
+  assert.equal(answers.s1[0].photo_id, 55);
+  assert.equal(answers.s1[1].photo_id, null);
+  assert.equal(answers.s2[0].photo_id, 55);
+});

@@ -2,16 +2,20 @@ import { useCallback, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import * as driverApi from "@/services/api/driver";
+import { formatClock } from "@/lib/driver";
 import { capturePosition } from "@/lib/geo";
 import { fetchWithCache, saveToCache, useRuntime } from "@/lib/offlineRuntime";
+import { isRemovedByDispatch } from "@/lib/offlineQueue";
 import { buildActionBody } from "@/lib/tripActions";
 import type { ActionSpec, SubmitOutcome } from "@/lib/tripActions";
 import type { QueueBlob, QueueKind } from "@/lib/offlineQueue";
-import { alreadyDoneText } from "@/lib/driver";
+import { getLang, DICTS } from "./i18n";
 import type { DriverScope } from "./shared";
 import { showToast } from "./shared";
 
-// Every read goes through the cache so screens still render offline ("offline - showing saved data").
+// Live data: refetch every 25 s while the app is visible, when it comes back to the front (focus / resume), and right
+// after every action. Every read goes through the offline cache so screens still render with no signal.
+export const LIVE_REFRESH_MS = 25_000;
 
 export function useToday(scope: DriverScope) {
   const enabled = !scope.sessionLoading && !scope.missingDriverId;
@@ -20,17 +24,22 @@ export function useToday(scope: DriverScope) {
     queryFn: () => fetchWithCache("today", undefined, scope.adminDriverId, () => driverApi.getToday(scope.adminDriverId)),
     enabled,
     retry: 1,
+    refetchInterval: LIVE_REFRESH_MS,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
   });
 }
 
-export function useAssignmentQuery(scope: DriverScope, batchId: string | undefined) {
+export function useAssignmentQuery(scope: DriverScope, batchId: string | undefined, live = true) {
   const enabled = !scope.sessionLoading && !scope.missingDriverId && Boolean(batchId);
   return useQuery({
     queryKey: ["driver-assignment", batchId, scope.adminDriverId],
     queryFn: () => fetchWithCache("batch", batchId, scope.adminDriverId, () => driverApi.getAssignment(batchId as string, scope.adminDriverId)),
     enabled,
-    retry: 1,
-    refetchInterval: (query) => (query.state.data?.data.details_loading ? 8000 : false),
+    retry: (count, err) => count < 1 && (err as { status?: number })?.status !== 404 && (err as { status?: number })?.status !== 409,
+    refetchInterval: (query) => (query.state.data?.data.details_loading ? 8000 : live ? LIVE_REFRESH_MS : false),
+    refetchOnWindowFocus: live ? "always" : true,
+    refetchOnReconnect: "always",
   });
 }
 
@@ -45,6 +54,7 @@ export function useTemplatesQuery(scope: DriverScope) {
   });
 }
 
+// Route = Google Maps links per stop and the pickup warehouse (local data, no external call).
 export function useRouteQuery(scope: DriverScope, batchId: string | undefined, enabledExtra = true) {
   const enabled = !scope.sessionLoading && !scope.missingDriverId && Boolean(batchId) && enabledExtra;
   return useQuery({
@@ -52,32 +62,14 @@ export function useRouteQuery(scope: DriverScope, batchId: string | undefined, e
     queryFn: () => fetchWithCache("route", batchId, scope.adminDriverId, () => driverApi.getRoute(batchId as string, scope.adminDriverId)),
     enabled,
     retry: 1,
-  });
-}
-
-export function useOfficersQuery(scope: DriverScope) {
-  const enabled = !scope.sessionLoading && !scope.missingDriverId;
-  return useQuery({
-    queryKey: ["driver-officers", scope.adminDriverId],
-    queryFn: () => fetchWithCache("officers", undefined, scope.adminDriverId, () => driverApi.getOfficers(scope.adminDriverId)),
-    enabled,
-    retry: 1,
-  });
-}
-
-export function useTimelineQuery(scope: DriverScope, batchId: string | undefined) {
-  const enabled = !scope.sessionLoading && !scope.missingDriverId && Boolean(batchId);
-  return useQuery({
-    queryKey: ["driver-timeline", batchId, scope.adminDriverId],
-    queryFn: () => fetchWithCache("timeline", batchId, scope.adminDriverId, () => driverApi.getTimeline(batchId as string, scope.adminDriverId)),
-    enabled,
-    retry: 1,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
 export interface RunOptions {
   kind: QueueKind;
   so_id?: string | null;
+  // English label for the "saved on this phone" list.
   label: string;
   path: string;
   extra?: Record<string, unknown>;
@@ -86,8 +78,8 @@ export interface RunOptions {
   doneMessage?: string;
 }
 
-// Crew action runner: capture GPS at the tap -> body (key, client_ts, gps) -> online first,
-// queue on network failure. Guarded against double taps while a call is in flight.
+// Crew action runner: capture GPS at the tap -> body (key, client_ts, gps) -> online first, queue on network failure.
+// Guarded against double taps while a call is in flight. Removed-by-dispatch answers are final and say so.
 export function useCrewAction(scope: DriverScope, batchId: string) {
   const runtime = useRuntime();
   const queryClient = useQueryClient();
@@ -100,6 +92,7 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
       if (!runtime || busyRef.current || scope.isAdmin) return null;
       busyRef.current = true;
       setBusy(true);
+      const t = DICTS[getLang()];
       try {
         const position = await capturePosition({ timeoutMs: 8000 });
         const body = buildActionBody(position, opts.extra ?? {});
@@ -111,21 +104,22 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
             queryClient.setQueryData(["driver-assignment", batchId, scope.adminDriverId], { data: batch, offline: false, saved_at: Date.now() });
             void saveToCache("batch", batchId, scope.adminDriverId, batch);
           }
-          void queryClient.invalidateQueries({ queryKey: ["driver-today"] });
-          void queryClient.invalidateQueries({ queryKey: ["driver-route", batchId] });
-          if (outcome.response.already_done) showToast(alreadyDoneText(outcome.response.done_by), "warn");
+          if (outcome.response.already_done) showToast(t.alreadyDone(outcome.response.done_by?.name ?? "", formatClock(outcome.response.done_by?.at)), "warn");
           else if (opts.doneMessage) showToast(opts.doneMessage);
         } else if (outcome.status === "queued") {
-          showToast(`${opts.label} saved - it will sync when you are online.`, "warn");
+          showToast(t.savedOffline, "warn");
         } else if (outcome.status === "unauthorized") {
-          setLocation("/login");
+          setLocation("/driver/login");
+        } else if (isRemovedByDispatch(outcome.info.code)) {
+          showToast(outcome.info.code === "trip_removed" ? t.removedTrip : t.orderRemovedByDispatch, "error");
         } else {
           showToast(outcome.info.message, "error");
-          // The server state moved on (e.g. the trip already started): refresh the flags.
-          void queryClient.invalidateQueries({ queryKey: ["driver-assignment", batchId] });
         }
         return outcome;
       } finally {
+        // Refresh right after every action (also picks up dispatch changes).
+        void queryClient.invalidateQueries({ queryKey: ["driver-assignment", batchId] });
+        void queryClient.invalidateQueries({ queryKey: ["driver-today"] });
         busyRef.current = false;
         setBusy(false);
       }
@@ -136,9 +130,7 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
   return { run, busy, ready: Boolean(runtime) };
 }
 
-export { assignmentPath as assignmentHref, subpagePath as subpageHref } from "@/lib/tripNav";
-
-// Alerts + issues belong to the logged-in crew member only (no admin ?driver_id= view).
+// Alerts belong to the logged-in crew member only (no admin ?driver_id= view).
 export function useAlertsQuery(scope: DriverScope) {
   const enabled = !scope.sessionLoading && !scope.isAdmin;
   return useQuery({
@@ -146,11 +138,6 @@ export function useAlertsQuery(scope: DriverScope) {
     queryFn: () => driverApi.getAlerts(),
     enabled,
     retry: 1,
-    refetchInterval: (query) => (document.visibilityState === "visible" && !query.state.error ? 60_000 : false),
+    refetchInterval: (query) => (!query.state.error ? 60_000 : false),
   });
-}
-
-export function useIssuesQuery(scope: DriverScope) {
-  const enabled = !scope.sessionLoading && !scope.isAdmin;
-  return useQuery({ queryKey: ["driver-issues"], queryFn: () => driverApi.getIssues(), enabled, retry: 1 });
 }

@@ -28,7 +28,14 @@ let runtime: Runtime | null = null;
 let initPromise: Promise<Runtime> | null = null;
 const storeListeners = new Set<() => void>();
 const resultListeners = new Set<(entry: QueueEntry, response: ActionResponse) => void>();
+const droppedListeners = new Set<(entry: QueueEntry, info: { message: string; code: string | null }) => void>();
 const notify = () => storeListeners.forEach((l) => l());
+
+// A queued action was dropped because dispatch removed its order / trip (it can never succeed).
+export function subscribeDropped(fn: (entry: QueueEntry, info: { message: string; code: string | null }) => void): () => void {
+  droppedListeners.add(fn);
+  return () => droppedListeners.delete(fn);
+}
 
 export function subscribeResults(fn: (entry: QueueEntry, response: ActionResponse) => void): () => void {
   resultListeners.add(fn);
@@ -54,6 +61,7 @@ export function ensureRuntime(): Promise<Runtime> {
       api,
       onUnauthorized: goToLogin,
       onResult: (entry, response) => resultListeners.forEach((l) => l(entry, response)),
+      onDropped: (entry, info) => droppedListeners.forEach((l) => l(entry, info)),
     });
     await engine.load();
     const rt: Runtime = { engine, submitter: createSubmitter({ engine, api }), storage, storageKind: kind };

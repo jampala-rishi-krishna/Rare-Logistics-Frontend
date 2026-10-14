@@ -7,7 +7,7 @@ import type { BatchDetail, DriverOrder, NextAction, TripChip, TripStatus } from 
 export interface QueuedAction {
   batch_id: string;
   so_id?: string | null;
-  kind: "acknowledge" | "start" | "check_in" | "check_out" | "end" | "handover";
+  kind: "acknowledge" | "acknowledge_all" | "start" | "check_in" | "check_out" | "end" | "handover";
   status: "pending" | "syncing" | "needs_attention" | "done";
   body?: Record<string, unknown>;
   seq?: number;
@@ -131,6 +131,14 @@ export function deriveBatchState(batch: BatchDetail, queue: QueuedAction[]): Eff
         if (o && !o.acked) {
           o.ackPending = true;
           o.pendingSync = true;
+        }
+        break;
+      case "acknowledge_all":
+        for (const each of orders) {
+          if (!each.acked) {
+            each.ackPending = true;
+            each.pendingSync = true;
+          }
         }
         break;
       case "start":

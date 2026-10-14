@@ -188,3 +188,12 @@ test("chip labels and queue counts", () => {
   assert.equal(chipLabelFor("handover_pending", 0, 1), "Handover pending");
   assert.deepEqual(queueCounts([{ status: "pending" }, { status: "syncing" }, { status: "needs_attention" }, { status: "done" }]), { pending: 2, needsAttention: 1 });
 });
+
+test("queued acknowledge_all marks every order pending and enables Start offline", () => {
+  const b = batch([order(1), order(2, { ack: ACK, can_acknowledge: false }), order(3)], { acknowledged: 1 });
+  const s = deriveBatchState(b, [q("acknowledge_all", null, 1)]);
+  assert.equal(s.acknowledged, 3);
+  assert.equal(s.canStart, true);
+  assert.equal(s.nextAction, "start");
+  assert.deepEqual(s.orders.map((o) => o.ackPending), [true, false, true]);
+});

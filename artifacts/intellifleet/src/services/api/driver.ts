@@ -112,6 +112,8 @@ export function markAlertsRead(input: { keys?: string[]; all?: boolean }): Promi
 // ---- action paths (also used by the offline queue, which stores the path) ----
 export const paths = {
   acknowledge: (batchId: string, soId: string) => `${base(batchId)}/orders/${encodeURIComponent(soId)}/acknowledge`,
+  // One tap: acknowledges every order of the trip in one transaction (API contract section 1).
+  acknowledgeAll: (batchId: string) => `${base(batchId)}/acknowledge-all`,
   start: (batchId: string) => `${base(batchId)}/start`,
   checkIn: (batchId: string, soId: string) => `${base(batchId)}/orders/${encodeURIComponent(soId)}/check-in`,
   checkOut: (batchId: string, soId: string) => `${base(batchId)}/orders/${encodeURIComponent(soId)}/check-out`,
@@ -125,6 +127,7 @@ export function postAction(path: string, body: unknown): Promise<ActionResponse>
 }
 
 export const acknowledge = (batchId: string, soId: string, body: ActionBody) => postAction(paths.acknowledge(batchId, soId), body);
+export const acknowledgeAll = (batchId: string, body: ActionBody) => postAction(paths.acknowledgeAll(batchId), body);
 export const start = (batchId: string, body: ActionBody) => postAction(paths.start(batchId), body);
 export const checkIn = (batchId: string, soId: string, body: ActionBody) => postAction(paths.checkIn(batchId, soId), body);
 export const checkOut = (batchId: string, soId: string, body: ActionBody) => postAction(paths.checkOut(batchId, soId), body);

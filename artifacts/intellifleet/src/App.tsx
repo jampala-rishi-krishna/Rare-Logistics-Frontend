@@ -36,6 +36,9 @@ import type { PendingAction } from "@/services/api/agent";
 import { RichAssistantMessage } from "@/components/agent/RichAssistantMessage";
 import heroBackgroundVideo from "../../../media/Rishi.mp4";
 import dashboardIllustration from "../../../media/dashabord.png";
+import loginPageImage from "../../../media/login page iameg.png";
+import coldStorageImage from "../../../media/cold storgaete.png";
+import dispatcherImage from "../../../media/disaptcher.png";
 import rishiProfilePhoto from "../../../media/rishi_pic.png";
 import chatbotIcon from "../../../media/martin.png";
 import {
@@ -156,20 +159,9 @@ import OfficerOutstanding from "@/pages/officer/OfficerOutstanding";
 import OfficerHistory from "@/pages/officer/OfficerHistory";
 import DriverOverview from "@/pages/overview/DriverOverview";
 import SetPassword from "@/pages/SetPassword";
-import DriverToday from "@/pages/driver/DriverToday";
-import DriverAssignment from "@/pages/driver/DriverAssignment";
-import DriverTrips from "@/pages/driver/DriverTrips";
-import DriverAlerts from "@/pages/driver/DriverAlerts";
-import DriverProfile from "@/pages/driver/DriverProfile";
-import DriverIssueForm from "@/pages/driver/DriverIssueForm";
-import DriverIssues from "@/pages/driver/DriverIssues";
 import DriverLogin from "@/pages/driver/DriverLogin";
 import DriverForgot from "@/pages/driver/DriverForgot";
-import DriverAcknowledge from "@/pages/driver/DriverAcknowledge";
-import DriverRoute from "@/pages/driver/DriverRoute";
-import DriverCheckout from "@/pages/driver/DriverCheckout";
-import DriverHandover from "@/pages/driver/DriverHandover";
-import DriverTrip from "@/pages/driver/DriverTrip";
+import DriverRoutes from "@/pages/driver/DriverRoutes";
 
 type Role = "Dispatcher" | "Planner" | "Driver" | "Warehouse" | "Client" | "Admin";
 // Widened from a fixed enum to a plain string: real order status values come
@@ -1013,8 +1005,7 @@ const roleStories: Record<
     eyebrow: "For dispatchers",
     title: "The whole network, at a glance.",
     body: "A calm command surface for making the next right decision before an exception becomes a delay.",
-    image:
-      "https://images.pexels.com/photos/6169056/pexels-photo-6169056.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    image: dispatcherImage,
     bullets: [
       "Live positions and route health",
       "Exceptions ranked by operational impact",
@@ -1025,8 +1016,7 @@ const roleStories: Record<
     eyebrow: "For drivers",
     title: "The right next step. One hand.",
     body: "Assignments, stops, and status changes designed for a cab, a phone, and a moving day.",
-    image:
-      "https://images.pexels.com/photos/7464230/pexels-photo-7464230.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    image: loginPageImage,
     bullets: [
       "Glanceable assignments",
       "Voice-first status updates",
@@ -1037,8 +1027,7 @@ const roleStories: Record<
     eyebrow: "For warehouses",
     title: "Make the dock the source of truth.",
     body: "Turn loading, receiving, and cold-chain exceptions into visible, accountable work.",
-    image:
-      "https://images.pexels.com/photos/4481327/pexels-photo-4481327.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    image: coldStorageImage,
     bullets: [
       "Manifest confirmation",
       "Temperature exception workflows",
@@ -1613,15 +1602,13 @@ function MarketingPage({
       eyebrow: "Platform",
       title: "One operating picture, built for five different days.",
       body: "IntelliFleet gives each role a focused surface while keeping every operational event connected.",
-      image:
-        "https://images.pexels.com/photos/6169056/pexels-photo-6169056.jpeg?auto=compress&cs=tinysrgb&w=1800",
+      image: dispatcherImage,
     },
     how: {
       eyebrow: "How it works",
       title: "From assignment to proof of delivery.",
       body: "The workflow is simple by design. Each handoff adds context instead of another place to look.",
-      image:
-        "https://images.pexels.com/photos/4481327/pexels-photo-4481327.jpeg?auto=compress&cs=tinysrgb&w=1800",
+      image: coldStorageImage,
     },
     channels: {
       eyebrow: "Channels",
@@ -2174,7 +2161,7 @@ function Login() {
         <div className="relative hidden min-w-0 overflow-hidden md:block">
           <img
             className="absolute inset-0 h-full w-full object-cover"
-            src="https://images.pexels.com/photos/7464230/pexels-photo-7464230.jpeg?auto=compress&cs=tinysrgb&w=1800"
+            src={loginPageImage}
             alt="Driver preparing a delivery"
           />
           <div className="absolute inset-0 bg-black/25" />
@@ -7265,24 +7252,7 @@ function App() {
                 <Route path="/driver/forgot-password" component={DriverForgot} />
                 <Route path="/driver/*?">
                   <RoleGate allowed={SECTION_ROLES.driver} loginPath="/driver/login">
-                    <Switch>
-                      <Route path="/driver/today" component={DriverToday} />
-                      <Route path="/driver/assignment/:batch_id" component={DriverAssignment} />
-                      <Route path="/driver/assignment/:batch_id/acknowledge/:so_id" component={DriverAcknowledge} />
-                      <Route path="/driver/assignment/:batch_id/route" component={DriverRoute} />
-                      <Route path="/driver/assignment/:batch_id/checkout/:so_id" component={DriverCheckout} />
-                      <Route path="/driver/assignment/:batch_id/handover" component={DriverHandover} />
-                      <Route path="/driver/trip/:batch_id" component={DriverTrip} />
-                      <Route path="/driver/trips" component={DriverTrips} />
-                      <Route path="/driver/history">
-                        <Redirect to="/driver/trips" />
-                      </Route>
-                      <Route path="/driver/alerts" component={DriverAlerts} />
-                      <Route path="/driver/profile" component={DriverProfile} />
-                      <Route path="/driver/issues/new" component={DriverIssueForm} />
-                      <Route path="/driver/issues" component={DriverIssues} />
-                      <Route component={NotFound} />
-                    </Switch>
+                    <DriverRoutes />
                   </RoleGate>
                 </Route>
                 <Route path="/officer/*?">

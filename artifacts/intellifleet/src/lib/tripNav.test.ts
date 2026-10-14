@@ -1,30 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  ackPath,
-  acknowledgeLeft,
-  actionsEnabled,
-  assignmentPath,
-  checkinNotice,
-  checkoutPath,
-  farWarningFor,
-  handoverPath,
-  nextToAcknowledge,
-  routePath,
-  stopRows,
-  timelinePath,
-} from "./tripNav.ts";
+import { actionsEnabled, changeKey, checkinNotice, currentStop, directionsUrl, farWarningFor, legacyRedirect, stopState, tripPath, tripStep, visibleChanges } from "./tripNav.ts";
 import type { EffectiveOrder } from "./tripState.ts";
-import type { BatchDetail, RouteInfo } from "./tripTypes.ts";
+import type { BatchDetail, DispatchChange } from "./tripTypes.ts";
 
-test("href builders keep the URLs the existing screens link to", () => {
-  assert.equal(assignmentPath("b 1", null), "/driver/assignment/b%201");
-  assert.equal(assignmentPath("b1", "12", { from: "history" }), "/driver/assignment/b1?from=history&driver_id=12");
-  assert.equal(ackPath("b1", "so/9", null), "/driver/assignment/b1/acknowledge/so%2F9");
-  assert.equal(checkoutPath("b1", "5", "7"), "/driver/assignment/b1/checkout/5?driver_id=7");
-  assert.equal(routePath("b1", null), "/driver/assignment/b1/route");
-  assert.equal(handoverPath("b1", null), "/driver/assignment/b1/handover");
-  assert.equal(timelinePath("b1", "7"), "/driver/trip/b1?driver_id=7");
+test("tripPath is the one trip screen, keeping driver_id / from", () => {
+  assert.equal(tripPath("b 1", null), "/driver/trip/b%201");
+  assert.equal(tripPath("b1", "12", { from: "history" }), "/driver/trip/b1?from=history&driver_id=12");
+});
+
+test("legacyRedirect sends every old driver URL to a live screen", () => {
+  assert.equal(legacyRedirect("/driver/assignment/b1", ""), "/driver/trip/b1");
+  assert.equal(legacyRedirect("/driver/assignment/b1/acknowledge/so9", "?driver_id=7"), "/driver/trip/b1?driver_id=7");
+  assert.equal(legacyRedirect("/driver/assignment/b1/checkout/5", ""), "/driver/trip/b1");
+  assert.equal(legacyRedirect("/driver/assignment/b1/route", ""), "/driver/trip/b1");
+  assert.equal(legacyRedirect("/driver/assignment/b1/handover", ""), "/driver/trip/b1");
+  assert.equal(legacyRedirect("/driver/assignment/b1", "?from=history"), "/driver/trip/b1?from=history");
+  assert.equal(legacyRedirect("/driver/trips", ""), "/driver/history");
+  assert.equal(legacyRedirect("/driver/alerts", ""), "/driver/profile");
+  assert.equal(legacyRedirect("/driver/issues/new", "?batch=b%202&so=1"), "/driver/trip/b%202");
+  assert.equal(legacyRedirect("/driver/issues", ""), "/driver/today");
+  assert.equal(legacyRedirect("/driver/whatever", ""), "/driver/today");
 });
 
 const scope = (o: Partial<{ isAdmin: boolean; missingDriverId: boolean; sessionLoading: boolean }> = {}) => ({ isAdmin: false, missingDriverId: false, sessionLoading: false, ...o });
@@ -36,49 +32,6 @@ test("actionsEnabled: crew with loaded trip only", () => {
   assert.equal(actionsEnabled(scope({ sessionLoading: true }), withTrip), false);
   assert.equal(actionsEnabled(scope(), undefined), false);
   assert.equal(actionsEnabled(scope(), { trip: null } as unknown as BatchDetail), false);
-});
-
-const o = (so_id: string, canAcknowledge: boolean) => ({ so_id, canAcknowledge });
-
-test("nextToAcknowledge walks forward, wraps, and skips the current order", () => {
-  const orders = [o("1", true), o("2", false), o("3", true), o("4", true)];
-  assert.equal(nextToAcknowledge(orders, "1"), "3");
-  assert.equal(nextToAcknowledge(orders, "3"), "4");
-  assert.equal(nextToAcknowledge(orders, "4"), "1");
-  assert.equal(nextToAcknowledge([o("1", true)], "1"), null);
-  assert.equal(nextToAcknowledge([o("1", false), o("2", false)], "1"), null);
-  assert.equal(nextToAcknowledge(orders, null), "1");
-  assert.equal(nextToAcknowledge([], "1"), null);
-  assert.equal(acknowledgeLeft(orders), 3);
-});
-
-function eff(so_id: string, so_number: string, seq?: number): EffectiveOrder {
-  return {
-    so_id,
-    order: { id: so_id, so_number, customer_name: `C${so_id}`, address_text: `A${so_id}`, workflow: seq ? { stop: { sequence: seq } } : null },
-  } as unknown as EffectiveOrder;
-}
-
-test("stopRows orders by route sequence and falls back to the orders", () => {
-  const orders = [eff("1", "SO-1"), eff("2", "SO-2"), eff("3", "SO-3")];
-  const route = {
-    source: "optimized",
-    origin: null,
-    maps_links: [],
-    warning: null,
-    stops: [
-      { so_id: 3, so_number: "SO-3", customer_name: "C3", address_text: "A3", sequence: 1, status: "pending", lat: null, lng: null, navigate_url: "u3" },
-      { so_id: 1, so_number: "SO-1", customer_name: "C1", address_text: "A1", sequence: 2, status: "pending", lat: null, lng: null, navigate_url: null },
-    ],
-  } as RouteInfo;
-  const rows = stopRows(route, orders);
-  assert.deepEqual(rows.map((r) => r.so_id), ["3", "1"]);
-  assert.equal(rows[0].navigate_url, "u3");
-  assert.equal(rows[0].eff?.so_id, "3");
-
-  const fb = stopRows(undefined, [eff("1", "SO-1", 3), eff("2", "SO-2", 1)]);
-  assert.deepEqual(fb.map((r) => r.so_id), ["2", "1"]);
-  assert.equal(stopRows({ ...route, stops: [] }, orders).length, 3);
 });
 
 test("checkinNotice: far is a warning, near is informational, none when unknown", () => {
@@ -102,4 +55,48 @@ test("farWarningFor reads the stop of the right order", () => {
   assert.equal(farWarningFor(batch, "2"), null);
   assert.equal(farWarningFor(batch, "9"), null);
   assert.equal(farWarningFor(null, "1"), null);
+});
+
+const eo = (so_id: string, stopStatus: string, extra: Partial<EffectiveOrder> = {}) => ({ so_id, stopStatus, outcome: null, attention: [], ...extra }) as unknown as EffectiveOrder;
+
+test("tripStep: one big button per state", () => {
+  const base = { orders: [] as EffectiveOrder[], acknowledged: 0, total: 3, stopsDone: 0 };
+  assert.equal(tripStep({ ...base, status: "pending" }), "acknowledge");
+  assert.equal(tripStep({ ...base, status: "pending", acknowledged: 3 }), "start");
+  assert.equal(tripStep({ ...base, status: "on_trip", orders: [eo("1", "pending")] }), "arrive");
+  assert.equal(tripStep({ ...base, status: "on_trip", orders: [eo("1", "checked_in")] }), "deliver");
+  assert.equal(tripStep({ ...base, status: "on_trip", stopsDone: 3 }), "end");
+  assert.equal(tripStep({ ...base, status: "returned" }), "waiting");
+  assert.equal(tripStep({ ...base, status: "handover_submitted" }), "waiting");
+  assert.equal(tripStep({ ...base, status: "closed" }), "closed");
+});
+
+test("currentStop: checked-in first, else the first stop not done (auto-advance)", () => {
+  assert.equal(currentStop([eo("1", "checked_out"), eo("2", "pending"), eo("3", "pending")])?.so_id, "2");
+  assert.equal(currentStop([eo("1", "pending"), eo("2", "checked_in")])?.so_id, "2");
+  assert.equal(currentStop([eo("1", "checked_out")]), null);
+});
+
+test("stopState labels", () => {
+  assert.equal(stopState(eo("1", "pending")), "waiting");
+  assert.equal(stopState(eo("1", "checked_in")), "here");
+  assert.equal(stopState(eo("1", "checked_out", { outcome: "Delivered" })), "delivered");
+  assert.equal(stopState(eo("1", "checked_out", { outcome: "Failed" })), "problem");
+  assert.equal(stopState(eo("1", "pending", { attention: [{ id: "x", kind: "check_in", error: "e" }] })), "problem");
+});
+
+test("directionsUrl prefers the server link, then coordinates, then the address", () => {
+  const order = { address_text: "131 Armstrong Ave, Paranaque", customer_name: "PJ" };
+  assert.equal(directionsUrl(order, { navigate_url: "https://x", lat: 1, lng: 2 }), "https://x");
+  assert.equal(directionsUrl(order, { navigate_url: null, lat: 14.5, lng: 121 }), "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=14.5,121");
+  assert.match(directionsUrl(order, null) ?? "", /destination=131%20Armstrong/);
+  assert.equal(directionsUrl({ address_text: "", customer_name: "" }, null), null);
+});
+
+test("visibleChanges filters by batch, hides dismissed, newest first", () => {
+  const c = (batch_id: string, at: string, so_id: string | null = "s"): DispatchChange => ({ kind: "order_removed", batch_id, so_id, so_number: "SO-1", at });
+  const list = [c("b1", "2026-10-14T01:00:00Z"), c("b2", "2026-10-14T02:00:00Z"), c("b1", "2026-10-14T03:00:00Z", "t")];
+  assert.deepEqual(visibleChanges(list, "b1", new Set()).map((x) => x.at), ["2026-10-14T03:00:00Z", "2026-10-14T01:00:00Z"]);
+  assert.equal(visibleChanges(list, null, new Set([changeKey(list[1])])).length, 2);
+  assert.deepEqual(visibleChanges(undefined, null, new Set()), []);
 });
