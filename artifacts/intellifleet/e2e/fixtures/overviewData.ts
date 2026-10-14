@@ -78,8 +78,8 @@ function orderTl(n: number, seq: number, done: boolean, outcome: string | null, 
     stop: seq <= 3 || done
       ? {
           sequence: seq, status: "checked_out", address_gps: { lat: 14.6, lng: 121.03 },
-          checkin: { at: `2026-10-13T0${7 + seq}:00:00+08:00`, by, gps: { lat: 14.6003, lng: 121.0301, accuracy_m: 9 }, distance_m: n === 3 ? 640 : 85, far: n === 3 },
-          checkout: { at: `2026-10-13T0${7 + seq}:20:00+08:00`, by, gps: { lat: 14.6003, lng: 121.0301, accuracy_m: 8 }, outcome, reason: outcome === "Delivered" ? null : "Store closed", invoice_no: invoice, answers: [{ key: "invoice_dr_number", label: "Invoice or DR Number", value: invoice }, { key: "outcome", label: "Delivery outcome", value: outcome }, ...(outcome !== "Failed" ? [{ key: "delivery_photo", label: "Proof of delivery photo", value: 12 + n, photo_url: `/api/media/${12 + n}` }] : []), { key: "notes", label: "Notes (optional)", value: "Left with the guard" }], template_version: 2 },
+          checkin: { at: `2026-10-13T${String(7 + seq).padStart(2, "0")}:00:00+08:00`, by, gps: { lat: 14.6003, lng: 121.0301, accuracy_m: 9 }, distance_m: n === 3 ? 640 : 85, far: n === 3 },
+          checkout: { at: `2026-10-13T${String(7 + seq).padStart(2, "0")}:20:00+08:00`, by, gps: { lat: 14.6003, lng: 121.0301, accuracy_m: 8 }, outcome, reason: outcome === "Delivered" ? null : "Store closed", invoice_no: invoice, answers: [{ key: "invoice_dr_number", label: "Invoice or DR Number", value: invoice }, { key: "outcome", label: "Delivery outcome", value: outcome }, ...(outcome !== "Failed" ? [{ key: "delivery_photo", label: "Proof of delivery photo", value: 12 + n, photo_url: `/api/media/${12 + n}` }] : []), { key: "notes", label: "Notes (optional)", value: "Left with the guard" }], template_version: 2 },
           minutes_at_stop: 20,
         }
       : { sequence: seq, status: "pending", checkin: null, checkout: null, minutes_at_stop: null },
@@ -147,3 +147,31 @@ export const templatesResponse = {
 };
 
 export const csv = "date,batch,driver\r\n2026-10-13,b-3,Casey Runner\r\n";
+
+// ---- Load planning > Confirmed Orders: the unassign guard (API contract 6/7). Fictitious orders only. ----
+function confirmedOrder(n: number, over: Record<string, unknown> = {}) {
+  return {
+    id: `50${n}`, salesorder_number: `SO-TEST-500${n}`, reference_number: null, customer_name: `Test Customer ${String.fromCharCode(64 + n)}`, order_status: "confirmed", invoice_status: "not_invoiced", payment_status: "unpaid",
+    shipment_status: "pending", order_date: "2026-10-12", expected_shipment_date: "2026-10-13", total: 1000 * n, delivery_method: null, salesperson_name: null, synced_at: "2026-10-13T06:00:00+08:00",
+    assignment_status: "assigned", vehicle_id: "TRK-1001", driver_id: 101, driver_name: "Alex Driver", shipping_city: "Quezon City", shipping_address: { address: `${n} Sample Street`, city: "Quezon City" },
+    assignment_batch_id: "b-1", email_status: "sent", order_type: "SO", products: [], ...over,
+  };
+}
+export const emptyOrdersPage = { items: [], page: 1, per_page: 100, total: 0, has_more: false, branches: [] };
+export const confirmedOrders = { items: [confirmedOrder(1), confirmedOrder(2)], page: 1, per_page: 100, total: 2, has_more: false, branches: [], total_weight_kg: 200, weight_complete: true };
+export const unassignPreview = {
+  needs_confirm: true,
+  orders: [
+    { id: "501", number: "SO-TEST-5001", order_type: "SO", state: "acknowledged", acknowledged_by: "Alex Driver", acknowledged_at: "2026-10-13T05:20:00Z", trip_started_at: null, checked_in_at: null, needs_confirm: true, blocked: false, reason: null, message: "SO-TEST-5001: acknowledged by Alex Driver at 13:20" },
+    { id: "502", number: "SO-TEST-5002", order_type: "SO", state: "delivered", acknowledged_by: "Alex Driver", acknowledged_at: "2026-10-13T05:20:00Z", trip_started_at: "2026-10-13T05:24:00Z", checked_in_at: "2026-10-13T06:00:00Z", needs_confirm: false, blocked: true, reason: "already delivered", message: "SO-TEST-5002: delivered at 14:20" },
+  ],
+};
+
+// Driver Overview timeline of b-3 after dispatch unassigned one acknowledged order (API contract 9).
+export const tripTimelineWithUnassign = {
+  ...tripTimeline,
+  events: [
+    ...tripTimeline.events,
+    { type: "order_unassigned", at: "2026-10-13T08:40:00+08:00", actor_name: "Test Dispatcher", by: null, so_id: "so-36", so_number: "SO-TEST-3006", order_type: "SO", previous_state: "acknowledged", gps: null },
+  ],
+};

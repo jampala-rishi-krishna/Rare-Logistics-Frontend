@@ -1,18 +1,23 @@
-// The WHOLE trip through the real screens, tapping like a driver: acknowledge -> start trip -> Arrived -> Departed (+ Invoice/DR, outcome,
-// proof-of-delivery photo) -> end trip -> handover -> the officer validates. Server rules come from e2e/flowMock.ts (same rules as the backend,
-// which test_full_driver_flow.py exercises against the real services). Run:
+// The simplified driver app, tapped like a driver at 360 px against the stateful fake in e2e/flowMock.ts (2 SOs + 1 TO):
+// Sign in -> Today -> Acknowledge (ONE call) -> Start trip (+sheet) -> per stop Reached -> Delivered sheet (photo) -> End trip (+sheet)
+// -> "Give the signed invoice copies" / Waiting for officer -> Closed. Plus: dispatch removed an order (banner, 409 order_removed
+// online and from the offline queue), Not fully delivered / Problem sheets, Tagalog, History read-only, Profile.
+// Screenshots: e2e/screenshots/driver-simplified/. Run:
 //   node --experimental-strip-types --no-warnings --test e2e/driver.flow.test.ts
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { launch, newContext, shot, startServer, stopServer, BASE } from "./harness.ts";
 import { installMocks } from "./mockApi.ts";
-import type { Recorder } from "./mockApi.ts";
-import { installFlow, newFlow } from "./flowMock.ts";
+import type { Recorder, Scenario } from "./mockApi.ts";
+import { BATCH, bringToFront, ended, installFlow, newFlow, onTrip, removeOrder } from "./flowMock.ts";
 import type { Flow } from "./flowMock.ts";
+import * as d from "./fixtures/driverData.ts";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
+const DIR = "driver-simplified";
 let browser: Browser;
+
 before(async () => {
   await startServer();
   browser = await launch();
@@ -22,155 +27,319 @@ after(async () => {
   stopServer();
 });
 
-async function session(role: "driver" | "officer", flow: Flow): Promise<{ context: BrowserContext; page: Page; recorder: Recorder }> {
-  const context = await newContext(browser, 360);
-  const page = await context.newPage();
-  const recorder = await installMocks(page, role === "officer" ? { session: { user: { id: "9", fullName: "Olivia Officer", email: "o@example.test", role: "logistics_officer", status: "active", mustChangePassword: false, staffId: null } } } : {});
-  await installFlow(page, flow);
-  return { context, page, recorder };
+interface Session {
+  context: BrowserContext;
+  page: Page;
+  recorder: Recorder;
+  errors: string[];
+  done: () => Promise<void>;
 }
 
-describe("full trip", () => {
-  it("acknowledge -> start -> arrived -> departed with proof of delivery -> end -> handover -> officer validates", async () => {
-    const flow = newFlow(2);
-    const { context, page, recorder } = await session("driver", flow);
-    const errors: string[] = [];
-    page.on("pageerror", (e) => errors.push(String(e)));
+async function session(flow: Flow, scenario: Scenario = {}, width = 360): Promise<Session> {
+  const context = await newContext(browser, width);
+  const page = await context.newPage();
+  const recorder = await installMocks(page, scenario);
+  await installFlow(page, flow);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  return {
+    context,
+    page,
+    recorder,
+    errors,
+    done: async () => {
+      assert.deepEqual(errors, [], "uncaught page errors");
+      assert.deepEqual(recorder.unexpected, [], "requests no fixture answers");
+      await context.close();
+    },
+  };
+}
 
-    // Today: the trip card's primary action is Acknowledge
-    await page.goto(`${BASE}/driver/today`);
+// Toasts stay 5 s and sit above the content; screenshots wait for them to go so the screen itself is visible.
+async function snap(page: Page, name: string, fullPage = true) {
+  await page.waitForFunction(() => !document.querySelector("[data-testid=driver-toast]"), null, { timeout: 10_000 }).catch(() => undefined);
+  await shot(page, `${DIR}/${name}`, fullPage);
+}
+
+const toastText = async (page: Page, re: RegExp) => page.waitForFunction((src) => Array.from(document.querySelectorAll("[data-testid=driver-toast]")).some((t) => new RegExp(src).test(t.textContent ?? "")), re.source, { timeout: 15_000 });
+
+async function addPhoto(page: Page, tap: (sel: string, label: string) => Promise<void>, label: string) {
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), tap("[data-testid=driver-photo-add]", label)]);
+  await chooser.setFiles({ name: "pod.png", mimeType: "image/png", buffer: PNG });
+  await page.waitForSelector("[data-testid=driver-photo-taken]");
+}
+
+describe("simplified driver flow at 360 px", () => {
+  it("sign in -> acknowledge (one call) -> start -> 3 stops delivered -> end -> waiting for officer -> closed; counts the taps", async () => {
+    const flow = newFlow();
+    const s = await session(flow, { session: null });
+    const { page } = s;
+    const taps: string[] = [];
+    const tap = async (selector: string, label: string) => {
+      taps.push(label);
+      await page.click(selector);
+    };
+
+    // Sign in
+    await page.goto(`${BASE}/driver/login`);
+    await page.waitForSelector("[data-testid=driver-login-submit]");
+    await snap(page, "01-signin");
+    await page.fill("[data-testid=driver-login-identifier]", "09170000101");
+    await page.fill("[data-testid=driver-login-password]", "correct horse battery");
+    await tap("[data-testid=driver-login-submit]", "Sign in");
+    await page.waitForURL("**/driver/today");
     await page.waitForSelector("[data-testid=driver-card-action-acknowledge]");
-    await shot(page, "flow-01-today-to-acknowledge");
-    await page.click("[data-testid=driver-card-action-acknowledge]");
-    await page.waitForSelector("[data-testid=driver-trip-summary]");
-    await shot(page, "flow-02-trip-to-acknowledge");
+    assert.equal((await page.textContent("[data-testid=driver-card-action-acknowledge]"))?.trim(), "Acknowledge");
+    assert.equal((await page.textContent("[data-testid=kpi-stops]"))?.match(/^\d+/)?.[0], "3");
+    await snap(page, "02-today");
 
-    // Acknowledge each SO by completing its checklist (after the first, the app opens the next SO to acknowledge by itself)
-    await page.click("[data-testid=driver-ack-SO-TEST-1001]");
-    for (let n = 1; n <= 2; n += 1) {
-      await page.waitForSelector("[data-testid=driver-ack-submit]");
-      for (const box of await page.locator("input[type=checkbox]").all()) await box.check();
-      if (n === 1) await shot(page, "flow-03-acknowledge-checklist");
-      await page.click("[data-testid=driver-ack-submit]");
-      await page.waitForTimeout(700);
+    // (not counted: a second tab shows what the trip screen looks like before acknowledging)
+    const peek = await s.context.newPage();
+    const peekRecorder = await installMocks(peek, {});
+    await installFlow(peek, flow);
+    await peek.goto(`${BASE}/driver/trip/${BATCH}`);
+    await peek.waitForSelector("[data-testid=driver-ack-all]");
+    for (const no of ["SO-TEST-1001", "SO-TEST-1002", "TO-TEST-0003"]) assert.equal(await peek.locator(`[data-testid=driver-order-${no}]`).count(), 1, `${no} listed`);
+    await snap(peek, "03-trip-acknowledge");
+    assert.deepEqual(peekRecorder.unexpected, []);
+    assert.equal(flow.log.length, 0, "looking at the trip sends nothing");
+    await peek.close();
+
+    // Acknowledge: ONE tap, ONE call, every order
+    await tap("[data-testid=driver-card-action-acknowledge]", "Acknowledge (Today card)");
+    await page.waitForSelector("[data-testid=driver-card-action-start]");
+    assert.equal(flow.log.filter((l) => l === "acknowledge-all").length, 1, "acknowledge-all called once");
+    assert.equal(flow.log.filter((l) => l === "acknowledge").length, 0, "no per-order acknowledge calls");
+    assert.ok(flow.orders.every((o) => o.ack), "all 3 orders (2 SO + 1 TO) acknowledged by that one call");
+    const ackBody = flow.posts.find((p) => p.path.endsWith("/acknowledge-all"))?.body ?? {};
+    assert.ok(typeof ackBody.idempotency_key === "string" && ackBody.client_ts, "idempotency key + client time sent");
+
+    // Start trip + confirm sheet
+    await tap("[data-testid=driver-card-action-start]", "Start trip (Today card)");
+    await page.waitForSelector("[data-testid=driver-start-sheet]");
+    await snap(page, "04-start-sheet", false);
+    await tap("[data-testid=driver-start-sheet-confirm]", "Start (sheet)");
+    await page.waitForURL(`**/driver/trip/${BATCH}`);
+    await page.waitForSelector("[data-testid=driver-im-here]");
+
+    // Every stop: Reached -> Delivered -> photo -> Delivered (submit)
+    const stops = [
+      { no: "SO-TEST-1001", invoice: "000456", type: "SO" },
+      { no: "SO-TEST-1002", invoice: "000457", type: "SO" },
+      { no: "TO-TEST-0003", invoice: "TO-TEST-0003", type: "TO" },
+    ];
+    for (const [i, stop] of stops.entries()) {
+      await page.waitForSelector(`[data-testid=driver-current-stop][data-so="${stop.no}"]`);
+      await page.waitForSelector("[data-testid=driver-im-here]:not([disabled])");
+      assert.match((await page.getAttribute("[data-testid=driver-navigate]", "href")) ?? "", /google\.com\/maps\/dir/, "Navigate opens Google Maps directions");
+      await tap("[data-testid=driver-im-here]", `Reached (stop ${i + 1})`);
+      await page.waitForSelector("[data-testid=driver-delivered]:not([disabled])");
+      if (i === 0) await snap(page, "05-trip-at-stop");
+      await tap("[data-testid=driver-delivered]", `Delivered (stop ${i + 1})`);
+      await page.waitForSelector("[data-testid=driver-delivered-sheet]");
+      const input = page.locator("[data-testid=driver-invoice-input]");
+      if (stop.type === "TO") {
+        assert.equal(await input.inputValue(), "TO-TEST-0003", "TO invoice field = the TO number");
+        assert.equal(await input.getAttribute("readonly"), "", "TO invoice field is read-only");
+      } else if (i === 0) {
+        assert.equal(await input.inputValue(), "000456", "known invoice number prefilled");
+        assert.equal(await input.getAttribute("readonly"), null, "an SO prefill stays editable");
+      } else {
+        assert.equal(await input.inputValue(), "");
+        await input.fill("000457"); // typing, not counted
+      }
+      await addPhoto(page, tap, `Add photo (stop ${i + 1})`);
+      if (i === 0) await snap(page, "06-delivered-sheet", false);
+      await tap("[data-testid=driver-delivered-submit]", `Delivered submit (stop ${i + 1})`);
+      await page.waitForSelector("[data-testid=driver-delivered-sheet]", { state: "detached" });
     }
-    if (!(await page.locator("[data-testid=driver-trip-summary]").count())) await page.goto(`${BASE}/driver/assignment/b-f`);
-    await page.waitForSelector("[data-testid=driver-trip-summary]");
-
-    // Start trip is only offered after every SO is acknowledged
-    await page.waitForSelector("[data-testid=driver-start-trip]:not([disabled])");
-    await shot(page, "flow-04-ready-to-start");
-    await page.click("[data-testid=driver-start-trip]");
-    await page.waitForSelector("[data-testid=driver-arrived-SO-TEST-1001]");
-    await shot(page, "flow-05-on-trip-arrive");
-
-    // Stop 1: Arrived -> Departed (Delivered needs the proof-of-delivery photo)
-    await page.click("[data-testid=driver-arrived-SO-TEST-1001]");
-    await page.waitForSelector("[data-testid=driver-checkout-SO-TEST-1001]");
-    await page.click("[data-testid=driver-checkout-SO-TEST-1001]");
-    await page.waitForSelector("[data-testid=driver-field-invoice_dr_number]");
-    await page.locator("[data-testid=driver-field-invoice_dr_number] input").fill("000456");
-    await page.click("text=Delivered");
-    await page.waitForSelector("[data-testid=driver-field-delivery_photo]");
-    assert.equal(await page.locator("[data-testid=driver-field-reason]").count(), 0);
-    assert.match((await page.textContent("[data-testid=driver-checkout-submit]")) ?? "", /Mark as delivered/);
-    await page.click("[data-testid=driver-checkout-submit]");
-    await page.waitForSelector("text=Take a photo first (proof of delivery is required)");
-    await shot(page, "flow-06-departed-photo-required");
-    assert.ok(!flow.log.includes("check-out"), "nothing was sent without the photo");
-    await page.locator("[data-testid=driver-field-delivery_photo] [data-testid=driver-photo-input]").setInputFiles({ name: "pod.png", mimeType: "image/png", buffer: PNG });
-    await page.waitForSelector("[data-testid=driver-field-delivery_photo] img");
-    await shot(page, "flow-07-departed-with-photo");
-    await page.click("[data-testid=driver-checkout-submit]");
-    await page.waitForSelector("[data-testid=driver-arrived-SO-TEST-1002]");
-    assert.ok(flow.log.includes("upload") && flow.log.includes("check-out"));
-
-    // Stop 2: Failed (reason required, photo optional)
-    await page.click("[data-testid=driver-arrived-SO-TEST-1002]");
-    await page.click("[data-testid=driver-checkout-SO-TEST-1002]");
-    await page.waitForSelector("[data-testid=driver-field-invoice_dr_number]");
-    await page.locator("[data-testid=driver-field-invoice_dr_number] input").fill("000457");
-    await page.click("text=Failed");
-    await page.waitForSelector("[data-testid=driver-field-reason]");
-    assert.equal(await page.locator("[data-testid=driver-field-delivery_photo]").count(), 0);
-    assert.match((await page.textContent("[data-testid=driver-checkout-submit]")) ?? "", /Save departure/);
-    await page.click("[data-testid=driver-checkout-submit]");
-    await page.waitForSelector("text=Give a reason");
-    await page.locator("[data-testid=driver-field-reason] textarea").fill("Store closed");
-    await page.click("[data-testid=driver-checkout-submit]");
     await page.waitForSelector("[data-testid=driver-end-trip]:not([disabled])");
-    await shot(page, "flow-08-all-stops-done-end-trip");
+    const checkouts = flow.posts.filter((p) => p.path.endsWith("/check-out")).map((p) => (p.body.answers ?? {}) as Record<string, unknown>);
+    assert.deepEqual(checkouts.map((a) => a.outcome), ["Delivered", "Delivered", "Delivered"]);
+    assert.deepEqual(checkouts.map((a) => a.invoice_dr_number ?? null), ["000456", "000457", null], "a TO sends no invoice number (the server uses the TO number)");
+    assert.ok(checkouts.every((a) => typeof a.delivery_photo === "number"), "every Delivered carries its uploaded photo id");
 
-    // End trip, then hand over the carbon copies
-    page.on("dialog", (dialog) => void dialog.accept());
-    await page.click("[data-testid=driver-end-trip]");
-    await page.waitForSelector("[data-testid=driver-handover-link]");
-    await shot(page, "flow-09-returned-handover");
-    await page.click("[data-testid=driver-handover-link]");
-    await page.waitForSelector("[data-testid=driver-handover-submit]");
-    const lines = (await page.textContent("main")) ?? "";
-    assert.match(lines, /SO-TEST-1001/);
-    assert.match(lines, /Invoice\/DR 000456/);
-    assert.match(lines, /Invoice\/DR 000457/);
-    await page.click("text=Mark all handed over");
-    await page.selectOption("[data-testid=driver-handover-officer] select", "9").catch(() => undefined); // a single officer is preselected
-    await shot(page, "flow-10-handover-carbon-copies");
-    await page.click("[data-testid=driver-handover-submit]");
-    await page.waitForSelector("[data-testid=driver-handover-waiting]");
-    await shot(page, "flow-11-handover-waiting-for-officer");
-    assert.deepEqual(errors, []);
-    assert.deepEqual(recorder.unexpected, []);
-    assert.deepEqual(flow.log.filter((l) => l !== "upload"), ["acknowledge", "acknowledge", "start", "check-in", "check-out", "check-in", "check-out", "end", "handover"]);
-    await context.close();
+    // End trip + confirm sheet
+    await tap("[data-testid=driver-end-trip]", "End trip");
+    await page.waitForSelector("[data-testid=driver-end-sheet]");
+    await snap(page, "09-end-sheet", false);
+    await tap("[data-testid=driver-end-sheet-confirm]", "End trip (sheet)");
 
-    // The logistics officer validates every invoice line
-    const officer = await session("officer", flow);
-    await officer.page.goto(`${BASE}/officer/handover/1`);
-    await officer.page.waitForSelector("[data-testid=invoice-1]");
-    const card = (await officer.page.textContent("[data-testid=invoice-1]")) ?? "";
-    assert.match(card, /SO-TEST-1001/);
-    assert.match(card, /Invoice\/DR 000456/);
-    assert.match(card, /Delivered/);
-    await shot(officer.page, "flow-12-officer-validates");
-    for (const label of await officer.page.locator("button:has-text('Received')").all()) await label.click();
-    await officer.page.click("[data-testid=officer-submit]");
-    await officer.page.waitForSelector("text=fully validated and closed");
-    await shot(officer.page, "flow-13-officer-closed");
-    assert.equal(flow.trip, "closed");
-    assert.deepEqual(officer.recorder.unexpected, []);
-    await officer.context.close();
+    // Auto handover: no handover form, the list comes from the End trip response
+    await page.waitForSelector("[data-testid=driver-give-invoices]");
+    assert.match((await page.textContent("[data-testid=driver-give-invoices]")) ?? "", /Give the signed invoice copies to the Logistics Officer/);
+    assert.equal((await page.textContent("[data-testid=driver-trip-chip]"))?.trim(), "Waiting for officer");
+    const list = (await page.textContent("[data-testid=driver-invoice-list]")) ?? "";
+    for (const v of ["000456", "000457", "TO-TEST-0003"]) assert.match(list, new RegExp(v), `invoice list shows ${v} (from the End trip handover)`);
+    assert.doesNotMatch(list, /No invoice/i);
+    assert.equal(await page.locator("[data-testid=driver-handover-submit], [data-testid=driver-handover-link]").count(), 0, "no driver handover form");
+    await snap(page, "10-waiting-officer");
 
-    // And the driver sees the final state
-    const after = await session("driver", flow);
-    await after.page.goto(`${BASE}/driver/assignment/b-f`);
-    await after.page.waitForSelector("[data-testid=driver-trip-summary]");
-    assert.match((await after.page.textContent("[data-testid=driver-trip-summary]")) ?? "", /Closed/);
-    await shot(after.page, "flow-14-driver-sees-closed");
-    await after.context.close();
+    // The officer validates (server side); the driver's screen picks it up on the next refresh
+    flow.trip = "closed";
+    await bringToFront(page);
+    await page.waitForSelector("[data-testid=driver-closed]", { timeout: 30_000 });
+    assert.equal((await page.textContent("[data-testid=driver-trip-chip]"))?.trim(), "Closed ✓");
+    await snap(page, "11-closed");
+
+    assert.deepEqual(flow.log.filter((l) => l !== "upload"), ["acknowledge-all", "start", "check-in", "check-out", "check-in", "check-out", "check-in", "check-out", "end"]);
+    assert.equal(flow.uploads, 3);
+    console.log(`\n[driver flow] taps from sign-in to End trip confirm (typing and Navigate excluded): ${taps.length}\n  ${taps.map((t, i) => `${i + 1}. ${t}`).join("\n  ")}\n`);
+    assert.equal(taps.length, 18);
+    await s.done();
   });
 
-  it("without photo storage the form says so (it does not hide the field) and the departure can still be saved", async () => {
-    const flow = newFlow(1);
-    const context = await newContext(browser, 360);
-    const page = await context.newPage();
-    const recorder = await installMocks(page, {});
-    await page.route("http://mock-api.test/api/driver/templates", async (route) => {
-      const { templates } = await import("./fixtures/driverData.ts");
-      await route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ ...templates, photo_storage_enabled: false }) });
-    });
-    await installFlow(page, flow);
-    flow.sos[0].ack = true;
-    flow.trip = "on_trip";
-    flow.sos[0].stop = "checked_in";
-    await page.goto(`${BASE}/driver/assignment/b-f/checkout/so-1`);
-    await page.waitForSelector("[data-testid=driver-field-invoice_dr_number]");
-    await page.locator("[data-testid=driver-field-invoice_dr_number] input").fill("1");
-    await page.click("text=Delivered");
-    await page.waitForSelector("[data-testid=driver-photo-not-configured]");
-    assert.match((await page.textContent("[data-testid=driver-photo-not-configured]")) ?? "", /Photo upload is not configured/);
-    assert.match((await page.textContent("[data-testid=driver-photo-not-configured]")) ?? "", /Contact the admin/);
-    await shot(page, "flow-15-photo-storage-not-configured");
-    assert.deepEqual(recorder.unexpected, []);
-    await context.close();
+  it("the trip screen's Acknowledge also acknowledges every order with one call", async () => {
+    const flow = newFlow();
+    const s = await session(flow);
+    await s.page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await s.page.waitForSelector("[data-testid=driver-ack-all]");
+    assert.equal((await s.page.textContent("[data-testid=driver-ack-all]"))?.trim(), "Acknowledge");
+    await s.page.click("[data-testid=driver-ack-all]");
+    await s.page.waitForSelector("[data-testid=driver-start-trip]");
+    assert.deepEqual(flow.log, ["acknowledge-all"]);
+    assert.ok(flow.orders.every((o) => o.ack));
+    await s.done();
+  });
+
+  it("Not fully delivered (Failed + reason, photo optional) and the Problem sheet", async () => {
+    const flow = onTrip(newFlow(), 0, true);
+    const s = await session(flow);
+    const { page } = s;
+    await page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await page.click("[data-testid=driver-delivered]");
+    await page.waitForSelector("[data-testid=driver-delivered-sheet]");
+    await page.click("[data-testid=driver-not-fully]");
+    await page.waitForSelector("[data-testid=driver-outcome-partial][aria-pressed=true]");
+    await page.waitForSelector("[data-testid=driver-reason-0]");
+    await snap(page, "07-not-fully", false);
+    await page.click("[data-testid=driver-outcome-failed]");
+    await page.click("[data-testid=driver-delivered-submit]");
+    await page.waitForSelector("[data-testid=driver-delivered-sheet] [role=alert]"); // reason required
+    assert.ok(!flow.log.includes("check-out"), "nothing sent without a reason");
+    await page.click("[data-testid=driver-reason-0]");
+    await page.click("[data-testid=driver-delivered-submit]");
+    await page.waitForSelector("[data-testid=driver-delivered-sheet]", { state: "detached" });
+    const sent = (flow.posts.find((p) => p.path.endsWith("/check-out"))?.body.answers ?? {}) as Record<string, unknown>;
+    assert.equal(sent.outcome, "Failed");
+    assert.ok(String(sent.reason ?? "").length > 0, "reason chip text sent");
+    assert.equal(sent.delivery_photo, undefined, "no photo needed for Failed");
+
+    await page.click("[data-testid=driver-problem]");
+    await page.waitForSelector("[data-testid=driver-problem-sheet]");
+    await snap(page, "08-problem-sheet", false);
+    await page.click("[data-testid=driver-problem-customer]");
+    await page.click("[data-testid=driver-problem-send]");
+    await page.waitForSelector("[data-testid=driver-problem-sheet]", { state: "detached" });
+    const issue = s.recorder.calls.find((c) => c.method === "POST" && c.path === "/api/driver/issues")?.body as { batch_id: string; category: string } | undefined;
+    assert.equal(issue?.batch_id, BATCH);
+    assert.equal(issue?.category, "Customer unavailable");
+    await s.done();
+  });
+
+  it("dispatch removed an order: Reached answers 409 order_removed, the banner shows and the order is gone after the refetch", async () => {
+    const flow = onTrip(newFlow(), 1);
+    const s = await session(flow);
+    const { page } = s;
+    await page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await page.waitForSelector('[data-testid=driver-current-stop][data-so="SO-TEST-1002"]');
+    removeOrder(flow, "so-2"); // the phone still shows SO-TEST-1002
+    await page.click("[data-testid=driver-im-here]");
+    await toastText(page, /This order was removed by dispatch/);
+    await page.waitForSelector("[data-testid=driver-dispatch-order_removed]");
+    assert.match((await page.textContent("[data-testid=driver-dispatch-order_removed]")) ?? "", /Dispatch removed SO-TEST-1002 from your trip/);
+    await page.waitForSelector("[data-testid=driver-order-SO-TEST-1002]", { state: "detached" });
+    await page.waitForSelector('[data-testid=driver-current-stop][data-so="TO-TEST-0003"]');
+    await snap(page, "15-dispatch-removed-banner");
+    // Today shows it too
+    await page.click("[data-testid=driver-trip-back]");
+    await page.waitForSelector("[data-testid=driver-dispatch-order_removed]");
+    await s.done();
+  });
+
+  it("a queued (offline) action whose order dispatch removed is dropped with 'This order was removed by dispatch'", async () => {
+    const flow = onTrip(newFlow(), 1);
+    const s = await session(flow);
+    const { page } = s;
+    await page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await page.waitForSelector('[data-testid=driver-current-stop][data-so="SO-TEST-1002"]');
+    flow.apiDown = true;
+    await page.click("[data-testid=driver-im-here]");
+    await page.waitForSelector("[data-testid=driver-pending-sync]", { timeout: 20_000 });
+    removeOrder(flow, "so-2");
+    flow.apiDown = false;
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await toastText(page, /This order was removed by dispatch/);
+    await page.waitForSelector("[data-testid=driver-order-SO-TEST-1002]", { state: "detached", timeout: 20_000 });
+    assert.equal(await page.locator("[data-sync=failed]").count(), 0, "dropped for good, not left as a failed action");
+    assert.ok(flow.log.includes("check-in"), "the queued Reached reached the server");
+    await s.done();
+  });
+
+  it("Tagalog: the sign-in toggle and the Profile language switch change the labels", async () => {
+    const flow = newFlow();
+    const s = await session(flow, { session: null });
+    const { page } = s;
+    await page.goto(`${BASE}/driver/login`);
+    await page.waitForSelector("[data-testid=driver-login-submit]");
+    assert.match((await page.textContent("[data-testid=driver-login-submit]")) ?? "", /^Sign in/);
+    await page.click("[data-testid=driver-lang-toggle]");
+    assert.match((await page.textContent("[data-testid=driver-login-submit]")) ?? "", /^Mag-sign in/);
+    await page.click("[data-testid=driver-lang-toggle]");
+    await page.fill("[data-testid=driver-login-identifier]", "09170000101");
+    await page.fill("[data-testid=driver-login-password]", "correct horse battery");
+    await page.click("[data-testid=driver-login-submit]");
+    await page.waitForURL("**/driver/today");
+    await page.click("[data-testid=driver-nav-profile]");
+    await page.waitForSelector("[data-testid=driver-lang-tl]");
+    await page.click("[data-testid=driver-lang-tl]");
+    await page.waitForFunction(() => document.querySelector("[data-testid=driver-nav-today]")?.textContent?.trim() === "Ngayon");
+    assert.equal((await page.textContent("[data-testid=driver-nav-history]"))?.trim(), "Nakaraan");
+    await snap(page, "14-profile-tagalog");
+    await page.click("[data-testid=driver-nav-today]");
+    await page.waitForSelector("[data-testid=driver-card-action-acknowledge]");
+    assert.equal((await page.textContent("[data-testid=driver-card-action-acknowledge]"))?.trim(), "Kumpirmahin");
+    await s.done();
+  });
+
+  it("History lists past trips and opens one read-only (no crew buttons)", async () => {
+    const flow = newFlow();
+    const h2 = { ...d.detailOnTrip, batch_id: "h-2", delivery_date: "2026-10-11" };
+    const s = await session(flow, { detail: { "h-2": h2 } });
+    const { page } = s;
+    await page.goto(`${BASE}/driver/history`);
+    await page.waitForSelector("[data-testid=driver-trip-h-1]");
+    await snap(page, "12-history");
+    await page.click("[data-testid=driver-trip-h-2]");
+    await page.waitForURL("**/driver/trip/h-2?from=history");
+    await page.waitForSelector("[data-testid=driver-trip-header]");
+    await page.waitForTimeout(400);
+    const crewButtons = "[data-testid=driver-ack-all], [data-testid=driver-start-trip], [data-testid=driver-im-here], [data-testid=driver-delivered], [data-testid=driver-end-trip], [data-testid=driver-problem], [data-testid=driver-action-bar]";
+    assert.equal(await page.locator(crewButtons).count(), 0, "read-only: no crew action");
+    assert.equal(await page.getAttribute("[data-testid=driver-trip-back]", "href"), "/driver/history");
+    await s.done();
+  });
+
+  it("Profile: language toggle and the alerts list", async () => {
+    const flow = newFlow();
+    const s = await session(flow);
+    const { page } = s;
+    await page.goto(`${BASE}/driver/profile`);
+    await page.waitForSelector("[data-testid=driver-alerts]");
+    assert.equal(await page.locator("[data-testid=driver-lang-en][aria-pressed=true]").count(), 1);
+    assert.equal(await page.locator("[data-testid=driver-lang-tl]").count(), 1);
+    assert.equal(await page.locator("[data-testid=driver-alerts] [data-testid^=driver-alert-]").count(), d.alerts.alerts.length);
+    assert.equal((await page.textContent("[data-testid=driver-unread]"))?.trim(), "3");
+    await snap(page, "13-profile");
+    await s.done();
+  });
+
+  it("after End trip the officer list waits; it never asks the driver for a handover form", async () => {
+    const flow = ended(newFlow());
+    const s = await session(flow);
+    await s.page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await s.page.waitForSelector("[data-testid=driver-give-invoices]");
+    assert.equal(await s.page.locator("[data-testid=driver-back-today]").count(), 1);
+    await s.done();
   });
 });

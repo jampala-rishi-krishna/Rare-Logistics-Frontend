@@ -20,6 +20,10 @@ export interface Scenario {
   role?: "admin" | "dispatcher";
   board?: unknown;
   issues_ov?: unknown;
+  tripTimeline?: unknown;
+  // Load planning > Confirmed Orders (unassign guard)
+  confirmedOrders?: unknown;
+  unassignPreview?: unknown;
 }
 
 export interface Recorder {
@@ -84,10 +88,21 @@ export async function installMocks(page: Page, scenario: Scenario = {}): Promise
       if (sub === "templates") return json(route, ov.templatesResponse);
       if (/^templates\/[a-z_]+\/versions\/\d+$/.test(sub)) return json(route, { ...ov.templatesResponse.delivery_checkout.active, version: 1, name: "DRAFT \u2014 mirror of Zoho form", is_draft: true, active: false });
       if (/^templates\/[a-z_]+$/.test(sub) && request.method() === "POST") return json(route, { ...ov.templatesResponse.delivery_checkout.active, version: 3 }, 201);
-      if (/^trips\/[^/]+$/.test(sub)) return json(route, ov.tripTimeline);
+      if (/^trips\/[^/]+$/.test(sub)) return json(route, scenario.tripTimeline ?? ov.tripTimeline);
       if (/^drivers\/\d+$/.test(sub)) return json(route, ov.driverDetail);
       if (sub === "export.csv") return route.fulfill({ status: 200, contentType: "text/csv; charset=utf-8", headers: { ...CORS, "content-disposition": 'attachment; filename="driver-overview-test.csv"', "access-control-expose-headers": "content-disposition" }, body: ov.csv });
     }
+
+    // ---- Load planning (Confirmed Orders + the unassign guard). Read-only fixtures; the POSTs are only recorded. ----
+    if (path === "/vehicles") return json(route, []);
+    if (path === "/api/load-planning/inventory/branches") return json(route, { branches: [] });
+    if (path === "/api/load-planning/inventory/sales-orders") return json(route, url.searchParams.get("assignment") === "assigned" ? (scenario.confirmedOrders ?? ov.emptyOrdersPage) : ov.emptyOrdersPage);
+    if (path === "/api/load-planning/assignments/unassign-preview" && request.method() === "POST") return json(route, scenario.unassignPreview ?? { needs_confirm: false, orders: [] });
+    if (path === "/api/load-planning/assignments/bulk-unassign" && request.method() === "POST") {
+      const ids = ((body as { order_ids?: string[] } | null)?.order_ids ?? []).map(String);
+      return json(route, { unassigned: ids, count: ids.length, count_by_type: { SO: ids.length }, skipped: [] });
+    }
+    if (/^\/api\/load-planning\/assignments\/[^/]+\/unassign$/.test(path) && request.method() === "POST") return json(route, { success: true, salesorder_id: decodeURIComponent(path.split("/")[4]), assignment_status: "unassigned" });
 
     if (path === "/auth/login") {
       const identifier = String((body as { identifier?: string } | null)?.identifier ?? "");

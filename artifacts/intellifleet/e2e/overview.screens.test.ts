@@ -6,6 +6,7 @@ import type { Browser, Page } from "playwright";
 import { horizontalOverflow, invisibleText, launch, newContext, shot, startServer, stopServer, BASE } from "./harness.ts";
 import { installMocks } from "./mockApi.ts";
 import type { Recorder, Scenario } from "./mockApi.ts";
+import * as ov from "./fixtures/overviewData.ts";
 
 let browser: Browser;
 before(async () => {
@@ -176,23 +177,26 @@ describe("Driver Overview at 1440", () => {
     await close();
   });
 
-  it("Template settings live in Admin > Settings (admin only), not in Driver Overview", async () => {
-    const { page, recorder, close } = await open("/admin/settings", "[data-testid=driver-forms-settings]");
-    const text = (await page.textContent("[data-testid=driver-forms-settings]")) ?? "";
-    assert.match(text, /Delivery time log/);
-    assert.match(text, /Added in app, not in Zoho form/);
-    assert.match(text, /In the Zoho form/);
-    assert.match((await page.textContent("[data-testid=settings-acknowledge_checklist]")) ?? "", /DRAFT/);
-    await shot(page, "admin-settings-driver-forms");
-    await page.locator("[data-testid=setting-item-notes] input[type=checkbox]").nth(1).uncheck(); // switch the optional notes question off
-    await page.click("[data-testid=save-delivery_checkout]");
-    await page.waitForTimeout(600);
-    const saved = recorder.calls.find((c) => c.method === "POST" && c.path === "/api/driver-overview/templates/delivery_checkout");
-    assert.ok(saved, "saved as a new version");
-    const items = (saved.body as { items: Array<{ key: string; active: boolean; app_only: boolean }> }).items;
-    assert.equal(items.find((i) => i.key === "notes")?.active, false);
-    assert.equal(items.find((i) => i.key === "outcome")?.app_only, true);
-    assert.equal(items.find((i) => i.key === "delivery_photo")?.app_only, true);
+  it("Admin > Settings no longer carries the driver form templates (removed in commit 222a235)", async () => {
+    const { page, close } = await open("/admin/settings", "[data-testid=admin-settings]");
+    assert.equal(await page.locator("[data-testid=driver-forms-settings], [data-testid=admin-driver-forms]").count(), 0);
+    await close();
+  });
+
+  it("Recent activity and the audit log show an order dispatch unassigned (order_unassigned)", async () => {
+    const { page, close } = await open(OVERVIEW, "[data-testid=live-list]", { role: "admin", tripTimeline: ov.tripTimelineWithUnassign });
+    await page.click("[data-testid=live-row-103]");
+    await page.waitForSelector("[data-testid=activity-unassigned]");
+    const row = (await page.textContent("[data-testid=activity-unassigned]")) ?? "";
+    assert.match(row, /Unassigned by dispatch/);
+    assert.match(row, /SO-TEST-3006/);
+    assert.match(row, /was acknowledged/);
+    assert.match(row, /Test Dispatcher/);
+    await page.locator("[data-testid=activity-unassigned]").scrollIntoViewIfNeeded();
+    await shot(page, "driver-simplified/17-overview-unassign-event", false);
+    await page.click("[data-testid=panel-tab-orders]");
+    await page.click("text=/Show audit log/");
+    await page.waitForSelector("text=Unassigned by dispatch - SO-TEST-3006 - was acknowledged - Test Dispatcher");
     await close();
   });
 
@@ -214,6 +218,34 @@ describe("Driver Overview at 1440", () => {
     await page.waitForSelector("[data-testid=timeline-so-SO-TEST-3001]");
     await shot(page, "overview-9-1024");
     assert.equal(await horizontalOverflow(page), 0);
+    await close();
+  });
+});
+
+describe("Load planning > Confirmed Orders: unassign guard", () => {
+  it("preview lists 'acknowledged by ... at ...' and the delivered order as blocked; Unassign anyway sends confirm:true with only the unblocked id", async () => {
+    const { page, recorder, close } = await open("/app/loads", "text=Confirmed Orders", { role: "admin", confirmedOrders: ov.confirmedOrders, unassignPreview: ov.unassignPreview });
+    await page.click("button:has-text('Confirmed Orders')");
+    await page.waitForSelector("input[aria-label='Select SO-TEST-5001']:visible");
+    await page.check("input[aria-label='Select SO-TEST-5001']:visible");
+    await page.check("input[aria-label='Select SO-TEST-5002']:visible");
+    await page.click("[data-testid=bulk-unassign-button]");
+    await page.waitForSelector("[data-testid=unassign-confirm-dialog]");
+    const preview = recorder.calls.find((c) => c.path === "/api/load-planning/assignments/unassign-preview");
+    assert.deepEqual((preview?.body as { order_ids: string[] }).order_ids.sort(), ["501", "502"]);
+    const confirmList = (await page.textContent("[data-testid=unassign-confirm-list]")) ?? "";
+    assert.match(confirmList, /SO-TEST-5001: acknowledged by Alex Driver at 13:20/);
+    const blocked = (await page.textContent("[data-testid=unassign-blocked-list]")) ?? "";
+    assert.match(blocked, /SO-TEST-5002: can't be unassigned - already delivered/);
+    assert.doesNotMatch(confirmList, /SO-TEST-5002/);
+    assert.equal((await page.textContent("[data-testid=unassign-confirm-go]"))?.trim(), "Unassign anyway");
+    assert.equal(recorder.calls.filter((c) => c.path.endsWith("/bulk-unassign") || c.path.endsWith("/unassign")).length, 0, "nothing unassigned before the dispatcher confirms");
+    await shot(page, "driver-simplified/16-unassign-dialog", false);
+    await page.click("[data-testid=unassign-confirm-go]");
+    await page.waitForSelector("[data-testid=unassign-confirm-dialog]", { state: "detached" });
+    const sent = recorder.calls.filter((c) => c.method === "POST" && c.path === "/api/load-planning/assignments/bulk-unassign");
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].body, { order_ids: ["501"], confirm: true });
     await close();
   });
 });
