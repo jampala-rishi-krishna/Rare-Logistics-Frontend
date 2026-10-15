@@ -20,15 +20,15 @@ export default function DriverForgot() {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {steps.map((s, i) => (
             <div key={i} style={{ background: C.card, borderRadius: 18, padding: 16, display: "flex", gap: 14, alignItems: "center" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 18, background: C.ink, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+              <div style={{ width: 36, height: 36, borderRadius: 18, background: C.ink, color: C.card, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
               <div style={{ fontSize: 16, fontWeight: 500 }}>{s}</div>
             </div>
           ))}
         </div>
         <div style={{ flexGrow: 1, minHeight: 32 }} />
         {tel ? (
-          <a href={tel} data-testid="driver-forgot-call" style={{ height: 60, borderRadius: 16, background: C.ink, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700 }}>
-            <Icon name="phone" size={22} color="#FFFFFF" />
+          <a href={tel} data-testid="driver-forgot-call" style={{ height: 60, borderRadius: 16, background: C.ink, color: C.card, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700 }}>
+            <Icon name="phone" size={22} color={C.onInk} />
             {t.callDispatch}
           </a>
         ) : (

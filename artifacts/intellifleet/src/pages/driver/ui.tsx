@@ -1,36 +1,23 @@
 // Design primitives for the driver app, taken 1:1 from docs/RGF Driver App – Simplified UI.html
-// (#F2F2EE background, #0A0A0A primary, white cards, DM Sans, 24px stroke icons). Fluid width, safe-area aware.
+// Shared dashboard colours, fluid width and safe-area aware.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { withDriverParams } from "@/lib/driver";
 import { useT } from "./i18n";
 
+// Photo: Pexels #4246120 (bundled locally).
+import sheetBackground from "@/assets/driver/sheet-bg.jpg";
+import { T, FONT_SANS, alpha } from "@/lib/themeTokens";
 export const C = {
-  bg: "#F2F2EE",
-  ink: "#0A0A0A",
-  card: "#FFFFFF",
-  sub: "#55554F",
-  body: "#3A3A36",
-  line: "#E4E4DF",
-  field: "#D6D6CF",
-  soft: "#F7F7F3",
-  muted: "#EDEDE8",
-  navOff: "#6B6B64",
-  amberBg: "#FFF3C4",
-  amber: "#6B4A00",
-  greenBg: "#E3F2E7",
-  green: "#1A5C2E",
-  blueBg: "#E6EEFB",
-  blue: "#1B4A8F",
-  so: "#B42318",
-  wm: "#7C3AED",
-  po: "#1B4A8F",
-  to: "#1D7A3A",
-  scrim: "#5E5E59", // solid, as drawn in the Delivered sheet design
+ bg: T.canvas, ink: T.ink, card: T.canvas, sub: T.muted, body: T.ink,
+ line: T.line, field: T.line, soft: T.surface, muted: T.surface, navOff: T.muted,
+ amberBg: T.warningBg, amber: T.warning, greenBg: T.positiveBg, green: T.positive,
+ blueBg: T.accentBg, blue: T.accent, so: T.negative, wm: T.orderWM,
+ po: T.orderPO, to: T.orderTO, scrim: alpha("ink", 0.65), onInk: T.onInk,
+ negativeBg: T.negativeBg,
 } as const;
-
-export const FONT = "'DM Sans', system-ui, sans-serif";
+export const FONT = FONT_SANS;
 
 // Bottom bars: the design's 22-26px bottom padding, or more on phones with a home indicator.
 export const SAFE_BOTTOM = (px: number) => `max(${px}px, calc(env(safe-area-inset-bottom) + 12px))`;
@@ -204,7 +191,7 @@ export function BottomNav({ active, adminDriverId, badge = 0 }: { active: Tab; a
             <span style={{ position: "relative", display: "inline-flex" }}>
               <Icon name={it.icon} color={color} width={on ? 2.2 : 2} />
               {it.tab === "acknowledge" && badge > 0 && (
-                <span data-testid="driver-ack-badge" style={{ position: "absolute", top: -4, right: -10, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: C.so, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>
+                <span data-testid="driver-ack-badge" style={{ position: "absolute", top: -4, right: -10, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: C.so, color: C.onInk, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>
                   {badge > 9 ? "9+" : badge}
                 </span>
               )}
@@ -222,7 +209,7 @@ const primaryBase: CSSProperties = {
   height: 60,
   borderRadius: 16,
   background: C.ink,
-  color: "#FFFFFF",
+  color: C.onInk,
   border: 0,
   display: "flex",
   alignItems: "center",
@@ -241,15 +228,15 @@ const primaryBase: CSSProperties = {
 export function PrimaryButton({ children, icon, onClick, disabled, testId, height = 60, fontSize = 18, type = "button" }: { children: ReactNode; icon?: IconName; onClick?: () => void; disabled?: boolean; testId?: string; height?: number; fontSize?: number; type?: "button" | "submit" }) {
   return (
     <button type={type} onClick={onClick} disabled={disabled} data-testid={testId} style={{ ...primaryBase, height, fontSize, opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
-      {icon && <Icon name={icon} size={22} color="#FFFFFF" width={icon === "check" ? 2.4 : 2} />}
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
+      {icon && <Icon name={icon} size={22} color={C.onInk} width={icon === "check" ? 2.4 : 2} />}
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", overflowWrap: "anywhere" }}>{children}</span>
     </button>
   );
 }
 
 const outlineBase: CSSProperties = {
   ...primaryBase,
-  background: "#FFFFFF",
+  background: C.card,
   color: C.ink,
   border: `1.5px solid ${C.ink}`,
 };
@@ -259,7 +246,7 @@ export function OutlineButton({ children, icon, onClick, href, external, disable
   const inner = (
     <>
       {icon && <Icon name={icon} size={20} />}
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", overflowWrap: "anywhere" }}>{children}</span>
     </>
   );
   if (href && external)
@@ -297,7 +284,7 @@ export function RoundButton({ icon, label, href, onClick, size = 44, filled = fa
     height: size,
     borderRadius: size / 2,
     border: filled ? 0 : `1px solid ${C.field}`,
-    background: filled ? C.bg : "#FFFFFF",
+    background: filled ? C.bg : C.card,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -352,7 +339,7 @@ export function TypeBadge({ type }: { type: string | null | undefined }) {
 
 export function NumberDot({ n, active = true, size = 36, done = false }: { n: number; active?: boolean; size?: number; done?: boolean }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: size / 2, background: done ? C.greenBg : active ? C.ink : C.muted, color: done ? C.green : active ? "#FFFFFF" : C.body, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>
+    <div style={{ width: size, height: size, borderRadius: size / 2, background: done ? C.greenBg : active ? C.ink : C.muted, color: done ? C.green : active ? C.card : C.body, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>
       {done ? <Icon name="check" size={size * 0.55} color={C.green} width={2.4} /> : n}
     </div>
   );
@@ -388,7 +375,7 @@ export function Banner({ children, tone = "amber", onDismiss, onClick, testId, d
 export function Avatar({ name, size = 44 }: { name: string | null | undefined; size?: number }) {
   const initials = (name ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
   return (
-    <div aria-hidden="true" style={{ width: size, height: size, borderRadius: size / 2, background: C.ink, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: size >= 60 ? 22 : 15, flexShrink: 0 }}>
+    <div aria-hidden="true" style={{ width: size, height: size, borderRadius: size / 2, background: C.ink, color: C.onInk, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: size >= 60 ? 22 : 15, flexShrink: 0 }}>
       {initials}
     </div>
   );
@@ -430,14 +417,14 @@ export function Sheet({
   }, [open, busy, onClose]);
   if (!open) return null;
   return (
-    <div role="dialog" aria-modal="true" data-testid={testId} style={{ position: "fixed", inset: 0, zIndex: 60, background: C.scrim, fontFamily: FONT, color: C.ink, display: "flex", flexDirection: "column" }}>
+    <div role="dialog" aria-modal="true" data-testid={testId} style={{ position: "fixed", inset: 0, zIndex: 60, background: `linear-gradient(${alpha("ink", 0.68)}, ${alpha("ink", 0.82)}), url(${sheetBackground}) center/cover`, fontFamily: FONT, color: C.ink, display: "flex", flexDirection: "column" }}>
       <div style={{ width: "100%", maxWidth: 560, margin: "0 auto", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div onClick={() => !busy && onClose()} style={{ flex: 1, minHeight: 24, paddingTop: "env(safe-area-inset-top)", color: "#FFFFFF" }}>
-          {context && <div style={{ padding: "24px 20px" }}>{context}</div>}
+        <div onClick={() => !busy && onClose()} style={{ flex: 1, minHeight: 24, paddingTop: "env(safe-area-inset-top)", color: C.onInk }}>
+          {context && <div style={{ padding: "24px 20px", background: C.ink, color: C.onInk }}>{context}</div>}
         </div>
         <div
           style={{
-            background: "#FFFFFF",
+            background: C.card,
             borderRadius: "26px 26px 0 0",
             padding: `12px 20px ${SAFE_BOTTOM(26)}`,
             display: "flex",
@@ -473,7 +460,7 @@ export function Pill({ on, children, onClick, testId, height = 44 }: { on: boole
       aria-pressed={on}
       onClick={onClick}
       data-testid={testId}
-      style={{ minHeight: height, padding: "6px 16px", borderRadius: height / 2, border: on ? `1px solid ${C.ink}` : `1px solid ${C.field}`, background: on ? C.ink : "#FFFFFF", color: on ? "#FFFFFF" : C.ink, fontFamily: FONT, fontSize: 14, fontWeight: on ? 700 : 500, cursor: "pointer", textAlign: "center", lineHeight: 1.25 }}
+      style={{ minHeight: height, padding: "6px 16px", borderRadius: height / 2, border: on ? `1px solid ${C.ink}` : `1px solid ${C.field}`, background: on ? C.ink : C.card, color: on ? C.card : C.ink, fontFamily: FONT, fontSize: 14, fontWeight: on ? 700 : 500, cursor: "pointer", textAlign: "center", lineHeight: 1.25 }}
     >
       {children}
     </button>

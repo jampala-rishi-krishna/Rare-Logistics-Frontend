@@ -10,6 +10,8 @@ import type { QueueEngine, QueueEntry, QueueStorage } from "./offlineQueue.ts";
 import { openBestStorage } from "./offlineStorage.ts";
 import type { StorageKind } from "./offlineStorage.ts";
 import { createSubmitter } from "./tripActions.ts";
+import { createPhotoUploader } from "./tripPhotoUploads.ts";
+import type { PhotoUploadRecord } from "./tripPhotoUploads.ts";
 import type { Submitter } from "./tripActions.ts";
 import { queueCounts } from "./tripState.ts";
 import type { ActionResponse } from "./tripTypes.ts";
@@ -135,6 +137,24 @@ export function useOfflineQueue() {
     return rt.engine.sync({ force: true });
   }, []);
   return { entries, pending, needsAttention, retry, dismiss, syncNow };
+}
+
+// ---- early photo uploads (thumbnail state: Sending... / Sent / Saved, will send) ----
+export const photoUploader = createPhotoUploader((req) => driverApi.uploadPhoto(req));
+let photoRetryWired = false;
+function wirePhotoRetry() {
+  if (photoRetryWired || typeof window === "undefined") return;
+  photoRetryWired = true;
+  window.addEventListener("online", () => void photoUploader.retrySaved());
+}
+
+export function usePhotoUpload(uploadKey: string | null | undefined): PhotoUploadRecord | undefined {
+  wirePhotoRetry();
+  return useSyncExternalStore(
+    (l) => photoUploader.subscribe(l),
+    () => (uploadKey ? photoUploader.get(uploadKey) : undefined),
+    () => undefined,
+  );
 }
 
 // Cache keys are tied to the login token so another user on the same phone never sees saved data.

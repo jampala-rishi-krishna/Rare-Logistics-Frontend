@@ -1,3 +1,4 @@
+import { greetingPart } from "@/lib/driver";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -51,7 +52,7 @@ function Stats({ batch, t, route }: { batch: Batch; t: Dict; route: string | nul
       </span>
       {Number.isFinite(batch.total_kg) && batch.total_kg > 0 && (
         <span data-testid="driver-kg">
-          <b>{formatQty(Math.round(batch.total_kg * 10) / 10)}</b> kg
+          <b>{formatQty(Math.round(batch.total_kg * 10) / 10)}</b> {t.kg}
         </span>
       )}
       {batch.total_packs !== null && batch.total_packs !== undefined && (
@@ -73,13 +74,13 @@ function routeLine(batch: Batch, warehouse: string | null | undefined): string |
 
 // Today's chip: a trip whose stops are all done reads "Delivered" (or "Closed ✓"); "Waiting for officer" stays inside the trip screen.
 function todayChip(t: Dict, trip: TripInfo | null | undefined): { tone: ChipTone; label: string } | null {
-  if (trip?.status === "returned" || trip?.status === "handover_submitted") return { tone: "green", label: t.chipDelivered };
+  if (trip?.status === "returned" || trip?.status === "handover_submitted") return { tone: "green", label: t.chipBackInvoices };
   if (trip?.status === "closed") return { tone: "green", label: t.chipClosed };
   return chipOfTrip(t, trip);
 }
 
 export function deliveredCount(b: Pick<Batch, "progress" | "trip">): number {
-  return b.progress?.delivered ?? b.trip?.stops_done ?? 0;
+  return b.trip?.stops_done ?? ((b.progress?.delivered ?? 0) + (b.progress?.partial ?? 0) + (b.progress?.failed ?? 0));
 }
 
 function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: Batch; scope: DriverScope; me: DriverMe | undefined; index: number; total: number; active: boolean; waitFor: number | null }) {
@@ -129,7 +130,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
       {finished && (
         <div data-testid="driver-card-delivered" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 16, fontWeight: 700, color: C.green }}>
           <Icon name="check" size={20} color={C.green} width={2.4} />
-          {t.deliveredOf(deliveredCount(batch), batch.so_count)}
+          {t.nOfMDone(deliveredCount(batch), batch.so_count)}
         </div>
       )}
       <Stats batch={batch} t={t} route={routeLine(batch, me?.warehouse)} />
@@ -149,7 +150,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
             e.stopPropagation();
             button?.run();
           }}
-          style={{ width: "100%", height: 56, marginTop: 16, borderRadius: 14, border: button.secondary ? `1.5px solid ${C.ink}` : 0, background: button.secondary ? "#FFFFFF" : C.ink, color: button.secondary ? C.ink : "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, fontFamily: "inherit", opacity: actions.busy ? 0.6 : 1, cursor: "pointer" }}
+          style={{ width: "100%", height: 56, marginTop: 16, borderRadius: 14, border: button.secondary ? `1.5px solid ${C.ink}` : 0, background: button.secondary ? C.card : C.ink, color: button.secondary ? C.ink : C.card, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, fontFamily: "inherit", opacity: actions.busy ? 0.6 : 1, cursor: "pointer" }}
         >
           {actions.busy ? t.gettingLocation : button.label}
         </button>
@@ -217,18 +218,20 @@ export default function DriverToday() {
   const batches = data?.batches ?? [];
   const stops = batches.reduce((n, b) => n + (b.so_count ?? 0), 0);
   const done = batches.reduce((n, b) => n + deliveredCount(b), 0);
+  const failed = batches.reduce((n, b) => n + (b.progress?.failed ?? 0), 0);
   const unread = alerts.data?.unread ?? 0;
   const firstOpen = batches.findIndex((b) => !isFinished(b));
 
   return (
     <DriverLayout scope={scope} tab="today" testId="driver-today">
+      {failed > 0 && <div style={{ color: C.so, padding: "12px 20px 0", fontWeight: 700 }}>{t.nNotDelivered(failed)}</div>}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "20px 20px 8px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <Avatar name={name} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, color: C.sub }}>{dayLabel(me.data?.today ?? data?.date ?? null, lang)}</div>
             <div data-testid="driver-greeting" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {t.hi(firstName(name))}
+              {t.greet(greetingPart(new Date().getHours()), firstName(name))}
             </div>
           </div>
         </div>
@@ -237,7 +240,7 @@ export default function DriverToday() {
             <span style={{ position: "relative", display: "inline-flex" }}>
               <RoundButton icon="bell" label={t.openAlerts(unread)} href={withDriverParams("/driver/alerts", { driver_id: scope.adminDriverId })} size={48} testId="driver-bell" />
               {unread > 0 && (
-                <span data-testid="driver-unread" aria-hidden="true" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, background: C.so, color: "#FFFFFF", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box", pointerEvents: "none" }}>
+                <span data-testid="driver-unread" aria-hidden="true" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, background: C.so, color: C.card, fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box", pointerEvents: "none" }}>
                   {unread > 9 ? "9+" : unread}
                 </span>
               )}

@@ -3,7 +3,9 @@
 import { classifyFailure } from "./tripErrors.ts";
 import type { ActionResponse } from "./tripTypes.ts";
 
-export type QueueKind = "acknowledge" | "acknowledge_all" | "start" | "check_in" | "check_out" | "end" | "handover";
+// "issue" = a Problem? report (POST /api/driver/issues). It is not a trip step: it never blocks, and is never blocked by,
+// the trip's own actions, and it does not change the trip state shown on the phone.
+export type QueueKind = "acknowledge" | "acknowledge_all" | "start" | "check_in" | "check_out" | "end" | "handover" | "issue";
 
 // Server codes that mean "dispatch removed this order / trip": retrying can never succeed, so a queued action
 // with one of these codes is dropped (not kept as needs_attention) and the crew is told why.
@@ -15,11 +17,16 @@ export function isRemovedByDispatch(code: string | null | undefined): boolean {
 export type QueueStatus = "pending" | "syncing" | "needs_attention" | "done";
 
 export interface QueueBlob {
-  // Where the uploaded photo_id goes: an answers key (checkout) or "item:<item_id>" (acknowledge).
+  // Where the uploaded photo_id goes: an answers key (checkout), "item:<item_id>" (acknowledge) or "photo_ids" (issue:
+  // the id is appended to body.photo_ids).
   field_key: string;
   upload_key: string;
   blob: Blob;
   filename: string;
+  // field_key sent to POST /api/driver/uploads when it differs from the target above (issue photos: "issue_photo").
+  server_field_key?: string;
+  // When the photo was taken (ISO); sent with the upload as captured_at.
+  captured_at?: string | null;
 }
 
 export interface QueueEntry {
@@ -87,6 +94,7 @@ export interface UploadRequest {
   so_id?: string | null;
   field_key: string;
   upload_key: string;
+  captured_at?: string | null;
 }
 
 export interface SyncApi {
@@ -106,6 +114,12 @@ export function applyUploads(body: Record<string, unknown>, blobs: QueueBlob[] |
   for (const b of blobs) {
     const photoId = uploaded[b.upload_key];
     if (photoId === undefined) continue;
+    if (b.field_key === "photo_ids") {
+      const list = Array.isArray(out.photo_ids) ? (out.photo_ids as unknown[]) : [];
+      if (!list.includes(photoId)) list.push(photoId);
+      out.photo_ids = list;
+      continue;
+    }
     const answers = out.answers;
     const itemMatch = /^item:(.+)$/.exec(b.field_key);
     if (answers && typeof answers === "object" && !Array.isArray(answers) && itemMatch && Object.values(answers).some(Array.isArray)) {
@@ -127,6 +141,11 @@ export function applyUploads(body: Record<string, unknown>, blobs: QueueBlob[] |
     }
   }
   return out;
+}
+
+// The upload request for one queued blob (server field key + capture time included).
+export function uploadRequestFor(b: QueueBlob, batchId: string, soId: string | null): UploadRequest {
+  return { blob: b.blob, filename: b.filename, batch_id: batchId, so_id: soId, field_key: b.server_field_key ?? b.field_key, upload_key: b.upload_key, ...(b.captured_at ? { captured_at: b.captured_at } : {}) };
 }
 
 export interface EnqueueInput {
@@ -235,7 +254,7 @@ export function createQueueEngine(deps: EngineDeps): QueueEngine {
     for (const b of current.blobs ?? []) {
       if (uploaded[b.upload_key] !== undefined) continue;
       try {
-        const res = await deps.api.upload({ blob: b.blob, filename: b.filename, batch_id: current.batch_id, so_id: current.so_id ?? null, field_key: b.field_key, upload_key: b.upload_key });
+        const res = await deps.api.upload(uploadRequestFor(b, current.batch_id, current.so_id ?? null));
         uploaded[b.upload_key] = res.photo_id;
         current = { ...current, uploaded: { ...uploaded } };
         await replace(current);
@@ -258,20 +277,21 @@ export function createQueueEngine(deps: EngineDeps): QueueEngine {
   async function runOnce(force: boolean): Promise<SyncSummary> {
     const summary: SyncSummary = { done: 0, needs_attention: 0, dropped: 0, stopped: null };
     const blocked = new Set<string>();
+    const lane = (e: QueueEntry) => `${e.kind === "issue" ? "issue:" : ""}${e.batch_id}`;
     const ordered = [...list].filter((e) => e.status === "pending").sort((a, b) => a.seq - b.seq);
     for (const entry of ordered) {
-      if (blocked.has(entry.batch_id)) continue;
+      if (blocked.has(lane(entry))) continue;
       const live = list.find((e) => e.id === entry.id);
       if (!live || live.status !== "pending") continue;
       if (!force && live.next_attempt_at && now() < live.next_attempt_at) {
-        blocked.add(live.batch_id);
+        blocked.add(lane(live));
         continue;
       }
       const result = await processEntry(live);
       if (result === "ok") summary.done += 1;
       else if (result === "attention") summary.needs_attention += 1;
       else if (result === "dropped") summary.dropped = (summary.dropped ?? 0) + 1;
-      else if (result === "blocked") blocked.add(live.batch_id);
+      else if (result === "blocked") blocked.add(lane(live));
       else {
         summary.stopped = result === "offline" ? "offline" : "unauthorized";
         return summary;
@@ -356,6 +376,6 @@ export function createQueueEngine(deps: EngineDeps): QueueEngine {
       await remove(id);
     },
     hasWork: () => list.some((e) => e.status === "pending" || e.status === "syncing"),
-    hasActiveForBatch: (batchId) => list.some((e) => e.batch_id === batchId && (e.status === "pending" || e.status === "syncing")),
+    hasActiveForBatch: (batchId) => list.some((e) => e.batch_id === batchId && e.kind !== "issue" && (e.status === "pending" || e.status === "syncing")),
   };
 }

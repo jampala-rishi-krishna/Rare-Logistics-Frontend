@@ -30,7 +30,7 @@ export default function DriverAlerts() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <RoundButton icon="back" label={t.backToToday} href={withDriverParams("/driver/today", { driver_id: scope.adminDriverId })} filled testId="driver-alerts-back" />
           {unread > 0 && !scope.isAdmin && (
-            <button type="button" data-testid="driver-alerts-read-all" onClick={() => markRead.mutate({ all: true })} style={{ minHeight: 44, padding: "0 14px", borderRadius: 22, border: `1px solid ${C.field}`, background: "#FFFFFF", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: C.ink, cursor: "pointer" }}>
+            <button type="button" data-testid="driver-alerts-read-all" onClick={() => markRead.mutate({ all: true })} style={{ minHeight: 44, padding: "0 14px", borderRadius: 22, border: `1px solid ${C.field}`, background: C.card, fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: C.ink, cursor: "pointer" }}>
               {t.markAllRead}
             </button>
           )}
@@ -62,7 +62,7 @@ export default function DriverAlerts() {
               }}
               style={{ display: "flex", width: "100%", gap: 12, alignItems: "flex-start", padding: 16, border: 0, borderRadius: 18, background: C.card, fontFamily: "inherit", color: C.ink, textAlign: "left", cursor: "pointer" }}
             >
-              <span aria-label={a.read ? undefined : "Unread"} style={{ width: 10, height: 10, borderRadius: 5, marginTop: 6, background: a.read ? C.muted : C.so, flexShrink: 0 }} />
+              <span aria-label={a.read ? undefined : t.unread} style={{ width: 10, height: 10, borderRadius: 5, marginTop: 6, background: a.read ? C.muted : C.so, flexShrink: 0 }} />
               <span style={{ minWidth: 0, flex: 1 }}>
                 <span style={{ display: "block", fontSize: 16, fontWeight: a.read ? 500 : 700, overflowWrap: "anywhere" }}>{a.title}</span>
                 {a.body && <span style={{ display: "block", fontSize: 14, color: C.sub, marginTop: 2, overflowWrap: "anywhere" }}>{a.body}</span>}

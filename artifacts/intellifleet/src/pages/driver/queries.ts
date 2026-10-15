@@ -1,15 +1,15 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import * as driverApi from "@/services/api/driver";
 import { formatClock } from "@/lib/driver";
 import { capturePosition } from "@/lib/geo";
-import { fetchWithCache, saveToCache, useRuntime } from "@/lib/offlineRuntime";
+import { fetchWithCache, saveToCache, useRuntime, photoUploader } from "@/lib/offlineRuntime";
 import { isRemovedByDispatch } from "@/lib/offlineQueue";
 import { buildActionBody } from "@/lib/tripActions";
 import type { ActionSpec, SubmitOutcome } from "@/lib/tripActions";
 import type { QueueBlob, QueueKind } from "@/lib/offlineQueue";
-import { getLang, DICTS } from "./i18n";
+import { getLang, DICTS, driverMessage } from "./i18n";
 import type { DriverScope } from "./shared";
 import { showToast } from "./shared";
 
@@ -17,8 +17,23 @@ import { showToast } from "./shared";
 // after every action. Every read goes through the offline cache so screens still render with no signal.
 export const LIVE_REFRESH_MS = 25_000;
 
+function useDriverResumeRefresh(enabled: boolean) {
+ const client = useQueryClient();
+ useEffect(() => {
+   if (!enabled) return;
+   const refresh = () => { if (document.visibilityState !== "hidden") {
+     void client.invalidateQueries({ queryKey: ["driver-today"] });
+     void client.invalidateQueries({ queryKey: ["driver-assignment"] });
+   }};
+   document.addEventListener("visibilitychange", refresh);
+   window.addEventListener("online", refresh);
+   window.addEventListener("focus", refresh);
+   return () => { document.removeEventListener("visibilitychange", refresh); window.removeEventListener("online", refresh); window.removeEventListener("focus", refresh); };
+ }, [client, enabled]);
+}
 export function useToday(scope: DriverScope) {
   const enabled = !scope.sessionLoading && !scope.missingDriverId;
+  useDriverResumeRefresh(enabled);
   return useQuery({
     queryKey: ["driver-today", scope.adminDriverId],
     queryFn: () => fetchWithCache("today", undefined, scope.adminDriverId, () => driverApi.getToday(scope.adminDriverId)),
@@ -32,6 +47,7 @@ export function useToday(scope: DriverScope) {
 
 export function useAssignmentQuery(scope: DriverScope, batchId: string | undefined, live = true) {
   const enabled = !scope.sessionLoading && !scope.missingDriverId && Boolean(batchId);
+  useDriverResumeRefresh(enabled && live);
   return useQuery({
     queryKey: ["driver-assignment", batchId, scope.adminDriverId],
     queryFn: () => fetchWithCache("batch", batchId, scope.adminDriverId, () => driverApi.getAssignment(batchId as string, scope.adminDriverId)),
@@ -96,7 +112,7 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
       try {
         const position = await capturePosition({ timeoutMs: 8000 });
         const body = buildActionBody(position, opts.extra ?? {});
-        const spec: ActionSpec = { batch_id: batchId, so_id: opts.so_id ?? null, kind: opts.kind, label: opts.label, path: opts.path, body, blobs: opts.blobs };
+        const spec: ActionSpec = { batch_id: batchId, so_id: opts.so_id ?? null, kind: opts.kind, label: opts.label, path: opts.path, body, blobs: opts.blobs, uploaded: photoUploader.uploadedFor((opts.blobs ?? []).map(b => b.upload_key)), queueNow: photoUploader.anySending((opts.blobs ?? []).map(b => b.upload_key)) };
         const outcome = await runtime.submitter.submit(spec);
         if (outcome.status === "done") {
           const batch = outcome.response.batch;
@@ -113,7 +129,7 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
         } else if (isRemovedByDispatch(outcome.info.code)) {
           showToast(outcome.info.code === "trip_removed" ? t.removedTrip : t.orderRemovedByDispatch, "error");
         } else {
-          showToast(outcome.info.message, "error");
+          showToast(driverMessage(outcome.info.message, t), "error");
         }
         return outcome;
       } finally {

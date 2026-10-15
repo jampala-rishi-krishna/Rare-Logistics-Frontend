@@ -100,7 +100,7 @@ export default function DriverProfile() {
       aria-pressed={lang === value}
       data-testid={`driver-lang-${value}`}
       onClick={() => setLang(value)}
-      style={{ height: 40, padding: "0 16px", borderRadius: 20, border: 0, background: lang === value ? C.ink : "transparent", color: lang === value ? "#FFFFFF" : C.ink, fontFamily: "inherit", fontWeight: lang === value ? 700 : 500, cursor: "pointer" }}
+      style={{ height: 40, padding: "0 16px", borderRadius: 20, border: 0, background: lang === value ? C.ink : "transparent", color: lang === value ? C.card : C.ink, fontFamily: "inherit", fontWeight: lang === value ? 700 : 500, cursor: "pointer" }}
     >
       {label}
     </button>
@@ -154,8 +154,8 @@ export default function DriverProfile() {
           {!scope.isAdmin && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "14px 20px 0" }}>
               {dispatchTel ? (
-                <a href={dispatchTel} data-testid="profile-call-dispatch" style={{ height: 56, borderRadius: 16, background: C.ink, color: "#FFFFFF", fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                  <Icon name="phone" size={20} color="#FFFFFF" />
+                <a href={dispatchTel} data-testid="profile-call-dispatch" style={{ height: 56, borderRadius: 16, background: C.ink, color: C.card, fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                  <Icon name="phone" size={20} color={C.onInk} />
                   {t.callDispatch}
                 </a>
               ) : (
@@ -163,10 +163,10 @@ export default function DriverProfile() {
                   {t.noDispatchNumber}
                 </div>
               )}
-              <button type="button" data-testid="driver-change-password" onClick={() => setPwOpen(true)} style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: "#FFFFFF", color: C.ink, fontFamily: "inherit", fontSize: 16, fontWeight: 500, cursor: "pointer" }}>
+              <button type="button" data-testid="driver-change-password" onClick={() => setPwOpen(true)} style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: C.card, color: C.ink, fontFamily: "inherit", fontSize: 16, fontWeight: 500, cursor: "pointer" }}>
                 {t.changePassword}
               </button>
-              <button type="button" data-testid="driver-logout" onClick={() => void logout()} style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: "#FFFFFF", color: C.so, fontFamily: "inherit", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
+              <button type="button" data-testid="driver-logout" onClick={() => void logout()} style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: C.card, color: C.so, fontFamily: "inherit", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
                 {t.logOut}
               </button>
             </div>

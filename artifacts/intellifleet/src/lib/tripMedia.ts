@@ -46,3 +46,14 @@ export async function canvasToPng(canvas: HTMLCanvasElement): Promise<{ blob: Bl
   const blob = await canvasToBlob(canvas, "image/png");
   return blob ? { blob, filename: "signature.png" } : null;
 }
+
+// Parts of a photo caption in Asia/Manila: day of month, month index (0-11) and "HH:MM". Null when unparseable.
+export function manilaParts(iso: string | null | undefined): { day: number; month: number; time: string } | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Manila", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const hour = String(Number(get("hour")) % 24).padStart(2, "0");
+  return { day: Number(get("day")), month: Number(get("month")) - 1, time: `${hour}:${get("minute")}` };
+}

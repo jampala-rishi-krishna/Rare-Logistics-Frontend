@@ -3,6 +3,8 @@
 import type { Page, Route } from "playwright";
 import * as d from "./fixtures/driverData.ts";
 import * as ov from "./fixtures/overviewData.ts";
+import { v2Hardcopies, v2Issues, v2Timeline, v2TripsResponse } from "./overviewMock.ts";
+import type { IssueRow } from "../src/services/api/overview.ts";
 
 export const API_ORIGIN = "http://mock-api.test";
 
@@ -42,6 +44,7 @@ function json(route: Route, body: unknown, status = 200) {
 
 export async function installMocks(page: Page, scenario: Scenario = {}): Promise<Recorder> {
   const recorder: Recorder = { apiDown: false, unexpected: [], calls: [] };
+  const overviewIssues = structuredClone(ov.issues.issues) as IssueRow[];
   const detail: Record<string, unknown> = { "b-1": d.detailPending, "b-2": d.detailReady, "b-3": d.detailOnTrip, ...(scenario.detail ?? {}) };
   if (scenario.session !== null) await page.addInitScript(() => localStorage.setItem("if-access-token", "test-token-not-real"));
 
@@ -81,14 +84,20 @@ export async function installMocks(page: Page, scenario: Scenario = {}): Promise
       if (sub === "board") return json(route, scenario.board ?? ov.board);
       if (sub === "live") return json(route, ov.live);
       if (sub === "map") return json(route, ov.map);
-      if (sub === "trips") return json(route, ov.trips);
-      if (sub === "hardcopies") return json(route, ov.hardcopies);
-      if (sub === "issues" && request.method() === "GET") return json(route, scenario.issues_ov ?? ov.issues);
-      if (/^issues\/\d+\/respond$/.test(sub)) return json(route, { ok: true, changed: true, issue: ov.issues.issues[0] });
+      if (sub === "trips") return json(route, v2TripsResponse(url.searchParams));
+      if (sub === "hardcopies") return json(route, v2Hardcopies(url.searchParams));
+      if (sub === "issues" && request.method() === "GET") return json(route, scenario.issues_ov ?? v2Issues(url.searchParams, overviewIssues));
+      if (/^issues\/\d+\/respond$/.test(sub)) {
+        const issue = overviewIssues.find((i) => i.id === Number(sub.split("/")[1]));
+        if (!issue) return json(route, { detail: "Not found" }, 404);
+        const sent = body as { status: string; response: string | null };
+        Object.assign(issue, sent, { status_label: sent.status, responded_at: new Date().toISOString(), responded_by: "Test Dispatcher" });
+        return json(route, { ok: true, changed: true, issue });
+      }
       if (sub === "templates") return json(route, ov.templatesResponse);
       if (/^templates\/[a-z_]+\/versions\/\d+$/.test(sub)) return json(route, { ...ov.templatesResponse.delivery_checkout.active, version: 1, name: "DRAFT \u2014 mirror of Zoho form", is_draft: true, active: false });
       if (/^templates\/[a-z_]+$/.test(sub) && request.method() === "POST") return json(route, { ...ov.templatesResponse.delivery_checkout.active, version: 3 }, 201);
-      if (/^trips\/[^/]+$/.test(sub)) return json(route, scenario.tripTimeline ?? ov.tripTimeline);
+      if (/^trips\/[^/]+$/.test(sub)) return json(route, scenario.tripTimeline ?? v2Timeline(decodeURIComponent(sub.split("/")[1]), overviewIssues));
       if (/^drivers\/\d+$/.test(sub)) return json(route, ov.driverDetail);
       if (sub === "export.csv") return route.fulfill({ status: 200, contentType: "text/csv; charset=utf-8", headers: { ...CORS, "content-disposition": 'attachment; filename="driver-overview-test.csv"', "access-control-expose-headers": "content-disposition" }, body: ov.csv });
     }

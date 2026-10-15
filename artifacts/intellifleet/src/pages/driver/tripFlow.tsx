@@ -9,7 +9,7 @@ import { newIdempotencyKey } from "@/lib/tripActions";
 import type { QueueBlob } from "@/lib/offlineQueue";
 import { changeKey, farDistanceFor, visibleChanges } from "@/lib/tripNav";
 import type { AutoHandover, DispatchChange, Template, TripInfo } from "@/lib/tripTypes";
-import { DICTS, getLang, useT } from "./i18n";
+import { DICTS, getLang, useT, driverMessage } from "./i18n";
 import type { Dict } from "./i18n";
 import { useCrewAction } from "./queries";
 import { showToast } from "./shared";
@@ -108,7 +108,7 @@ export function ChecklistSheet({ open, template, photoStorage, orderIds, busy, c
   const set = (key: string, v: FormValue) => setForm((f) => ({ ...f, values: { ...f.values, [key]: v } }));
   const submit = () => {
     const errs = validateAck(items, form.values);
-    setErrors(errs);
+    setErrors(Object.fromEntries(Object.entries(errs).map(([key, message]) => [key, driverMessage(message, t)])));
     if (Object.keys(errs).length > 0) return;
     const built = buildAckAnswers(form, items, newIdempotencyKey);
     const answers: Record<string, unknown> = {};

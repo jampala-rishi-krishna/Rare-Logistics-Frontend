@@ -65,6 +65,18 @@
   --sidebar-accent: 40 10% 94%;
   --sidebar-accent-foreground: 240 4% 7%;
   --sidebar-ring: 0 0% 7%;
+  /* Status tokens (added 2026-10-15 for Driver Overview + the driver app; Uber Base values, text-safe shades). Use via src/lib/themeTokens.ts. */
+  --status-success: 145 61% 30%;
+  --success-bg: 154 29% 93%;
+  --status-warning: 35 73% 30%;
+  --warning-bg: 39 100% 93%;
+  --info: 219 87% 44%;
+  --info-bg: 219 87% 95%;
+  --destructive-bg: 4 100% 95%;
+  --order-so: 0 100% 38%;
+  --order-wm: 262 83% 58%;
+  --order-po: 219 67% 37%;
+  --order-to: 123 46% 34%;
   --app-font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   --app-font-display: 'Space Grotesk', 'DM Sans', sans-serif;
   --app-font-hero: 'Manrope', 'DM Sans', ui-sans-serif, sans-serif;

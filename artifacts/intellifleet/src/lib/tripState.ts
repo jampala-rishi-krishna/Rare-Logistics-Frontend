@@ -7,7 +7,7 @@ import type { BatchDetail, DriverOrder, NextAction, TripChip, TripStatus } from 
 export interface QueuedAction {
   batch_id: string;
   so_id?: string | null;
-  kind: "acknowledge" | "acknowledge_all" | "start" | "check_in" | "check_out" | "end" | "handover";
+  kind: "acknowledge" | "acknowledge_all" | "start" | "check_in" | "check_out" | "end" | "handover" | "issue";
   status: "pending" | "syncing" | "needs_attention" | "done";
   body?: Record<string, unknown>;
   seq?: number;
@@ -92,7 +92,8 @@ export function chipLabelFor(chip: TripChip, stopsDone: number, total: number): 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 export function deriveBatchState(batch: BatchDetail, queue: QueuedAction[]): EffectiveBatch {
-  const mine = queue.filter((q) => q.batch_id === batch.batch_id);
+  // Problem reports (kind "issue") ride the same queue but never change the trip state.
+  const mine = queue.filter((q) => q.batch_id === batch.batch_id && q.kind !== "issue");
   const active = mine
     .filter((q) => q.status === "pending" || q.status === "syncing")
     .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));

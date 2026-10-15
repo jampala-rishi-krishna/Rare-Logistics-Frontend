@@ -14,7 +14,7 @@ const input: CSSProperties = {
   height: 56,
   borderRadius: 14,
   border: `1px solid ${C.field}`,
-  background: "#FFFFFF",
+  background: C.card,
   padding: "0 16px",
   fontSize: 18,
   fontFamily: "inherit",
@@ -42,7 +42,9 @@ export default function DriverLogin() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const [error, setError] = useState("");
+  const [errorKey, setErrorKey] = useState<keyof Dict | null>(null);
+  const setError = (value: string) => setErrorKey((Object.keys(t) as Array<keyof Dict>).find(k => t[k] === value) ?? null);
+  const error = errorKey ? String(t[errorKey]) : "";
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(() => Boolean(getStoredSessionId()));
 
@@ -108,7 +110,7 @@ export default function DriverLogin() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="truck" color="#FFFFFF" />
+            <Icon name="truck" color={C.onInk} />
           </div>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" }}>{t.appName}</div>
         </div>
@@ -130,7 +132,7 @@ export default function DriverLogin() {
               autoCorrect="off"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="09xx xxx xxxx"
+              placeholder={t.phonePlaceholder}
               style={input}
             />
           </label>
@@ -155,7 +157,7 @@ export default function DriverLogin() {
             </span>
           </label>
           {error && (
-            <p role="alert" data-testid="driver-login-error" style={{ margin: 0, padding: "12px 14px", borderRadius: 14, background: "#FDECEC", color: C.so, fontSize: 14, fontWeight: 700 }}>
+            <p role="alert" data-testid="driver-login-error" style={{ margin: 0, padding: "12px 14px", borderRadius: 14, background: C.negativeBg, color: C.so, fontSize: 14, fontWeight: 700 }}>
               {error}
             </p>
           )}
@@ -165,10 +167,10 @@ export default function DriverLogin() {
           type="submit"
           disabled={busy}
           data-testid="driver-login-submit"
-          style={{ height: 60, borderRadius: 16, background: C.ink, color: "#FFFFFF", border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
+          style={{ height: 60, borderRadius: 16, background: C.ink, color: C.card, border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
         >
           {busy ? t.signingIn : t.signIn}
-          {!busy && <Icon name="arrowRight" size={22} color="#FFFFFF" />}
+          {!busy && <Icon name="arrowRight" size={22} color={C.onInk} />}
         </button>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 18, fontSize: 14, color: C.sub }}>
           <Link href="/driver/forgot-password" data-testid="driver-forgot-link" style={{ color: C.sub, minHeight: 44, display: "flex", alignItems: "center" }}>
@@ -177,11 +179,11 @@ export default function DriverLogin() {
           <button
             type="button"
             data-testid="driver-lang-toggle"
-            aria-label={lang === "en" ? "Tagalog" : "English"}
+            aria-label={lang === "en" ? t.tagalog : t.english}
             onClick={() => setLang(lang === "en" ? "tl" : "en")}
-            style={{ height: 44, padding: "0 14px", borderRadius: 22, border: `1px solid ${C.field}`, background: "#FFFFFF", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: C.ink, flexShrink: 0, cursor: "pointer" }}
+            style={{ height: 44, padding: "0 14px", borderRadius: 22, border: `1px solid ${C.field}`, background: C.card, fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: C.ink, flexShrink: 0, cursor: "pointer" }}
           >
-            <span style={{ fontWeight: lang === "en" ? 700 : 400 }}>EN</span> · <span style={{ fontWeight: lang === "tl" ? 700 : 400 }}>TL</span>
+            <span style={{ fontWeight: lang === "en" ? 700 : 400 }}>{t.langCodeEn}</span> · <span style={{ fontWeight: lang === "tl" ? 700 : 400 }}>{t.langCodeTl}</span>
           </button>
         </div>
       </form>

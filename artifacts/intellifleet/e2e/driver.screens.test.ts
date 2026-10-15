@@ -8,7 +8,8 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { Browser, Page } from "playwright";
-import { coveredByFixedBottom, horizontalOverflow, invisibleText, launch, newContext, sheetProblems, smallTargets, startServer, stopServer, BASE } from "./harness.ts";
+import { shot, coveredByFixedBottom, horizontalOverflow, invisibleText, launch, newContext, sheetProblems, smallTargets, startServer, stopServer, BASE } from "./harness.ts";
+import { contrastViolations } from "./contrast.ts";
 import { installMocks } from "./mockApi.ts";
 import type { Scenario } from "./mockApi.ts";
 import { BATCH, ackAll, ended, installFlow, newFlow, onTrip } from "./flowMock.ts";
@@ -70,13 +71,14 @@ const SCREENS: Screen[] = [
   { name: "today-delivered", path: "/driver/today", ready: "[data-testid=driver-card-delivered]", flow: () => ended(newFlow()) },
 ];
 
-async function open(screen: Screen, width: number): Promise<{ page: Page; close: () => Promise<void> }> {
+async function open(screen: Screen, width: number, lang: "en" | "tl" = "en"): Promise<{ page: Page; close: () => Promise<void> }> {
   const context = await newContext(browser, width);
   const page = await context.newPage();
   const recorder = await installMocks(page, screen.scenario ?? {});
   await installFlow(page, screen.flow());
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
+  await page.addInitScript((lang) => localStorage.setItem("rgf.driver.lang", lang), lang);
   await page.goto(`${BASE}${screen.path}`);
   await page.waitForSelector(screen.ready, { timeout: 20_000 });
   await page.waitForTimeout(300);
@@ -97,8 +99,8 @@ describe("driver screens at 360 / 390 / 430: no sideways scroll, nothing under t
   for (const screen of SCREENS) {
     it(screen.name, async () => {
       const problems: string[] = [];
-      for (const width of WIDTHS) {
-        const { page, close } = await open(screen, width);
+      for (const lang of ["en", "tl"] as const) for (const width of WIDTHS) {
+        const { page, close } = await open(screen, width, lang);
         if (screen.sheet) {
           const [button, sheetId, inner] = screen.sheet;
           await page.click(button);
@@ -116,6 +118,12 @@ describe("driver screens at 360 / 390 / 430: no sideways scroll, nothing under t
         if (invisible.length) problems.push(`${width}px: text same colour as its background: ${invisible.join("; ")}`);
         const small = await smallTargets(page);
         if (small.length) notes.push(`${screen.name} @${width}: ${small.slice(0, 5).join("; ")}`);
+        const contrast = await contrastViolations(page, screen.sheet ? `[data-testid=${screen.sheet[1]}]` : "[data-testid^=driver-]");
+        if (contrast.length) problems.push(`${lang}/${width}px contrast: ${JSON.stringify(contrast)}`);
+        if (width === 360) {
+          if (screen.sheet) await page.locator(`[data-testid=${screen.sheet[1]}] > div > div:last-child`).evaluate(el => { el.scrollTop = 0; });
+          await shot(page, `driver-after/${lang}/${screen.name}`, !screen.sheet);
+        }
         await close();
       }
       results.push(`${screen.name}: ${problems.length ? "FAIL" : "ok"} at ${WIDTHS.join("/")}`);

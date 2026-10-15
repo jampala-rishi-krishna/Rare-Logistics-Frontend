@@ -5,7 +5,7 @@ import * as authApi from "@/services/api/auth";
 import * as driverApi from "@/services/api/driver";
 import { formatClock } from "@/lib/driver";
 import { fetchWithCache } from "@/lib/offlineRuntime";
-import { useT } from "./i18n";
+import { useT, DICTS, getLang } from "./i18n";
 import { C, FONT, PrimaryButton } from "./ui";
 
 export interface DriverScope {
@@ -47,7 +47,7 @@ export function useDriverMe(scope: DriverScope) {
 }
 
 export function errorText(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "Could not load data. Check your connection.";
+  return DICTS[getLang()].loadFailed;
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -121,7 +121,7 @@ export function ToastHost() {
   return (
     <div aria-live="polite" style={{ pointerEvents: "none", position: "fixed", left: 0, right: 0, bottom: "calc(150px + env(safe-area-inset-bottom))", zIndex: 50 /* below sheets (60): a toast never covers a sheet button */, display: "grid", gap: 8, padding: "0 20px", maxWidth: 560, margin: "0 auto", fontFamily: FONT }}>
       {toasts.map((x) => (
-        <div key={x.id} role="status" data-testid="driver-toast" style={{ pointerEvents: "auto", padding: "14px 16px", borderRadius: 14, background: bg(x.tone), color: "#FFFFFF", fontSize: 15, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.18)" }}>
+        <div key={x.id} role="status" data-testid="driver-toast" style={{ pointerEvents: "auto", padding: "14px 16px", borderRadius: 14, background: bg(x.tone), color: C.card, fontSize: 15, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.18)" }}>
           {x.text}
         </div>
       ))}

@@ -98,7 +98,7 @@ export function getIssues(): Promise<IssueList> {
 }
 
 export function postIssue(body: IssueInput): Promise<{ ok: boolean; replayed: boolean; issue: IssueItem }> {
-  return api.post("/api/driver/issues", body);
+  return api.post(paths.issues, body);
 }
 
 export function getAlerts(): Promise<AlertList> {
@@ -119,6 +119,8 @@ export const paths = {
   checkOut: (batchId: string, soId: string) => `${base(batchId)}/orders/${encodeURIComponent(soId)}/check-out`,
   end: (batchId: string) => `${base(batchId)}/end`,
   handover: (batchId: string) => `${base(batchId)}/handover`,
+  // Problem? reports also go through the offline queue (kind "issue"), keyed by the phone's idempotency_key.
+  issues: "/api/driver/issues",
 };
 
 // Generic POST of an already-built action body (idempotency_key / client_ts / gps included).
@@ -141,6 +143,8 @@ export interface UploadFields {
   so_id?: string | null;
   field_key: string;
   upload_key: string;
+  // When the photo was taken on the phone (ISO). Nothing else about the order / customer / crew is sent with a photo.
+  captured_at?: string | null;
 }
 
 export interface UploadResult {
@@ -156,13 +160,15 @@ export function uploadPhoto(fields: UploadFields): Promise<UploadResult> {
   if (fields.so_id) form.append("so_id", fields.so_id);
   form.append("field_key", fields.field_key);
   form.append("upload_key", fields.upload_key);
+  if (fields.captured_at) form.append("captured_at", fields.captured_at);
   return api.postForm<UploadResult>("/api/driver/uploads", form);
 }
 
 // Authenticated media URL for <img>: /api/media/{id} needs the bearer token, so images are
 // fetched through fetchMediaBlob instead of a bare src.
-export async function fetchMediaBlob(photoId: number | string): Promise<Blob> {
-  const { blob } = await api.download(`/api/media/${encodeURIComponent(String(photoId))}`);
+// size "thumb" for list thumbnails, "full" for the enlarged viewer.
+export async function fetchMediaBlob(photoId: number | string, size: "thumb" | "full" = "full"): Promise<Blob> {
+  const { blob } = await api.download(`/api/media/${encodeURIComponent(String(photoId))}`, { size });
   return blob;
 }
 

@@ -8,6 +8,9 @@ import { requiresInvoice } from "./orderType.ts";
 export interface FileValue {
   blob: Blob;
   filename: string;
+  // Set when the photo is taken: the same key is used for the early upload and the queued action (the server de-duplicates).
+  upload_key?: string;
+  captured_at?: string;
 }
 
 export type FormValue = string | number | boolean | null | undefined | FileValue;
@@ -204,7 +207,7 @@ export function buildCheckoutAnswers(items: TemplateItem[], values: FormValues, 
     if (FILE_TYPES.has(item.item_type)) {
       if (isFileValue(v)) {
         answers[item.key] = null; // replaced by the photo_id once uploaded
-        blobs.push({ field_key: item.key, upload_key: newUploadKey(), blob: v.blob, filename: v.filename });
+        blobs.push({ field_key: item.key, upload_key: v.upload_key ?? newUploadKey(), blob: v.blob, filename: v.filename, ...(v.captured_at ? { captured_at: v.captured_at } : {}) });
       }
       continue;
     }
@@ -264,7 +267,7 @@ export function buildAckAnswers(form: AckForm, items: TemplateItem[], newUploadK
     else if (item.item_type === "count") a.count = typeof v === "string" ? parseNumber(v) : null;
     else if (item.item_type === "note") a.text = typeof v === "string" && v.trim() ? v.trim() : null;
     else if (item.item_type === "photo" && isFileValue(v)) {
-      blobs.push({ field_key: `item:${item.id}`, upload_key: newUploadKey(), blob: v.blob, filename: v.filename });
+      blobs.push({ field_key: `item:${item.id}`, upload_key: v.upload_key ?? newUploadKey(), blob: v.blob, filename: v.filename, ...(v.captured_at ? { captured_at: v.captured_at } : {}) });
     }
     answers.push(a);
   }

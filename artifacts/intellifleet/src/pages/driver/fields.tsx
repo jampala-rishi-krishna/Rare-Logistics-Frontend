@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { newIdempotencyKey } from "@/lib/tripActions";
+import { photoUploader, usePhotoUpload } from "@/lib/offlineRuntime";
 import { downscaleImage, canvasToPng } from "@/lib/tripMedia";
 import { isFileValue } from "@/lib/tripForms";
 import type { FormValue } from "@/lib/tripForms";
 import type { TemplateItem } from "@/lib/tripTypes";
-import { useT } from "./i18n";
+import { photoCaption, useLang, useT } from "./i18n";
+import { PhotoViewer } from "./media";
 import { C, FieldError, Icon } from "./ui";
 
 export const fieldInput: CSSProperties = {
   height: 56,
   borderRadius: 14,
   border: `1px solid ${C.field}`,
-  background: "#FFFFFF",
+  background: C.card,
   padding: "0 16px",
   fontSize: 17,
   fontFamily: "inherit",
@@ -25,9 +28,13 @@ export function FieldLabel({ children }: { children: ReactNode }) {
 }
 
 // The design's photo block: big dashed "Add photo" tile; once taken, the thumbnail ("Photo 1 ✓") next to a "Retake" tile.
-export function PhotoTiles({ value, onChange, testId = "driver-photo" }: { value: FormValue; onChange: (v: FormValue) => void; testId?: string }) {
+export function PhotoTiles({ value, onChange, testId = "driver-photo", context }: { value: FormValue; onChange: (v: FormValue) => void; testId?: string; context?: { batch_id: string; so_id?: string | null; so_number?: string; field_key: string; kind?: string } }) {
   const t = useT();
+  const [lang] = useLang();
+  const upload = usePhotoUpload(isFileValue(value) ? value.upload_key : null);
+  const [pickError, setPickError] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [enlarged, setEnlarged] = useState(false);
   const [working, setWorking] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
@@ -44,7 +51,13 @@ export function PhotoTiles({ value, onChange, testId = "driver-photo" }: { value
     if (!file) return;
     setWorking(true);
     try {
-      onChange(await downscaleImage(file));
+      const captured_at = new Date().toISOString();
+      const next = { ...await downscaleImage(file), captured_at, upload_key: newIdempotencyKey() };
+      onChange(next);
+      setPickError(false);
+      if (context) void photoUploader.start({ ...context, ...next });
+    } catch {
+      setPickError(true);
     } finally {
       setWorking(false);
     }
@@ -56,7 +69,7 @@ export function PhotoTiles({ value, onChange, testId = "driver-photo" }: { value
       disabled={working}
       onClick={() => inputRef.current?.click()}
       data-testid={`${testId}-add`}
-      style={{ height: 108, borderRadius: 14, border: "1.5px dashed #9A9A92", background: C.soft, fontFamily: "inherit", fontSize: 15, fontWeight: 700, color: C.ink, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", width: "100%" }}
+      style={{ height: 108, borderRadius: 14, border: `1.5px dashed ${C.field}`, background: C.soft, fontFamily: "inherit", fontSize: 15, fontWeight: 700, color: C.ink, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", width: "100%" }}
     >
       <Icon name="camera" size={28} />
       {working ? "..." : has ? t.retakePhoto : t.addPhoto}
@@ -77,20 +90,24 @@ export function PhotoTiles({ value, onChange, testId = "driver-photo" }: { value
         }}
       />
       {has && (
-        <div
-          data-testid={`${testId}-taken`}
-          style={{ height: 108, borderRadius: 14, background: preview ? `#DCD9CF url(${preview}) center/cover no-repeat` : "#DCD9CF", display: "flex", alignItems: "flex-end", padding: 10, boxSizing: "border-box", fontSize: 13, fontWeight: 700, color: C.body }}
-        >
-          <span style={{ background: "rgba(255,255,255,.85)", borderRadius: 8, padding: "2px 6px" }}>{t.photoN(1)}</span>
-        </div>
+        <figure data-testid={`${testId}-taken`} style={{ margin: 0, minWidth: 0 }}>
+          {preview && <button type="button" onClick={() => setEnlarged(true)} aria-label={t.photoOpen} style={{ border: 0, padding: 0, width: "100%", background: C.card }}><img src={preview} alt={t.photoN(1)} style={{ width: "100%", height: 108, objectFit: "cover", borderRadius: 14, background: C.muted }} /></button>}
+          <figcaption style={{ paddingTop: 6, fontSize: 12, fontWeight: 700, color: C.body, overflowWrap: "anywhere" }}>
+            {context ? photoCaption({ so_number: context.so_number, captured_at: isFileValue(value) ? value.captured_at : null, kind: context.kind }, lang) : t.photoN(1)}
+            <br />{upload?.state === "sending" ? t.upSending : upload?.state === "sent" ? t.upSent : t.upSaved}
+          </figcaption>
+        </figure>
       )}
+      {enlarged && preview && <PhotoViewer src={preview} caption={context ? photoCaption({ so_number: context.so_number, captured_at: isFileValue(value) ? value.captured_at : null, kind: context.kind }, lang) : t.photoN(1)} onClose={() => setEnlarged(false)} />}
       {addTile}
+      {pickError && <FieldError>{t.photoRetry}</FieldError>}
     </div>
   );
 }
 
 // Touch / pointer signature pad -> PNG blob (updated at the end of every stroke). Only used if an admin adds one.
 export function SignaturePad({ value, onChange }: { value: FormValue; onChange: (v: FormValue) => void }) {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
@@ -115,7 +132,7 @@ export function SignaturePad({ value, onChange }: { value: FormValue; onChange: 
         width={640}
         height={240}
         data-testid="driver-signature-canvas"
-        style={{ height: 160, width: "100%", touchAction: "none", border: `1.5px dashed #9A9A92`, borderRadius: 14, background: "#FFFFFF" }}
+        style={{ height: 160, width: "100%", touchAction: "none", border: `1.5px dashed ${C.field}`, borderRadius: 14, background: C.card }}
         onPointerDown={(e) => {
           e.preventDefault();
           canvasRef.current?.setPointerCapture(e.pointerId);
@@ -129,7 +146,7 @@ export function SignaturePad({ value, onChange }: { value: FormValue; onChange: 
           const p = pos(e);
           ctx.lineWidth = 3;
           ctx.lineCap = "round";
-          ctx.strokeStyle = "#000";
+          ctx.strokeStyle = C.ink;
           ctx.beginPath();
           ctx.moveTo(last.current.x, last.current.y);
           ctx.lineTo(p.x, p.y);
@@ -146,9 +163,9 @@ export function SignaturePad({ value, onChange }: { value: FormValue; onChange: 
           c?.getContext("2d")?.clearRect(0, 0, c.width, c.height);
           onChange(null);
         }}
-        style={{ height: 44, borderRadius: 22, border: `1px solid ${C.field}`, background: "#FFFFFF", fontFamily: "inherit", fontWeight: 500, justifySelf: "end", padding: "0 16px" }}
+        style={{ height: 44, borderRadius: 22, border: `1px solid ${C.field}`, background: C.card, fontFamily: "inherit", fontWeight: 500, justifySelf: "end", padding: "0 16px" }}
       >
-        {isFileValue(value) ? "Clear ✓" : "Clear"}
+        {isFileValue(value) ? t.cleared : t.clear}
       </button>
     </div>
   );
@@ -168,10 +185,10 @@ export function TemplateField({ item, value, onChange, required, error, locked =
             aria-pressed={value === true}
             disabled={locked}
             onClick={() => onChange(!(value === true))}
-            style={{ minHeight: 56, borderRadius: 14, border: value === true ? `1.5px solid ${C.ink}` : `1px solid ${C.field}`, background: value === true ? C.soft : "#FFFFFF", display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", fontFamily: "inherit", fontSize: 16, fontWeight: 700, color: C.ink, textAlign: "left", cursor: "pointer" }}
+            style={{ minHeight: 56, borderRadius: 14, border: value === true ? `1.5px solid ${C.ink}` : `1px solid ${C.field}`, background: value === true ? C.soft : C.card, display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", fontFamily: "inherit", fontSize: 16, fontWeight: 700, color: C.ink, textAlign: "left", cursor: "pointer" }}
           >
-            <span style={{ width: 28, height: 28, borderRadius: 8, border: `2px solid ${C.ink}`, background: value === true ? C.ink : "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {value === true && <Icon name="check" size={18} color="#FFFFFF" width={2.4} />}
+            <span style={{ width: 28, height: 28, borderRadius: 8, border: `2px solid ${C.ink}`, background: value === true ? C.ink : C.card, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {value === true && <Icon name="check" size={18} color={C.onInk} width={2.4} />}
             </span>
             <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
               {item.label}
@@ -196,7 +213,7 @@ export function TemplateField({ item, value, onChange, required, error, locked =
               aria-pressed={text === o}
               disabled={locked}
               onClick={() => onChange(o)}
-              style={{ minHeight: 44, padding: "6px 16px", borderRadius: 22, border: text === o ? `1px solid ${C.ink}` : `1px solid ${C.field}`, background: text === o ? C.ink : "#FFFFFF", color: text === o ? "#FFFFFF" : C.ink, fontFamily: "inherit", fontSize: 14, fontWeight: text === o ? 700 : 500 }}
+              style={{ minHeight: 44, padding: "6px 16px", borderRadius: 22, border: text === o ? `1px solid ${C.ink}` : `1px solid ${C.field}`, background: text === o ? C.ink : C.card, color: text === o ? C.card : C.ink, fontFamily: "inherit", fontSize: 14, fontWeight: text === o ? 700 : 500 }}
             >
               {o}
             </button>

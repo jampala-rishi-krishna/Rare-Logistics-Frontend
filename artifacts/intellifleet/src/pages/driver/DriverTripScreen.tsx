@@ -20,8 +20,9 @@ import { deriveBatchState } from "@/lib/tripState";
 import type { EffectiveBatch, EffectiveOrder } from "@/lib/tripState";
 import type { AutoHandover, BatchDetail, DriverOrder, DriverToday, RouteInfo, Templates } from "@/lib/tripTypes";
 import type { Cached } from "@/lib/offlineCache";
+import { MediaPhoto } from "./media";
 import DriverLayout from "./DriverLayout";
-import { DICTS, useT } from "./i18n";
+import { DICTS, useT, driverMessage } from "./i18n";
 import type { Dict } from "./i18n";
 import { useAssignmentQuery, useRouteQuery, useTemplatesQuery } from "./queries";
 import { ErrorState, MissingDriverNotice, OfflineNote, errorText, showToast, useDriverMe, useDriverScope } from "./shared";
@@ -69,7 +70,7 @@ function ItemsLine({ order, t, extra }: { order: DriverOrder; t: Dict; extra?: s
       {order.total_kg > 0 && (
         <>
           {n > 0 ? " · " : ""}
-          <b>{formatQty(Math.round(order.total_kg * 10) / 10)}</b> kg
+          <b>{formatQty(Math.round(order.total_kg * 10) / 10)}</b> {t.kg}
         </>
       )}
       {order.total_packs !== null && order.total_packs !== undefined && (
@@ -127,6 +128,13 @@ function Header({ batch, state, t, backHref, backLabel, me, done }: { batch: Bat
           <div style={{ fontSize: 15, color: C.sub, marginTop: 2 }}>{t.tripSummary(batch.trip_number ?? 1, state.total, me?.warehouse ?? null)}</div>
         </>
       )}
+      <div data-testid="driver-step-rail" aria-label={t.stepsLabel} style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap", fontSize: 14 }}>
+        {[t.stepLoad, t.stepDeliver, t.stepReturn].map((label, index) => {
+          const step = batch.step?.step ?? (state.status === "closed" ? "closed" : state.status === "on_trip" ? 2 : ["returned", "handover_submitted"].includes(state.status) ? 3 : 1);
+          const active = step === "closed" || index + 1 <= step;
+          return <span key={index} aria-current={step === index + 1 ? "step" : undefined} style={{ fontWeight: active ? 700 : 400, color: active ? C.ink : C.sub }}>{step === "closed" || (typeof step === "number" && index + 1 < step) ? "\u2713" : index + 1} {label}</span>;
+        })}
+      </div>
       {!done && partners.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
           {partners.map((p) => (
@@ -226,12 +234,21 @@ function CurrentStopCard({ eff, t, here }: { eff: EffectiveOrder; t: Dict; here:
         </div>
       )}
       {eff.attention.map((a, i) => (
-        <div key={a.id ?? i} role="alert" style={{ marginTop: 12, padding: "10px 12px", borderRadius: 14, background: "#FDECEC", color: C.so, fontSize: 14, fontWeight: 700, overflowWrap: "anywhere" }}>
-          {a.error}
+        <div key={a.id ?? i} role="alert" style={{ marginTop: 12, padding: "10px 12px", borderRadius: 14, background: C.negativeBg, color: C.so, fontSize: 14, fontWeight: 700, overflowWrap: "anywhere" }}>
+          {driverMessage(a.error, t)}
         </div>
       ))}
     </div>
   );
+}
+
+function OrderProofs({ order }: { order: DriverOrder }) {
+ const t = useT();
+ const photos = order.workflow?.stop?.photos ?? [];
+ if (!photos.length) return null;
+ return <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 10 }}>
+  {photos.map(photo => <MediaPhoto key={photo.photo_id} photoId={photo.photo_id} alt={t.photos} meta={{ ...photo, so_number: photo.so_number ?? order.so_number }} />)}
+ </div>;
 }
 
 function StopRow({ eff, index, t }: { eff: EffectiveOrder; index: number; t: Dict }) {
@@ -246,9 +263,10 @@ function StopRow({ eff, index, t }: { eff: EffectiveOrder; index: number; t: Dic
           <TypeBadge type={o.order_type} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {o.so_number} · {stateLabel(t, s)}
-            {eff.stopStatus === "checked_out" && eff.outcome && !/^deliver/i.test(eff.outcome) ? ` (${eff.outcome})` : ""}
+            {eff.stopStatus === "checked_out" && eff.outcome && !/^deliver/i.test(eff.outcome) ? ` (${/^partial/i.test(eff.outcome) ? t.partial : t.failed})` : ""}
           </span>
         </div>
+        <OrderProofs order={o} />
       </div>
     </div>
   );
@@ -272,9 +290,10 @@ function StopList({ state, t, current }: { state: EffectiveBatch; t: Dict; curre
 
 function handoverStatusLabel(t: Dict, status: string | null | undefined, closed: boolean): { text: string; color: string } {
   const s = (status ?? "").toLowerCase();
-  if (closed || ["received", "validated", "ok", "checked", "accepted", "complete", "completed"].includes(s)) return { text: t.checked, color: C.green };
-  if (["missing", "not_received", "rejected", "disputed"].includes(s)) return { text: t.missing, color: C.amber };
-  return { text: t.notChecked, color: C.sub };
+  if (closed || ["received", "validated", "ok", "checked", "accepted", "complete", "completed"].includes(s)) return { text: t.offReceived, color: C.green };
+  if (s === "discrepancy") return { text: t.offWrong, color: C.so };
+  if (["missing", "not_received", "rejected", "disputed"].includes(s)) return { text: t.offMissing, color: C.amber };
+  return { text: t.offWaiting, color: C.sub };
 }
 
 function DoneTop({ batch, state, t }: { batch: BatchDetail; state: EffectiveBatch; t: Dict }) {
@@ -284,7 +303,7 @@ function DoneTop({ batch, state, t }: { batch: BatchDetail; state: EffectiveBatc
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18 }}>
         <div style={{ width: 56, height: 56, borderRadius: 28, background: closed ? C.green : C.ink, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Icon name="check" size={30} color="#FFFFFF" width={2.4} />
+          <Icon name="check" size={30} color={C.onInk} width={2.4} />
         </div>
         <div style={{ minWidth: 0 }}>
           <div data-testid="driver-trip-done-title" style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
@@ -298,7 +317,8 @@ function DoneTop({ batch, state, t }: { batch: BatchDetail; state: EffectiveBatc
 
 function DoneView({ batch, state, t, handover }: { batch: BatchDetail; state: EffectiveBatch; t: Dict; handover: AutoHandover | undefined }) {
   const closed = state.status === "closed";
-  const byId = new Map((handover?.items ?? []).map((it) => [String(it.so_id), it]));
+  const byId = new Map<string, { invoice_no: string | null; officer_status: string | null }>((handover?.items ?? []).map((it) => [String(it.so_id), { ...it, officer_status: it.status }]));
+  for (const item of batch.invoice_handover_items ?? []) byId.set(String(item.so_id), { invoice_no: item.invoice_no, officer_status: item.officer_status });
   return (
     <>
       {closed ? (
@@ -306,7 +326,7 @@ function DoneView({ batch, state, t, handover }: { batch: BatchDetail; state: Ef
           {t.tripClosedHint}
         </div>
       ) : (
-        <div data-testid="driver-give-invoices" style={{ margin: "18px 20px 0", padding: 16, borderRadius: 18, background: C.ink, color: "#FFFFFF" }}>
+        <div data-testid="driver-give-invoices" style={{ margin: "18px 20px 0", padding: 16, borderRadius: 18, background: C.ink, color: C.card }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{t.giveInvoices}</div>
           <div style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>{t.giveInvoicesHint}</div>
         </div>
@@ -318,12 +338,13 @@ function DoneView({ batch, state, t, handover }: { batch: BatchDetail; state: Ef
           const invoice = item?.invoice_no ?? o.workflow?.stop?.invoice_no ?? null;
           const title = isTo(o) ? o.so_number : invoice ? t.invoiceN(invoice) : t.noInvoiceNo;
           const sub = isTo(o) ? o.customer_name : `${o.so_number} · ${o.customer_name}`;
-          const st = handoverStatusLabel(t, item?.status, closed);
+          const st = handoverStatusLabel(t, item?.officer_status, closed);
           return (
             <div key={eff.so_id} style={{ background: C.card, borderRadius: 16, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, overflowWrap: "anywhere" }}>{title}</div>
                 <div style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>
+                <OrderProofs order={o} />
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: st.color, whiteSpace: "nowrap" }}>{st.text}</span>
             </div>
@@ -395,7 +416,7 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
       if (k === INVOICE_KEY) shown[k] = /digit/i.test(msg) ? t.digitsOnly : t.needInvoice;
       else if (photoItem && k === photoItem.key) shown[k] = t.needPhoto;
       else if (k === "reason") shown[k] = t.needReason;
-      else shown[k] = msg === "Required" ? t.required : msg;
+      else shown[k] = driverMessage(msg, t);
     }
     setErrors(shown);
     if (Object.keys(shown).length > 0) return;
@@ -420,8 +441,8 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
         return;
       }
       const mapped = mapServerErrors(out.info.errors, items);
-      setErrors(mapped.fields);
-      setGeneral([out.info.message, ...mapped.general].join(" "));
+      setErrors(Object.fromEntries(Object.entries(mapped.fields).map(([k, message]) => [k, driverMessage(message, t)])));
+      setGeneral(driverMessage([out.info.message, ...mapped.general].join(" "), t));
     }
   };
 
@@ -453,7 +474,7 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
         value={typeof values[INVOICE_KEY] === "string" ? (values[INVOICE_KEY] as string) : ""}
         readOnly={invoiceLocked}
         onChange={(e) => set(INVOICE_KEY, e.target.value.replace(/[^0-9]/g, ""))}
-        style={{ height: 58, borderRadius: 14, border: `1.5px solid ${errors[INVOICE_KEY] ? C.so : C.ink}`, background: invoiceLocked ? C.soft : "#FFFFFF", padding: "0 16px", fontSize: 22, fontWeight: 700, letterSpacing: "0.04em", fontFamily: "inherit", color: C.ink, width: "100%", boxSizing: "border-box" }}
+        style={{ height: 58, borderRadius: 14, border: `1.5px solid ${errors[INVOICE_KEY] ? C.so : C.ink}`, background: invoiceLocked ? C.soft : C.card, padding: "0 16px", fontSize: 22, fontWeight: 700, letterSpacing: "0.04em", fontFamily: "inherit", color: C.ink, width: "100%", boxSizing: "border-box" }}
       />
       <FieldError>{errors[INVOICE_KEY]}</FieldError>
     </label>
@@ -462,7 +483,7 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
   const photoBlock = photoItem ? (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <FieldLabel>{photoRequired ? t.photoOfDelivery : t.photoOptional}</FieldLabel>
-      <PhotoTiles value={values[photoItem.key]} onChange={(v) => set(photoItem.key, v)} />
+      <PhotoTiles value={values[photoItem.key]} onChange={(v) => set(photoItem.key, v)} context={{ batch_id: batch.batch_id, so_id: eff.so_id, so_number: o.so_number, field_key: photoItem.key, kind: mode }} />
       <FieldError>{errors[photoItem.key]}</FieldError>
     </div>
   ) : !photoOn ? (
@@ -525,12 +546,11 @@ const ISSUE_CHOICES: Array<{ cat: string; icon: typeof Clock; priority: "normal"
   { cat: "Missing goods", icon: PackageX, priority: "normal" },
   { cat: "Delivery delay", icon: Clock, priority: "normal" },
   { cat: "Vehicle breakdown", icon: Truck, priority: "high" },
-  { cat: "Traffic or route issue", icon: TrafficCone, priority: "normal" },
   { cat: "Refrigeration or cargo handling", icon: Snowflake, priority: "high" },
   { cat: "Other", icon: CircleHelp, priority: "normal" },
 ];
 
-function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn }: { open: boolean; onClose: () => void; batch: BatchDetail; orders: EffectiveOrder[]; defaultSoId: string | null; photoOn: boolean }) {
+function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn, scope }: { open: boolean; onClose: () => void; batch: BatchDetail; orders: EffectiveOrder[]; defaultSoId: string | null; photoOn: boolean; scope: DriverScope }) {
   const t = useT();
   const queryClient = useQueryClient();
   const [cat, setCat] = useState<string | null>(null);
@@ -539,6 +559,7 @@ function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn }: { 
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const actions = useTripActions(scope, batch.batch_id);
   const key = useRef(newIdempotencyKey());
   const photoKey = useRef(newIdempotencyKey());
   useEffect(() => {
@@ -556,15 +577,12 @@ function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn }: { 
     setBusy(true);
     setErr(null);
     try {
-      const photoIds: number[] = [];
-      if (photo && typeof photo === "object" && "blob" in photo) {
-        const up = await driverApi.uploadPhoto({ blob: photo.blob, filename: photo.filename, batch_id: batch.batch_id, so_id: soId, field_key: "issue_photo", upload_key: photoKey.current });
-        photoIds.push(up.photo_id);
-      }
       const choice = ISSUE_CHOICES.find((c) => c.cat === cat);
       const description = note.trim().length >= 5 ? note.trim() : `${cat}${note.trim() ? `: ${note.trim()}` : ""}`;
-      await driverApi.postIssue({ idempotency_key: key.current, category: cat, priority: choice?.priority ?? "normal", description, batch_id: batch.batch_id, so_id: soId, photo_ids: photoIds, client_ts: new Date().toISOString() });
-      showToast(t.sent);
+      const blobs = photo && typeof photo === "object" && "blob" in photo ? [{ ...photo, field_key: "photo_ids", server_field_key: "issue_photo", upload_key: photo.upload_key ?? photoKey.current }] : [];
+      const out = await actions.run({ kind: "issue", label: t.problemKind, path: driverApi.paths.issues, so_id: soId, blobs,
+        extra: { idempotency_key: key.current, category: cat, priority: choice?.priority ?? "normal", description, batch_id: batch.batch_id, so_id: soId, photo_ids: [] }, doneMessage: t.sent });
+      if (!out || (out.status !== "done" && out.status !== "queued")) return;
       key.current = newIdempotencyKey();
       photoKey.current = newIdempotencyKey();
       setCat(null);
@@ -582,7 +600,7 @@ function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn }: { 
 
   return (
     <Sheet open={open} onClose={onClose} busy={busy} testId="driver-problem-sheet">
-      <SheetTitle>{t.problemTitle}</SheetTitle>
+      <SheetTitle sub={t.problemHint}>{t.problemTitle}</SheetTitle>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
         {ISSUE_CHOICES.map(({ cat: c, icon: I }) => {
           const on = cat === c;
@@ -593,7 +611,7 @@ function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn }: { 
               aria-pressed={on}
               data-testid={`driver-problem-${c.split(" ")[0].toLowerCase()}`}
               onClick={() => setCat(c)}
-              style={{ minHeight: 84, borderRadius: 14, border: on ? `1.5px solid ${C.ink}` : `1px solid ${C.field}`, background: on ? C.ink : "#FFFFFF", color: on ? "#FFFFFF" : C.ink, fontFamily: "inherit", fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 4px", lineHeight: 1.2, cursor: "pointer" }}
+              style={{ minHeight: 84, borderRadius: 14, border: on ? `1.5px solid ${C.ink}` : `1px solid ${C.field}`, background: on ? C.ink : C.card, color: on ? C.card : C.ink, fontFamily: "inherit", fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 4px", lineHeight: 1.2, cursor: "pointer" }}
             >
               <I size={24} strokeWidth={2} aria-hidden="true" />
               {t.issueCats[c] ?? c}
@@ -619,7 +637,7 @@ function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn }: { 
       {photoOn ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <FieldLabel>{t.photoOptional}</FieldLabel>
-          <PhotoTiles value={photo} onChange={setPhoto} testId="driver-problem-photo" />
+          <PhotoTiles value={photo} onChange={setPhoto} testId="driver-problem-photo" context={{ batch_id: batch.batch_id, so_id: soId, so_number: orders.find(o => o.so_id === soId)?.order.so_number, field_key: "issue_photo", kind: "problem" }} />
         </div>
       ) : (
         <div style={{ fontSize: 13, color: C.sub, fontWeight: 500 }}>{t.photoNotAvailable}</div>
@@ -808,7 +826,7 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
               }}
             />
           )}
-          <ProblemSheet open={sheet === "problem"} onClose={() => setSheet(null)} batch={batch} orders={state.orders} defaultSoId={current?.so_id ?? (state.orders.length === 1 ? state.orders[0].so_id : null)} photoOn={photoOn} />
+          <ProblemSheet scope={scope} open={sheet === "problem"} onClose={() => setSheet(null)} batch={batch} orders={state.orders} defaultSoId={current?.so_id ?? (state.orders.length === 1 ? state.orders[0].so_id : null)} photoOn={photoOn} />
         </>
       )}
     </>

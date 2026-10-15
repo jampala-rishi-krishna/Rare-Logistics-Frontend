@@ -5,7 +5,7 @@ import { formatClock } from "@/lib/driver";
 import { subscribeDropped, subscribeResults, useOfflineQueue } from "@/lib/offlineRuntime";
 import type { QueueEntry } from "@/lib/offlineQueue";
 import { syncBadge } from "@/lib/syncStatus";
-import { DICTS, getLang, useT } from "./i18n";
+import { DICTS, getLang, useT, driverMessage } from "./i18n";
 import { useToday } from "./queries";
 import { ordersToAcknowledge } from "@/lib/tripNav";
 import { ToastHost, showToast } from "./shared";
@@ -13,18 +13,8 @@ import type { DriverScope } from "./shared";
 import { BottomNav, C, Icon, OutlineButton, Page, PrimaryButton, Sheet, SheetTitle, TextButton } from "./ui";
 import type { Tab } from "./ui";
 
-const KIND_LABEL: Record<string, string> = {
-  acknowledge: "Acknowledge",
-  acknowledge_all: "Acknowledge all",
-  start: "Start trip",
-  check_in: "Reached",
-  check_out: "Delivered",
-  end: "End trip",
-  handover: "Hand over invoices",
-};
-
 function entryLabel(e: QueueEntry): string {
-  return e.label || KIND_LABEL[e.kind] || e.kind;
+  return DICTS[getLang()].queueKinds[e.kind] ?? e.kind;
 }
 
 function SyncSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -44,7 +34,7 @@ function SyncSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
               <div style={{ fontSize: 13, color: e.status === "needs_attention" ? C.so : C.sub, fontWeight: 500 }}>
                 {e.status === "needs_attention" ? t.notSent : e.status === "syncing" ? t.syncing : t.waitingToSend}
               </div>
-              {e.error && <div style={{ fontSize: 13, color: C.so, marginTop: 4, overflowWrap: "anywhere" }}>{e.error}</div>}
+              {e.error && <div style={{ fontSize: 13, color: C.so, marginTop: 4, overflowWrap: "anywhere" }}>{driverMessage(e.error, t)}</div>}
               {e.status === "needs_attention" && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
                   <OutlineButton height={48} fontSize={15} onClick={() => void retry(e.id)}>
@@ -95,7 +85,7 @@ function SyncRow({ onOpen, confirmedAt }: { onOpen: () => void; confirmedAt: num
       onClick={onOpen}
       data-testid={failed ? "driver-needs-attention" : "driver-pending-sync"}
       data-sync={badge.kind}
-      style={{ margin: "10px 20px 0", minHeight: 44, padding: "8px 14px", borderRadius: 14, border: 0, background: failed ? "#FDECEC" : ok ? C.greenBg : C.amberBg, color: failed ? C.so : ok ? C.green : C.amber, fontFamily: "inherit", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer" }}
+      style={{ margin: "10px 20px 0", minHeight: 44, padding: "8px 14px", borderRadius: 14, border: 0, background: failed ? C.negativeBg : ok ? C.greenBg : C.amberBg, color: failed ? C.so : ok ? C.green : C.amber, fontFamily: "inherit", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer" }}
     >
       <Icon name={ok ? "check" : "refresh"} size={18} color={failed ? C.so : ok ? C.green : C.amber} />
       {text}

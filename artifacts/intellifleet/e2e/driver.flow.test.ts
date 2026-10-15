@@ -1,5 +1,5 @@
 // The simplified driver app, tapped like a driver at 360 px against the stateful fake in e2e/flowMock.ts (2 SOs + 1 TO):
-// Sign in -> Today -> "Acknowledge orders (3)" -> Acknowledge tab "Acknowledge 3 orders" (ONE call) -> Today -> Start trip (+sheet) -> per stop Reached -> Delivered sheet (photo) -> End trip (+sheet)
+// Sign in -> Today -> "Acknowledge orders (3)" -> Acknowledge tab "I have all 3 orders" (ONE call) -> Today -> Start trip (+sheet) -> per stop Reached -> Delivered sheet (photo) -> End trip (+sheet)
 // -> "Give the signed invoice copies" / Waiting for officer -> Closed. Plus: dispatch removed an order (banner, 409 order_removed
 // online and from the offline queue), Not fully delivered / Problem sheets, Tagalog, History read-only, Profile, the Alerts page
 // (bell on Today), the delivered Today card and past dates on the Acknowledge tab.
@@ -115,7 +115,7 @@ describe("simplified driver flow at 360 px", () => {
     assert.equal(flow.log.length, 0, "opening the Acknowledge tab sends nothing");
     const groupButton = `[data-testid=driver-ack-trip-button-${BATCH}]`;
     await page.waitForSelector(groupButton);
-    assert.equal((await page.textContent(groupButton))?.trim(), "Acknowledge 3 orders");
+    assert.equal((await page.textContent(groupButton))?.trim(), "I have all 3 orders");
     for (const no of ["SO-TEST-1001", "SO-TEST-1002", "TO-TEST-0003"]) assert.equal(await page.getAttribute(`[data-testid=driver-ack-order-${no}]`, "data-acked"), "false");
     await snap(page, "18-acknowledge-tab");
     await tap(groupButton, "Acknowledge 3 orders (Acknowledge tab)");
@@ -189,7 +189,7 @@ describe("simplified driver flow at 360 px", () => {
 
     // Auto handover: no handover form, the list comes from the End trip response
     await page.waitForSelector("[data-testid=driver-give-invoices]");
-    assert.match((await page.textContent("[data-testid=driver-give-invoices]")) ?? "", /Give the signed invoice copies to the Logistics Officer/);
+    assert.match((await page.textContent("[data-testid=driver-give-invoices]")) ?? "", /Give the signed invoices to the Logistics Officer/);
     assert.equal((await page.textContent("[data-testid=driver-trip-chip]"))?.trim(), "Waiting for officer");
     const list = (await page.textContent("[data-testid=driver-invoice-list]")) ?? "";
     for (const v of ["000456", "000457", "TO-TEST-0003"]) assert.match(list, new RegExp(v), `invoice list shows ${v} (from the End trip handover)`);
@@ -251,14 +251,14 @@ describe("simplified driver flow at 360 px", () => {
     await s.done();
   });
 
-  it("Today: a delivered trip reads Delivered with 'N of N delivered', never Waiting for officer; Done counts delivered stops", async () => {
+  it("Today: a returned trip reads Back, invoices due and Done counts all completed stops", async () => {
     const flow = ended(newFlow());
     const s = await session(flow);
     const { page } = s;
     await page.goto(`${BASE}/driver/today`);
     await page.waitForSelector("[data-testid=driver-card-delivered]");
-    assert.equal((await page.textContent("[data-testid=driver-trip-chip]"))?.trim(), "Delivered");
-    assert.match((await page.textContent("[data-testid=driver-card-delivered]")) ?? "", /3 of 3 delivered/);
+    assert.equal((await page.textContent("[data-testid=driver-trip-chip]"))?.trim(), "Back, invoices due");
+    assert.match((await page.textContent("[data-testid=driver-card-delivered]")) ?? "", /3 of 3 done/);
     assert.doesNotMatch((await page.textContent(`[data-testid=driver-batch-${BATCH}]`)) ?? "", /Waiting for officer|acknowledg/i);
     assert.match((await page.textContent("[data-testid=kpi-done]")) ?? "", /^3/);
     await snap(page, "21-today-delivered");
@@ -432,4 +432,75 @@ describe("simplified driver flow at 360 px", () => {
     assert.equal(await s.page.locator("[data-testid=driver-back-today]").count(), 1);
     await s.done();
   });
+});
+
+describe("driver polish contracts", () => {
+ it("officer item states survive reload and refresh after officer changes", async () => {
+  const flow = ended(newFlow());
+  flow.handover = { id: 1, status: "pending", items: flow.orders.map((o,i) => ({ so_id: o.id, so_number: o.number, invoice_no: o.invoice, status: i === 0 ? "missing" : "received" })) };
+  const s = await session(flow); const page = s.page;
+  await page.goto(`${BASE}/driver/trip/${BATCH}`); await page.waitForSelector("[data-testid=driver-invoice-list]");
+  await page.waitForFunction(() => /Missing/.test(document.querySelector("[data-testid=driver-invoice-list]")?.textContent ?? ""));
+  assert.match(await page.textContent("[data-testid=driver-invoice-list]") ?? "", /Received/);
+  await shot(page,"driver-after/en/officer-missing-received");
+  await page.evaluate(()=>{localStorage.setItem("rgf.driver.lang","tl");});await page.reload();await page.waitForSelector("[data-testid=driver-invoice-list]");
+  await shot(page,"driver-after/tl/officer-missing-received");
+  await page.evaluate(()=>{localStorage.setItem("rgf.driver.lang","en");});await page.reload();await page.waitForSelector("[data-testid=driver-invoice-list]");
+  flow.handover.items[0].status = "discrepancy"; await bringToFront(page);
+  await page.waitForFunction(() => /Wrong/.test(document.querySelector("[data-testid=driver-invoice-list]")?.textContent ?? ""));
+  await page.reload(); await page.waitForSelector("[data-testid=driver-invoice-list]");
+  assert.match(await page.textContent("[data-testid=driver-invoice-list]") ?? "", /Wrong/);
+  await s.done();
+ });
+ it("login errors change language immediately with the login toggle", async () => {
+  const s = await session(newFlow(), { session: null }); const page=s.page;
+  await page.goto(`${BASE}/driver/login`); await page.click("[data-testid=driver-login-submit]");
+  assert.match(await page.textContent("[data-testid=driver-login-error]") ?? "", /Enter your phone/);
+  await page.click("[data-testid=driver-lang-toggle]");
+  assert.match(await page.textContent("[data-testid=driver-login-error]") ?? "", /Ilagay/);
+  await s.done();
+ });
+});
+
+describe("photo status and captions", () => {
+ for(const lang of ["en", "tl"]) it(`${lang}: offline photo says saved and then sent without another capture`, async () => {
+  const flow=onTrip(newFlow(),0,true); const s=await session(flow);const page=s.page;
+  await page.addInitScript((l)=>localStorage.setItem("rgf.driver.lang",l),lang);
+  await page.goto(`${BASE}/driver/trip/${BATCH}`);await page.waitForSelector("[data-testid=driver-delivered]");await page.click("[data-testid=driver-delivered]");
+  flow.apiDown=true;
+  await addPhoto(page, async (selector)=>{await page.click(selector);}, "capture");
+  await page.waitForFunction((lang)=>{const t=document.querySelector("[data-testid=driver-photo-taken]")?.textContent??"";return lang==="en"? /Saved, will send/.test(t): /Naka-save/.test(t);},lang);
+  assert.match(await page.textContent("[data-testid=driver-photo-taken]")??"", /SO-TEST-1001/);
+  await shot(page,`driver-after/${lang}/offline-photo`,false);
+  flow.apiDown=false;await page.evaluate(()=>window.dispatchEvent(new Event("online")));
+  await page.waitForFunction((lang)=>{const t=document.querySelector("[data-testid=driver-photo-taken]")?.textContent??"";return lang==="en"? /Sent/.test(t): /Naipadala/.test(t);},lang);
+  await shot(page,`driver-after/${lang}/photo-sent-caption`,false);assert.equal(flow.uploads,1);await s.done();
+ });
+});
+
+describe("driver refresh contracts", () => {
+ it("refreshes Today and assignment on focus and at25seconds, then pauses while hidden", async () => {
+  const s=await session(onTrip(newFlow(),0));const page=s.page;let reads=0;
+  page.on("request",r=>{if(/\/api\/driver\/(today|assignments\/b-f)/.test(r.url()))reads++;});
+  await page.clock.install();await page.goto(`${BASE}/driver/trip/${BATCH}`);await page.waitForSelector("[data-testid=driver-step-rail]");
+  await page.waitForTimeout(300);const baseline=reads;
+  await page.clock.fastForward(25_100);await page.waitForTimeout(300);assert.ok(reads>baseline,"25s polling refreshes live payload");
+  const afterPoll=reads;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await page.waitForTimeout(300);assert.ok(reads>afterPoll,"focus refreshes live payload");
+  await page.evaluate(()=>{Object.defineProperty(document,"visibilityState",{configurable:true,get:()=>"hidden"});document.dispatchEvent(new Event("visibilitychange"));});
+  await page.waitForTimeout(300);const hidden=reads;await page.clock.fastForward(50_100);await page.waitForTimeout(300);assert.equal(reads,hidden,"hidden tab stops polling");
+  await s.done();
+ });
+});
+
+describe("driver proof photos",()=>{
+ for(const lang of ["en","tl"]) it(`${lang}: history trip proof has caption and enlarges inside app`,async()=>{
+  const flow=ended(newFlow());const s=await session(flow);const page=s.page;
+  await page.addInitScript(l=>localStorage.setItem("rgf.driver.lang",l),lang);
+  await page.goto(`${BASE}/driver/trip/${BATCH}?from=history`);await page.waitForSelector("[data-testid=driver-proof-photo]");
+  const proof=page.locator("[data-testid=driver-proof-photo]").first();assert.match(await proof.textContent()??"",/SO-TEST-1001.*13.*09:20/);
+  await proof.locator("button").click();await page.waitForSelector("[data-testid=driver-photo-viewer]");
+  assert.match(await page.textContent("[data-testid=driver-photo-viewer]")??"",/SO-TEST-1001/);
+  await shot(page,`driver-after/${lang}/history-proof-viewer`,false);await page.keyboard.press("Escape");await page.waitForSelector("[data-testid=driver-photo-viewer]",{state:"detached"});
+  await s.done();
+ });
 });

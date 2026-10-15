@@ -55,7 +55,7 @@ function OrderCard({ eff, n, t }: { eff: EffectiveOrder; n: number; t: Dict }) {
           {o.total_kg > 0 && (
             <>
               {o.lines.length > 0 ? " · " : ""}
-              <b>{formatQty(Math.round(o.total_kg * 10) / 10)}</b> kg
+              <b>{formatQty(Math.round(o.total_kg * 10) / 10)}</b> {t.kg}
             </>
           )}
           {o.total_packs !== null && o.total_packs !== undefined && (
@@ -202,7 +202,7 @@ export default function DriverAcknowledge() {
           <Pill on={!isToday && date === yesterday} onClick={() => go(yesterday)} testId="driver-ack-date-yesterday">
             {t.dateYesterday}
           </Pill>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 6px 0 14px", borderRadius: 22, border: `1px solid ${!isToday && date !== yesterday ? C.ink : C.field}`, background: "#FFFFFF", fontSize: 14, fontWeight: 500, minWidth: 0 }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 6px 0 14px", borderRadius: 22, border: `1px solid ${!isToday && date !== yesterday ? C.ink : C.field}`, background: C.card, fontSize: 14, fontWeight: 500, minWidth: 0 }}>
             <Icon name="clock" size={18} />
             <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{t.pickDate}</span>
             <input

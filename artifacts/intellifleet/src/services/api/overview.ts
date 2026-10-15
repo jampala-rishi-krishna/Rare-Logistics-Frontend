@@ -1,88 +1,19 @@
 // Driver Overview client (docs/TRIP_WORKFLOW.md section 8). Prefix /api/driver-overview.
+// Overview v2 (one filter bar, tiles, trip list, trip drawer): GET /trips, /trips/{batch_id}, /hardcopies, /issues, /export.csv.
+// The legacy /summary, /board, /drivers/{id}, /map and /live endpoints still exist on the server but the page no longer calls them.
 import { api, getStoredSessionId, ApiError } from "./client";
 
 const BASE = "/api/driver-overview";
 
-export interface OverviewFilter {
+export type TileId = "loading" | "on_road" | "back" | "closed" | "attention";
+
+export interface TripsFilter {
   date?: string;
   from?: string;
   to?: string;
   warehouse?: string;
-  driver_id?: number | string;
-}
-
-export interface Summary {
-  from: string;
-  to: string;
-  generated_at: string;
-  kpis: {
-    drivers: { active: number; on_trip: number; returned: number; idle: number };
-    sos: { assigned: number; acknowledged: number; delivered: number; partial: number; failed: number };
-    trips_pending_handover: number;
-    invoices_outstanding: number;
-    issues_open?: number;
-    batches?: number;
-    kg?: number;
-    kg_complete?: boolean;
-    kg_unknown_lines?: number;
-    packs?: number | null;
-  };
-}
-
-export type BoardState = "idle" | "to_acknowledge" | "ready" | "on_trip" | "returned" | "handover_pending" | "closed";
-
-export interface BoardRow {
-  staff_id: number | string;
-  name: string;
-  role: "driver" | "helper";
-  warehouse: string | null;
-  state: BoardState;
-  vehicle: string | null;
-  batch_id: string | null;
-  current_stop: string | null;
-  progress: { done: number; total: number } | null;
-  state_label?: string;
-  acknowledged?: number;
-  batch_count?: number;
-  kg?: number;
-  kg_complete?: boolean;
-  kg_unknown_lines?: number;
-  packs?: number | null;
-  so_numbers?: string[];
-  trips?: BoardTrip[];
-  last_action: { type: string; at: string; label: string } | null;
-  last_gps_at: string | null;
-  stale: boolean;
-}
-
-export interface BoardTrip {
-  batch_id: string;
-  trip_number: number;
-  trips_on_date: number;
-  vehicle: string | null;
-  state: BoardState;
-  state_label: string;
-  so_count: number;
-  kg: number;
-  kg_complete: boolean;
-  kg_unknown_lines: number;
-  packs: number | null;
-  acknowledged: number;
-  stops_done: number;
-  role: "driver" | "helper";
-}
-
-export interface Board {
-  stale_minutes: number;
-  rows: BoardRow[];
-}
-
-export interface TimelineAnswer {
-  label: string;
-  type?: string;
-  value?: unknown;
-  note?: string | null;
-  photo_url?: string | null;
+  q?: string;
+  tile?: TileId | "";
 }
 
 export interface Gps {
@@ -90,6 +21,135 @@ export interface Gps {
   lng?: number;
   accuracy_m?: number;
   [k: string]: unknown;
+}
+
+export interface Person {
+  user_id?: number;
+  name?: string | null;
+  role?: string | null;
+}
+
+// driver_step(batch) — the same 3-step vocabulary as the driver app's rail.
+export interface DriverStep {
+  step: 1 | 2 | 3 | "closed";
+  label_key: "waiting_crew" | "ready" | "on_road" | "invoices_due" | "closed" | string;
+  sub: {
+    acknowledged?: number;
+    total?: number;
+    done?: number;
+    current?: number | null;
+    current_so?: string | null;
+    here_since?: string | null;
+    received?: number;
+    total_invoices?: number;
+    missing?: number;
+    discrepancy?: number;
+    problems?: number;
+  };
+}
+
+export type AttentionCode =
+  | "no_activity"
+  | "not_delivered"
+  | "partial"
+  | "problem_open"
+  | "far_checkin"
+  | "no_gps"
+  | "invoice_missing"
+  | "invoice_discrepancy"
+  | "order_removed"
+  | "photo_missing";
+
+export interface AttentionFlag {
+  code: AttentionCode | string;
+  label: string;
+  stop_so_id?: string | null;
+  event_id?: string | number | null;
+}
+
+export interface CrewMember {
+  id: number | string | null;
+  name: string | null;
+  role: "driver" | "helper" | string;
+  phone?: string | null;
+}
+
+export interface TripRow {
+  batch_id: string;
+  date: string | null;
+  vehicle: string | null;
+  warehouse?: string | null;
+  trip_number: number;
+  trips_on_date: number;
+  step?: DriverStep | null;
+  tile?: Exclude<TileId, "attention"> | null;
+  crew?: CrewMember[];
+  so_count: number;
+  kg: number | null;
+  kg_complete?: boolean;
+  kg_unknown_lines: number;
+  packs: number | null;
+  acknowledged: number;
+  stops_done: number;
+  outcomes?: { delivered: number; partial: number; failed: number };
+  invoices?: { total: number; received: number; missing: number; discrepancy: number; with_driver: number; with_officer: number };
+  attention?: AttentionFlag[];
+  last_crew_activity_at?: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_minutes?: number | null;
+  so_numbers?: string[];
+  invoice_nos?: string[];
+  customers?: string[];
+  // keys the pre-v2 /trips rows already had (kept by the server)
+  driver_id?: number | null;
+  driver_name?: string | null;
+  helpers?: Array<string | null>;
+  state?: string;
+  state_label?: string;
+  delivered?: number;
+  partial?: number;
+  failed?: number;
+  trip_minutes?: number | null;
+  handover_status?: string | null;
+}
+
+export interface NotAssigned {
+  staff_id: number | string;
+  name: string;
+  warehouse: string | null;
+  phone: string | null;
+}
+
+export interface TripsResponse {
+  from: string;
+  to: string;
+  generated_at?: string;
+  stale_minutes?: number;
+  tile_counts?: Record<TileId, number>;
+  orders_line?: { orders: number; delivered: number; partial: number; failed: number; to_go: number };
+  total: number;
+  trips: TripRow[];
+  not_assigned?: NotAssigned[];
+}
+
+export interface TimelineAnswer {
+  key?: string;
+  label: string;
+  type?: string;
+  value?: unknown;
+  note?: string | null;
+  photo_url?: string | null;
+}
+
+export type PhotoKind = "delivered" | "partial" | "failed" | "problem" | "other" | string;
+
+export interface PhotoMeta {
+  photo_id: number | string;
+  so_number?: string | null;
+  captured_at?: string | null;
+  kind?: PhotoKind | null;
+  field_key?: string | null;
 }
 
 export interface TimelineOrder {
@@ -101,12 +161,15 @@ export interface TimelineOrder {
   destination_warehouse?: string | null;
   customer_name: string | null;
   address_text: string | null;
-  ack: { at: string | null; by: unknown; template_version: number | null; answers: TimelineAnswer[]; discrepancy_note: string | null } | null;
+  removed?: boolean;
+  flags?: string[];
+  photos?: PhotoMeta[];
+  ack: { at: string | null; received_at?: string | null; by: unknown; template_version: number | null; answers: TimelineAnswer[]; discrepancy_note: string | null; gps?: Gps | null } | null;
   stop: {
     sequence: number | null;
     status: string;
-    checkin: { at: string | null; by: unknown; gps: Gps | null; distance_m: number | null; far: boolean | null } | null;
-    checkout: { at: string | null; by: unknown; gps: Gps | null; outcome: string | null; reason: string | null; invoice_no?: string | null; answers: TimelineAnswer[]; template_version: number | null } | null;
+    checkin: { at: string | null; received_at?: string | null; by: unknown; gps: Gps | null; distance_m: number | null; far: boolean | null } | null;
+    checkout: { at: string | null; received_at?: string | null; by: unknown; gps: Gps | null; outcome: string | null; reason: string | null; invoice_no?: string | null; answers: TimelineAnswer[]; template_version: number | null; template_name?: string | null } | null;
     minutes_at_stop: number | null;
     address_gps?: { lat: number; lng: number } | null;
   } | null;
@@ -118,47 +181,76 @@ export interface TimelineOrder {
     officer_note: string | null;
     checked_at: string | null;
     checked_by: unknown;
+    resolved_at?: string | null;
   } | null;
 }
 
+export interface TimelineEvent {
+  type: string;
+  at: string | null;
+  received_at?: string | null;
+  by?: unknown;
+  so_number?: string | null;
+  gps?: Gps | null;
+  id?: string | number;
+  actor_name?: string | null;
+  previous_state?: string | null;
+  order_type?: string | null;
+  [k: string]: unknown;
+}
+
+export type InvoiceStatus = "with_driver" | "with_officer" | "received" | "missing" | "discrepancy" | "not_handed_over" | string;
+
+export interface TripInvoice {
+  so_id: string;
+  so_number: string;
+  invoice_no: string | null;
+  status: InvoiceStatus;
+  officer_name?: string | null;
+  checked_at?: string | null;
+  officer_note?: string | null;
+}
+
+export interface OtherDay {
+  batch_id: string;
+  date: string | null;
+  vehicle: string | null;
+  trip_number?: number | null;
+  step?: DriverStep | null;
+  tile?: string | null;
+}
+
 export interface Timeline {
-  batch: Record<string, unknown> & { batch_id?: string; vehicle?: string; delivery_date?: string };
+  batch: Record<string, unknown> & { batch_id?: string; vehicle?: string; delivery_date?: string; warehouse?: string | null; assigned_at?: string | null; so_count?: number };
   trip: {
     status?: string;
     chip_label?: string;
+    acknowledged?: number;
+    total?: number;
+    stops_done?: number;
     started_at?: string | null;
+    started_by?: unknown;
+    started_gps?: Gps | null;
     ended_at?: string | null;
+    ended_by?: unknown;
+    ended_gps?: Gps | null;
+    end_distance_m?: number | null;
+    closed_at?: string | null;
     duration_minutes?: number | null;
     handover_status?: string | null;
     [k: string]: unknown;
   };
-  crew: Array<{ id: number | string; name: string; role: string; phone?: string | null }>;
+  crew: CrewMember[];
   orders: TimelineOrder[];
-  events: Array<{ type: string; at: string | null; received_at?: string | null; by?: unknown; so_number?: string | null; gps?: Gps | null }>;
-}
-
-export interface DriverDetail {
-  person: Record<string, unknown> & { name?: string; staff_id?: number | string; role?: string };
-  batches: Array<Record<string, unknown> & { batch_id: string; vehicle?: string; delivery_date?: string; trip?: { status?: string; chip_label?: string; duration_minutes?: number | null } }>;
-  totals: Record<string, unknown>;
-}
-
-export interface MapPoint {
-  type: "start" | "stop" | "checkin" | "checkout" | "end";
-  lat: number;
-  lng: number;
-  at: string | null;
-  so_number: string | null;
-  customer_name: string | null;
-  batch_id: string | null;
-  driver_name: string | null;
-  accuracy_m: number | null;
-  outcome: string | null;
-}
-
-export interface MapData {
-  warehouses: Array<{ id: string | number; name: string; lat: number; lng: number }>;
-  points: MapPoint[];
+  handover?: { status?: string; submitted_at?: string | null; submitted_by?: unknown; officer?: unknown; officer_acknowledged_at?: string | null; note?: string | null } | null;
+  events: TimelineEvent[];
+  // v2 additions (CONTRACT.md)
+  step?: DriverStep | null;
+  tile?: string | null;
+  attention?: AttentionFlag[];
+  invoices?: TripInvoice[];
+  issues?: IssueRow[];
+  other_days?: OtherDay[];
 }
 
 export type TemplateKind = "acknowledge_checklist" | "delivery_checkout";
@@ -217,24 +309,18 @@ export interface TemplateSavePayload {
 
 const q = (o: Record<string, string | number | undefined>) => o;
 
-export function getSummary(f: OverviewFilter): Promise<Summary> {
-  return api.get<Summary>(`${BASE}/summary`, q({ ...f }));
+// Only the filter keys the server knows; date XOR from/to.
+function tripParams(f: TripsFilter): Record<string, string | undefined> {
+  const range = f.from && f.to ? { from: f.from, to: f.to } : { date: f.date };
+  return { ...range, warehouse: f.warehouse || undefined, q: f.q?.trim() || undefined, tile: f.tile || undefined };
 }
 
-export function getBoard(f: OverviewFilter & { status?: string; stale_minutes?: number }): Promise<Board> {
-  return api.get<Board>(`${BASE}/board`, q({ ...f }));
-}
-
-export function getDriver(staffId: number | string, range: { from?: string; to?: string }): Promise<DriverDetail> {
-  return api.get<DriverDetail>(`${BASE}/drivers/${encodeURIComponent(String(staffId))}`, q({ ...range }));
+export function getTrips(f: TripsFilter): Promise<TripsResponse> {
+  return api.get<TripsResponse>(`${BASE}/trips`, q(tripParams(f)));
 }
 
 export function getTrip(batchId: string): Promise<Timeline> {
   return api.get<Timeline>(`${BASE}/trips/${encodeURIComponent(batchId)}`);
-}
-
-export function getMap(f: OverviewFilter): Promise<MapData> {
-  return api.get<MapData>(`${BASE}/map`, q({ ...f }));
 }
 
 export function getTemplates(): Promise<TemplatesResponse> {
@@ -250,70 +336,29 @@ export function saveTemplate(kind: TemplateKind, payload: TemplateSavePayload): 
 }
 
 // Authenticated CSV download: fetch with the bearer header -> blob. The token never appears in a URL.
-export async function downloadExport(f: { from?: string; to?: string; warehouse?: string; driver_id?: number | string }): Promise<{ blob: Blob; filename: string }> {
-  const { blob, filename } = await api.download(`${BASE}/export.csv`, q({ ...f }));
-  return { blob, filename: filename && filename !== "sales-orders" ? filename : `driver-overview_${f.from ?? ""}_${f.to ?? ""}.csv` };
+// Exports exactly the page's filters: date or from/to, warehouse, search (q) and tile.
+export async function downloadExport(f: TripsFilter): Promise<{ blob: Blob; filename: string }> {
+  const params = tripParams(f);
+  const { blob, filename } = await api.download(`${BASE}/export.csv`, q(params));
+  const span = params.date ?? `${params.from ?? ""}_${params.to ?? ""}`;
+  return { blob, filename: filename && filename !== "sales-orders" ? filename : `driver-overview_${span}.csv` };
 }
 
-// Photo / signature media is behind a 302 to a short-lived presigned URL and needs the bearer
-// token, so <img src> cannot be used directly. Resolves to an object URL for the image.
-export async function fetchMediaObjectUrl(photoId: number | string): Promise<string> {
+// Photo media needs the bearer token, so <img src> cannot point at it directly: fetch -> object URL.
+// size=thumb for thumbnails, size=full for the viewer (CONTRACT: the server streams bytes, no redirect).
+export async function fetchMediaObjectUrl(photoId: number | string, size: "thumb" | "full" = "full"): Promise<string> {
   const base = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (!base) throw new Error("VITE_API_BASE_URL is not configured");
   const token = getStoredSessionId();
-  const res = await fetch(new URL(`/api/media/${encodeURIComponent(String(photoId))}`, base).toString(), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const url = new URL(`/api/media/${encodeURIComponent(String(photoId))}`, base);
+  url.searchParams.set("size", size);
+  const res = await fetch(url.toString(), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!res.ok) throw new ApiError(res.status, `Could not load photo (HTTP ${res.status})`);
   return URL.createObjectURL(await res.blob());
 }
 
-// ---- Phase 2 additions ----
-
-export interface LiveTruck {
-  plate: string;
-  drivers: string[];
-  batch_ids: string[];
-  states: string[];
-  fix: { lat: number; lng: number; heading: number; speed_kph: number; ignition_on: boolean | null; status: string | null; gps_time: string | null; last_updated: string | null } | null;
-}
-
-export function getLive(f: { date?: string; warehouse?: string }): Promise<{ date: string; generated_at: string; trucks: LiveTruck[] }> {
-  return api.get(`${BASE}/live`, q({ ...f }));
-}
-
-export interface TripRow {
-  batch_id: string;
-  date: string | null;
-  driver_id: number | null;
-  driver_name: string | null;
-  helpers: Array<string | null>;
-  vehicle: string | null;
-  trip_number: number;
-  trips_on_date: number;
-  state: BoardState;
-  state_label: string;
-  so_count: number;
-  kg: number;
-  kg_complete: boolean;
-  kg_unknown_lines: number;
-  packs: number | null;
-  acknowledged: number;
-  stops_done: number;
-  delivered: number;
-  partial: number;
-  failed: number;
-  started_at: string | null;
-  ended_at: string | null;
-  trip_minutes: number | null;
-  handover_status: string | null;
-}
-
-export function getTrips(f: OverviewFilter): Promise<{ from: string; to: string; total: number; trips: TripRow[] }> {
-  return api.get(`${BASE}/trips`, q({ ...f }));
-}
-
 export interface HardCopyRow {
+  so_id?: string | null;
   so_number: string | null;
   order_type?: "SO" | "WM" | "PO" | "TO" | null;
   customer_name: string | null;
@@ -324,11 +369,18 @@ export interface HardCopyRow {
   since: string | null;
   batch_id: string;
   delivery_date: string;
+  vehicle?: string | null;
   note: string | null;
 }
 
-export function getHardCopies(f: { warehouse?: string; driver_id?: string }): Promise<{ generated_at: string; total: number; counts: Record<string, number>; rows: HardCopyRow[] }> {
-  return api.get(`${BASE}/hardcopies`, q({ ...f }));
+export interface HardCopiesFilter {
+  warehouse?: string;
+  q?: string;
+  date?: string;
+}
+
+export function getHardCopies(f: HardCopiesFilter): Promise<{ generated_at: string; total: number; counts: Record<string, number>; rows: HardCopyRow[] }> {
+  return api.get(`${BASE}/hardcopies`, q({ warehouse: f.warehouse || undefined, q: f.q?.trim() || undefined, date: f.date || undefined }));
 }
 
 export interface IssueRow {
@@ -340,9 +392,11 @@ export interface IssueRow {
   status_label: string;
   description: string;
   batch_id: string | null;
+  so_id?: string | null;
   so_number: string | null;
   vehicle: string | null;
   photo_ids: number[];
+  photos?: PhotoMeta[];
   created_at: string | null;
   response: string | null;
   responded_at: string | null;
@@ -350,8 +404,15 @@ export interface IssueRow {
   reporter: { user_id: number; staff_id: number | null; name: string | null; role: string };
 }
 
-export function getIssues(status: string): Promise<{ issues: IssueRow[]; statuses: string[] }> {
-  return api.get(`${BASE}/issues`, q({ status }));
+export interface IssuesFilter {
+  status: string;
+  warehouse?: string;
+  q?: string;
+  date?: string;
+}
+
+export function getIssues(f: IssuesFilter): Promise<{ issues: IssueRow[]; statuses: string[] }> {
+  return api.get(`${BASE}/issues`, q({ status: f.status, warehouse: f.warehouse || undefined, q: f.q?.trim() || undefined, date: f.date || undefined }));
 }
 
 export function respondToIssue(id: number, body: { status: string; response: string | null }): Promise<{ ok: boolean; changed: boolean; issue: IssueRow }> {

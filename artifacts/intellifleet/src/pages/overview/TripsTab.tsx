@@ -1,114 +1,257 @@
-import { Fragment, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import * as overviewApi from "@/services/api/overview";
-import { formatDuration, isValidRange, manilaDate, stateTone } from "@/lib/overview";
-import { matchesSearch } from "@/lib/overviewView";
-import { formatKgPartial } from "@/lib/kgDisplay";
-import { Chip, Empty, ErrorNote, Skeleton, fmtDateTime, inputClass } from "./shared";
-import TripTimeline from "./TripTimeline";
-import type { TopFilter } from "./LiveTab";
-
-// Every trip (one row per assignment batch) in a date range, from the same shared read model as the app and Load Planning.
-export default function TripsTab({ filter }: { filter: TopFilter }) {
-  const [from, setFrom] = useState(manilaDate(new Date(), -6));
-  const [to, setTo] = useState(manilaDate());
-  const [open, setOpen] = useState<string | null>(null);
-  const ok = isValidRange(from, to);
-  const trips = useQuery({
-    queryKey: ["overview-trips", from, to, filter.warehouse],
-    queryFn: () => overviewApi.getTrips({ from, to, warehouse: filter.warehouse || undefined }),
-    enabled: ok,
-    refetchInterval: 15_000,
-    refetchIntervalInBackground: false,
-  });
-  const rows = (trips.data?.trips ?? []).filter((t) => (!filter.status || t.state === filter.status) && matchesSearch({ name: t.driver_name ?? "", vehicle: t.vehicle, so_numbers: [] }, filter.search));
-  const head = "whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[#77787b]";
-  const cell = "px-3 py-2 align-middle text-[13px]";
+﻿import type { UseQueryResult } from "@tanstack/react-query";
+import type { TripRow, TripsResponse } from "@/services/api/overview";
+import {
+  crewOf,
+  dayLabel,
+  durationText,
+  formatKg,
+  groupByDate,
+  isRange,
+  lastActivity,
+  manilaDateTime,
+  outcomesOf,
+  railOf,
+  sortTrips,
+  tileLabel,
+  tileOf,
+  type UrlState,
+} from "@/lib/overviewModel";
+import {
+  AttentionChip,
+  buttonClass,
+  CallLink,
+  ErrorLine,
+  focusRing,
+  Skeleton,
+  useNow,
+} from "./shared";
+export function Rail({ row }: { row: Parameters<typeof railOf>[0] }) {
+  const rail = railOf(row);
   return (
-    <section className="grid gap-3" data-testid="trips-tab">
-      <div className="flex flex-wrap items-end gap-3 rounded-[8px] border border-[#e4e3df] bg-white p-2.5">
-        <label className="grid gap-1 text-[11px] font-medium text-[#55565a]">
-          From
-          <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} !w-auto`} data-testid="trips-from" />
-        </label>
-        <label className="grid gap-1 text-[11px] font-medium text-[#55565a]">
-          To
-          <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={`${inputClass} !w-auto`} data-testid="trips-to" />
-        </label>
-        {trips.data && (
-          <span className="ml-auto pb-2 text-xs font-medium text-[#55565a]">
-            {rows.length} of {trips.data.total} trips
-          </span>
-        )}
+    <div
+      aria-label={`Trip progress: ${rail.word}`}
+      className="flex flex-wrap gap-x-3 gap-y-1 text-xs"
+    >
+      {rail.steps.map((s, i) => (
+        <span
+          key={s.key}
+          className={
+            s.state === "todo" ? "text-muted-foreground" : "text-foreground"
+          }
+        >
+          <strong>
+            {s.state === "done" ? "✓" : `${i + 1}.`} {s.label}
+          </strong>{" "}
+          {s.sub}
+        </span>
+      ))}
+      {rail.closed && <strong>✓ Closed</strong>}
+    </div>
+  );
+}
+export default function TripsTab({
+  state,
+  set,
+  query,
+  today,
+  filters,
+}: {
+  state: UrlState;
+  set: (p: Partial<UrlState>) => void;
+  query: UseQueryResult<TripsResponse, Error>;
+  today: string;
+  filters: string[];
+}) {
+  const now = useNow(15000);
+  const rows = sortTrips(query.data?.trips ?? []);
+  const open = (r: TripRow) =>
+    set({
+      trip: r.batch_id,
+      stop: state.q.trim()
+        ? (r.so_numbers?.find((n) =>
+            n.toLowerCase().includes(state.q.trim().toLowerCase()),
+          ) ?? "")
+        : "",
+    });
+  const outcome = (r: TripRow) => {
+    const o = outcomesOf(r);
+    return `✓ ${o.delivered} delivered · ◐ ${o.partial} partial · ✕ ${o.failed} not delivered`;
+  };
+  const groups = isRange(state) ? groupByDate(rows) : [{ date: "", rows }];
+  return (
+    <section className="grid min-w-0 gap-3" data-testid="trips-tab">
+      <div className="flex justify-end">
+        <button
+          className={buttonClass}
+          aria-pressed={state.view === "table"}
+          onClick={() =>
+            set({ view: state.view === "table" ? "list" : "table" })
+          }
+        >
+          Table view
+        </button>
       </div>
-      {!ok && <p className="text-sm font-semibold text-[#86000B]">The start date must be on or before the end date.</p>}
-      {trips.isLoading ? (
-        <Skeleton className="h-40" />
-      ) : trips.isError ? (
-        <ErrorNote error={trips.error} onRetry={() => void trips.refetch()} />
+      {query.isError && (
+        <ErrorLine error={query.error} onRetry={() => void query.refetch()} />
+      )}
+      {query.isLoading ? (
+        <Skeleton className="h-48" />
       ) : rows.length === 0 ? (
-        <Empty>No trips found for this date range.</Empty>
-      ) : (
-        <div className="overflow-x-auto rounded-[8px] border border-[#e4e3df] bg-white">
-          <table className="w-full min-w-[900px] border-collapse" data-testid="trips-table">
-            <thead>
-              <tr className="border-b border-[#e4e3df] bg-[#fafaf8]">
-                {["Date", "Driver", "Vehicle", "Status", "SOs", "Done", "Weight", "Packs", "Outcomes", "Trip length", "Started"].map((h) => (
-                  <th key={h} className={head}>
+        <div className="rounded-lg border border-border p-6 text-center">
+          <h2 className="font-semibold">No trips match these filters</h2>
+          <p className="my-2 text-sm text-muted-foreground">
+            {filters.join(" · ")}
+          </p>
+          <button
+            className={buttonClass}
+            onClick={() =>
+              set({ date: today, from: "", to: "", wh: "", q: "", tile: "" })
+            }
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : state.view === "table" ? (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full whitespace-nowrap text-left text-xs">
+            <thead className="bg-muted">
+              <tr>
+                {[
+                  "Date",
+                  "Driver",
+                  "Vehicle",
+                  "Status",
+                  "SOs",
+                  "Done",
+                  "Weight",
+                  "Packs",
+                  "Outcomes",
+                  "Trip length",
+                  "Started",
+                ].map((h) => (
+                  <th key={h} className="p-3">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((t) => {
-                const kg = formatKgPartial(t.kg, t.kg_unknown_lines, 1);
-                const isOpen = open === t.batch_id;
-                return (
-                  <Fragment key={t.batch_id}>
-                    <tr className="h-[52px] cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8]" onClick={() => setOpen(isOpen ? null : t.batch_id)} data-testid={`trip-row-${t.batch_id}`}>
-                      <td className={cell}>{t.date}</td>
-                      <td className={cell}>
-                        <div className="font-semibold">{t.driver_name ?? "—"}</div>
-                        {t.helpers.filter(Boolean).length > 0 && <div className="text-xs text-[#77787b]">Helper: {t.helpers.filter(Boolean).join(", ")}</div>}
-                      </td>
-                      <td className={`${cell} font-mono`}>
-                        {t.vehicle ?? "—"}
-                        {t.trips_on_date > 1 ? <div className="font-sans text-xs text-[#77787b]">Trip {t.trip_number} of {t.trips_on_date}</div> : null}
-                      </td>
-                      <td className={cell}>
-                        <Chip tone={stateTone(t.state)}>{t.state_label}</Chip>
-                      </td>
-                      <td className={cell}>{t.so_count}</td>
-                      <td className={cell}>
-                        {t.stops_done} / {t.so_count}
-                      </td>
-                      <td className={cell}>
-                        {kg.text}
-                        {kg.note && <div className="text-[10px] text-[#8a5a00]">{kg.note}</div>}
-                      </td>
-                      <td className={cell}>{t.packs === null ? "—" : t.packs}</td>
-                      <td className={cell}>
-                        <span className="text-[#1e7b44]">{t.delivered} delivered</span>
-                        {t.partial > 0 && <span className="ml-1 text-[#8a5a00]">{t.partial} partial</span>}
-                        {t.failed > 0 && <span className="ml-1 text-[#c4291f]">{t.failed} failed</span>}
-                      </td>
-                      <td className={cell}>{formatDuration(t.trip_minutes)}</td>
-                      <td className={cell}>{fmtDateTime(t.started_at)}</td>
-                    </tr>
-                    {isOpen && (
-                      <tr className="border-b border-[#e4e3df] bg-[#fafaf8]">
-                        <td colSpan={11} className="p-3">
-                          <TripTimeline batchId={t.batch_id} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
+              {rows.map((r) => (
+                <tr
+                  key={r.batch_id}
+                  tabIndex={0}
+                  onClick={() => open(r)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      open(r);
+                    }
+                  }}
+                  className={`cursor-pointer border-t border-border hover:bg-muted ${focusRing}`}
+                  data-testid="trip-row"
+                >
+                  {[
+                    r.date,
+                    crewOf(r)
+                      .map((c) => c.name)
+                      .join(" + "),
+                    `${r.vehicle} · Trip ${r.trip_number} of ${r.trips_on_date}`,
+                    tileLabel(tileOf(r)),
+                    r.so_count,
+                    r.stops_done,
+                    formatKg([r])?.text,
+                    r.packs ?? "—",
+                    outcome(r),
+                    durationText(r.duration_minutes ?? r.trip_minutes),
+                    manilaDateTime(r.started_at),
+                  ].map((v, i) => (
+                    <td key={i} className="p-3">
+                      {v}
+                    </td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+      ) : (
+        groups.map((g) => (
+          <div key={g.date} className="grid gap-2">
+            {g.date && <h2 className="font-semibold">{dayLabel(g.date)}</h2>}
+            {g.rows.map((r) => {
+              const a = lastActivity(r, now, query.data?.stale_minutes ?? 30);
+              const kg = formatKg([r]);
+              return (
+                <article
+                  key={r.batch_id}
+                  className="relative grid gap-2 rounded-lg border border-border bg-card p-4"
+                  data-testid="trip-row"
+                >
+                  <button
+                    onClick={() => open(r)}
+                    className={`absolute inset-0 z-0 rounded-lg ${focusRing}`}
+                    aria-label={`Open ${r.vehicle ?? "truck"}, Trip ${r.trip_number}`}
+                  />
+                  <div className="pointer-events-none relative flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <strong className="text-base">
+                      {r.vehicle ?? "No vehicle"}
+                    </strong>
+                    <span className="text-sm">
+                      Trip {r.trip_number}
+                      {r.trips_on_date > 1 ? ` of ${r.trips_on_date}` : ""}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {r.warehouse}
+                    </span>
+                    <div className="pointer-events-auto relative z-[1] flex flex-wrap gap-2 text-sm">
+                      {crewOf(r).map((c, i) => (
+                        <CallLink
+                          key={i}
+                          name={c.name}
+                          role={c.role}
+                          phone={c.phone}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pointer-events-none relative">
+                    <Rail row={r} />
+                  </div>
+                  <p className="pointer-events-none relative text-xs">
+                    {outcome(r)} · Invoices {r.invoices?.received ?? 0}/
+                    {r.invoices?.total ?? r.so_count} received
+                  </p>
+                  <p
+                    className={`pointer-events-none relative text-xs ${a.stale ? "font-semibold text-destructive" : "text-muted-foreground"}`}
+                  >
+                    {a.text} · {kg?.text} {kg?.note ? `(${kg.note})` : ""} ·{" "}
+                    {r.packs ?? "—"} packs
+                  </p>
+                  <div className="pointer-events-none relative flex flex-wrap gap-1">
+                    {r.attention?.map((f, i) => (
+                      <AttentionChip key={i} flag={f} />
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ))
+      )}
+      {!isRange(state) && state.date === today && (
+        <details className="rounded-lg border border-border p-3">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Not assigned today ({query.data?.not_assigned?.length ?? 0})
+          </summary>
+          <ul className="mt-3 grid gap-2 text-sm">
+            {query.data?.not_assigned?.map((p) => (
+              <li key={p.staff_id}>
+                <CallLink name={p.name} phone={p.phone} /> ·{" "}
+                {p.warehouse ?? "—"}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

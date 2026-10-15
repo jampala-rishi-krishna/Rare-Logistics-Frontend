@@ -117,7 +117,7 @@ export default function DriverHistory() {
                 disabled={trips.isFetchingNextPage}
                 onClick={() => void trips.fetchNextPage()}
                 data-testid="driver-trips-more"
-                style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: "#FFFFFF", fontFamily: "inherit", fontSize: 16, fontWeight: 500, color: C.ink, marginTop: 6 }}
+                style={{ height: 56, borderRadius: 16, border: `1px solid ${C.field}`, background: C.card, fontFamily: "inherit", fontSize: 16, fontWeight: 500, color: C.ink, marginTop: 6 }}
               >
                 {trips.isFetchingNextPage ? t.loading : t.loadMore}
               </button>

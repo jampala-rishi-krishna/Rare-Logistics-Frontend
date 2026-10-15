@@ -1,7 +1,7 @@
 // Pure navigation / derived-view helpers for the one-page driver trip screen: href builders, which step the
 // big button is on, the current stop, Google Maps directions, check-in distance notices and old-URL redirects.
 import { withDriverParams } from "./driver.ts";
-import type { AlertItem, Batch, BatchDetail, DispatchChange, DriverOrder, RouteStop } from "./tripTypes.ts";
+import type { AlertItem, Batch, BatchDetail, DispatchChange, DriverOrder, DriverStep, InvoiceHandoverItem, RouteStop } from "./tripTypes.ts";
 import type { EffectiveBatch, EffectiveOrder } from "./tripState.ts";
 
 const enc = encodeURIComponent;
@@ -99,16 +99,25 @@ export interface CheckinNotice {
   text: string;
 }
 
+// Words for checkinNotice (the driver app passes its i18n strings; English by default).
+export interface CheckinWords {
+  far: (meters: number | null) => string;
+  near: (meters: number) => string;
+}
+
+export const CHECKIN_WORDS_EN: CheckinWords = {
+  far: (m) => `You arrived ${m === null ? "far" : `${m} m`} from this address. Check that you are at the right stop.`,
+  near: (m) => `${m} m from the address at arrival`,
+};
+
 // Distance recorded at check-in. Far (> 500 m) is a warning only; it never blocks anything.
-export function checkinNotice(stop: { checkin_distance_m?: number | null; checkin_far?: boolean | null } | null | undefined): CheckinNotice | null {
+export function checkinNotice(stop: { checkin_distance_m?: number | null; checkin_far?: boolean | null } | null | undefined, words: CheckinWords = CHECKIN_WORDS_EN): CheckinNotice | null {
   if (!stop) return null;
   const d = stop.checkin_distance_m;
   const has = typeof d === "number" && Number.isFinite(d);
-  const meters = has ? `${Math.round(d)} m` : null;
-  if (stop.checkin_far) {
-    return { far: true, text: `You arrived ${meters ?? "far"} from this address. Check that you are at the right stop.` };
-  }
-  return has ? { far: false, text: `${meters} from the address at arrival` } : null;
+  const meters = has ? Math.round(d) : null;
+  if (stop.checkin_far) return { far: true, text: words.far(meters) };
+  return meters !== null ? { far: false, text: words.near(meters) } : null;
 }
 
 // Distance in metres of a far check-in (null when not far), read from the check-in response.
@@ -154,4 +163,42 @@ export function shiftYmd(ymd: string, days: number): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
   if (!m) return "";
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days)).toISOString().slice(0, 10);
+}
+
+// ---- 3-step rail (same words as Driver Overview: Load / Deliver / Return) ----
+export type RailStep = 1 | 2 | 3 | "closed";
+
+// The server's batch.step when it is there and nothing is waiting on this phone; otherwise the phone's own step
+// (so a queued Start / End moves the rail at once, and older servers without `step` still work).
+export function railStep(serverStep: DriverStep | null | undefined, local: TripStep, overlay: boolean): RailStep {
+  const s = serverStep?.step;
+  if (!overlay && (s === 1 || s === 2 || s === 3 || s === "closed")) return s;
+  if (local === "acknowledge" || local === "start") return 1;
+  if (local === "waiting") return 3;
+  if (local === "closed") return "closed";
+  return 2;
+}
+
+// ---- officer status per invoice after End trip (batch.invoice_handover_items) ----
+export type OfficerStatus = "received" | "missing" | "wrong" | "waiting";
+
+export function officerStatus(item: Pick<InvoiceHandoverItem, "officer_status"> | null | undefined, tripClosed: boolean): OfficerStatus {
+  const s = String(item?.officer_status ?? "").toLowerCase();
+  if (s === "received" || s === "validated" || s === "ok") return "received";
+  if (s === "missing" || s === "not_received") return "missing";
+  if (s === "discrepancy" || s === "wrong" || s === "rejected" || s === "disputed") return "wrong";
+  return tripClosed ? "received" : "waiting";
+}
+
+// ---- Today counts: stops done (checked out, like the trip screen) and not-delivered stops ----
+export function todayCounts(batches: Array<Pick<Batch, "so_count" | "progress" | "trip">> | null | undefined): { stops: number; done: number; notDelivered: number } {
+  let stops = 0;
+  let done = 0;
+  let notDelivered = 0;
+  for (const b of batches ?? []) {
+    stops += b.so_count ?? 0;
+    done += b.progress?.stops_done ?? b.trip?.stops_done ?? 0;
+    notDelivered += b.progress?.failed ?? 0;
+  }
+  return { stops, done, notDelivered };
 }

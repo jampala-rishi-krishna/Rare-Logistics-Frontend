@@ -1,5 +1,5 @@
 // Building and submitting crew actions: capture -> body -> online first -> queue on failure.
-import { applyUploads } from "./offlineQueue.ts";
+import { applyUploads, uploadRequestFor } from "./offlineQueue.ts";
 import type { QueueBlob, QueueEngine, QueueEntry, QueueKind, SyncApi } from "./offlineQueue.ts";
 import { classifyFailure } from "./tripErrors.ts";
 import type { ErrorInfo } from "./tripErrors.ts";
@@ -39,8 +39,13 @@ export interface ActionSpec {
   kind: QueueKind;
   label?: string | null;
   path: string;
-  body: ActionBody;
+  // Crew actions carry ActionBody (key, client_ts, gps); an issue report carries its own body with the same idempotency_key.
+  body: ActionBody | (Record<string, unknown> & { idempotency_key: string });
   blobs?: QueueBlob[];
+  // Photos already uploaded while the sheet was open (upload_key -> photo_id): never uploaded again.
+  uploaded?: Record<string, number>;
+  // A photo is still uploading: hand the action to the queue right away so the driver is never blocked.
+  queueNow?: boolean;
 }
 
 export type SubmitOutcome =
@@ -62,15 +67,17 @@ export function createSubmitter(deps: { engine: QueueEngine; api: SyncApi }): Su
   async function run(spec: ActionSpec): Promise<SubmitOutcome> {
     const { engine, api } = deps;
     const body = spec.body as Record<string, unknown>;
-    if (engine.hasActiveForBatch(spec.batch_id)) {
-      const entry = await engine.enqueue({ ...spec, body });
+    const { queueNow: _queueNow, ...rest } = spec;
+    const uploaded: Record<string, number> = { ...(spec.uploaded ?? {}) };
+    if (spec.queueNow || (spec.kind !== "issue" && engine.hasActiveForBatch(spec.batch_id))) {
+      const entry = await engine.enqueue({ ...rest, body, uploaded });
       void engine.sync();
       return { status: "queued", entry };
     }
-    const uploaded: Record<string, number> = {};
     try {
       for (const b of spec.blobs ?? []) {
-        const res = await api.upload({ blob: b.blob, filename: b.filename, batch_id: spec.batch_id, so_id: spec.so_id ?? null, field_key: b.field_key, upload_key: b.upload_key });
+        if (uploaded[b.upload_key] !== undefined) continue;
+        const res = await api.upload(uploadRequestFor(b, spec.batch_id, spec.so_id ?? null));
         uploaded[b.upload_key] = res.photo_id;
       }
       const response = await api.post(spec.path, applyUploads(body, spec.blobs, uploaded));
@@ -79,14 +86,14 @@ export function createSubmitter(deps: { engine: QueueEngine; api: SyncApi }): Su
       const { kind, info } = classifyFailure(err);
       if (kind === "unauthorized") return { status: "unauthorized", info };
       if (kind === "needs_attention") return { status: "rejected", info };
-      const entry = await engine.enqueue({ ...spec, body, uploaded, attempts: 1, error: info.message });
+      const entry = await engine.enqueue({ ...rest, body, uploaded, attempts: 1, error: info.message });
       return { status: "queued", entry };
     }
   }
 
   return {
     submit(spec) {
-      const key = spec.body.idempotency_key;
+      const key = String(spec.body.idempotency_key);
       const existing = inflight.get(key);
       if (existing) return existing;
       const p = run(spec).finally(() => {

@@ -1,322 +1,672 @@
-import { useState } from "react";
-import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
-import { normalizeOrderType } from "@/lib/orderType";
-import { useQuery } from "@tanstack/react-query";
-import { Check, MapPin } from "lucide-react";
-import * as overviewApi from "@/services/api/overview";
-import { personName } from "@/lib/officer";
-import { activityParts, activityText, displayValue, formatDuration, isPhotoValue, stateLabel } from "@/lib/overview";
-import { formatMeters, gpsReason, hasGps } from "@/lib/overviewView";
-import { Chip, ErrorNote, Skeleton, fmtDateTime, fmtTime } from "./shared";
-
-const OSM = (lat: number, lng: number) => `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`;
-
-function Gps({ gps }: { gps: (overviewApi.Gps & { lat?: number; lng?: number; accuracy_m?: number }) | null | undefined }) {
-  if (hasGps(gps)) {
+﻿import { useEffect, useRef } from "react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import type {
+  TimelineOrder,
+  TimelineAnswer,
+  Gps as GpsType,
+  TripRow,
+} from "@/services/api/overview";
+import {
+  crewOf,
+  durationText,
+  formatKg,
+  INVOICE_TONE,
+  invoiceWord,
+  manilaDateTime,
+  manilaTime,
+  outcomesOf,
+  personName,
+  sentence,
+  stopPhotos,
+  type UrlState,
+} from "@/lib/overviewModel";
+import { activityParts, activityText, displayValue } from "@/lib/overview";
+import { useTripDetail } from "./queries";
+import {
+  AttentionChip,
+  buttonClass,
+  CallLink,
+  Chip,
+  ErrorLine,
+  iconButtonClass,
+  OutcomeChip,
+  Skeleton,
+  Thumb,
+  useFocusTrap,
+  usePhotoViewer,
+} from "./shared";
+import { Rail } from "./TripsTab";
+import { IssueCard } from "./IssuesTab";
+function Gps({ value }: { value: GpsType | null | undefined }) {
+  if (typeof value?.lat === "number" && typeof value.lng === "number")
     return (
-      <a href={OSM(gps.lat, gps.lng)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-2">
-        <MapPin size={12} />
-        {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}
-        {typeof gps.accuracy_m === "number" ? ` (±${Math.round(gps.accuracy_m)} m)` : ""}
+      <a
+        href={`https://www.openstreetmap.org/?mlat=${value.lat}&mlon=${value.lng}#map=18/${value.lat}/${value.lng}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline underline-offset-2"
+      >
+        {value.lat.toFixed(5)}, {value.lng.toFixed(5)}
+        {typeof value.accuracy_m === "number"
+          ? ` (±${Math.round(value.accuracy_m)} m)`
+          : ""}
       </a>
     );
-  }
-  const reason = gpsReason(gps as { reason?: unknown } | null);
-  return <span className="text-[#8a5a00]">No GPS{reason ? `: ${reason}` : ""}</span>;
+  return (
+    <span className="text-[hsl(var(--status-warning))]">
+      No GPS{value?.reason ? `: ${String(value.reason)}` : ""}
+    </span>
+  );
 }
-
-// Proof-of-delivery / checklist photos: the thumbnail loads by itself, tap to enlarge. Images are fetched with the bearer token (never in a URL).
-function Photo({ id }: { id: number | string }) {
-  const [big, setBig] = useState(false);
-  const photo = useQuery({ queryKey: ["overview-photo", String(id)], queryFn: () => overviewApi.fetchMediaObjectUrl(id), staleTime: 8 * 60_000, retry: 1 });
-  if (photo.isError) return <span className="text-xs text-[#86000B]">Photo could not be loaded.</span>;
-  if (!photo.data) return <span className="inline-flex h-20 w-20 animate-pulse items-center justify-center bg-[#e4e3df] text-[10px] text-[#77787b]">Loading</span>;
+function Time({
+  at,
+  received,
+}: {
+  at: string | null | undefined;
+  received?: string | null;
+}) {
+  return (
+    <span>
+      {manilaDateTime(at)}
+      {received && received !== at
+        ? ` · Received ${manilaDateTime(received)}`
+        : ""}
+    </span>
+  );
+}
+function Answers({ answers }: { answers: TimelineAnswer[] }) {
+  return (
+    <dl className="grid gap-1">
+      {answers
+        .filter(
+          (a) => a.type !== "photo" && a.type !== "signature" && !a.photo_url,
+        )
+        .map((a, i) => (
+          <div key={i}>
+            <dt className="inline font-medium">{a.label}: </dt>
+            <dd className="inline break-words">
+              {displayValue(a.value)}
+              {a.note ? ` (${a.note})` : ""}
+            </dd>
+          </div>
+        ))}
+    </dl>
+  );
+}
+export default function TripDrawer({
+  state,
+  set,
+  rows,
+}: {
+  state: UrlState;
+  set: (p: Partial<UrlState>) => void;
+  rows: TripRow[];
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const viewer = usePhotoViewer();
+  useFocusTrap(ref, !viewer.isOpen);
+  const query = useTripDetail(state.trip);
+  const t = query.data;
+  const row = rows.find((r) => r.batch_id === state.trip);
+  const index = rows.findIndex((r) => r.batch_id === state.trip);
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !viewer.isOpen) set({ trip: "" });
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [set, viewer.isOpen]);
+  useEffect(() => {
+    if (!state.stop || !t) return;
+    const node = document.getElementById(
+      `stop-${t.orders.find((o) => o.so_id === state.stop || o.so_number === state.stop)?.so_id ?? state.stop}`,
+    ) as HTMLDetailsElement | null;
+    if (node) {
+      node.open = true;
+      node.scrollIntoView({ block: "start" });
+    }
+  }, [state.stop, t]);
+  const openStop = (so: string) => {
+    const node = document.getElementById(
+      `stop-${t?.orders.find((o) => o.so_id === so || o.so_number === so)?.so_id ?? so}`,
+    ) as HTMLDetailsElement | null;
+    if (node) {
+      node.open = true;
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+  const openEvent = (id?: string | number | null) => {
+    const log = document.getElementById(
+      "trip-activity",
+    ) as HTMLDetailsElement | null;
+    if (log) log.open = true;
+    (id ? document.getElementById(`event-${id}`) : log)?.scrollIntoView({
+      block: "center",
+    });
+  };
+  const allPhotos = t?.orders.flatMap(stopPhotos) ?? [];
+  const stop = (o: TimelineOrder, i: number) => {
+    const ack = o.ack;
+    const checkin = o.stop?.checkin;
+    const out = o.stop?.checkout;
+    const hand = o.handover;
+    const photos = stopPhotos(o);
+    return (
+      <section
+        key={o.so_id}
+        className="rounded-lg border border-border bg-card"
+      >
+        <details
+          id={`stop-${o.so_id}`}
+          open={state.stop === o.so_id || state.stop === o.so_number}
+          className="scroll-mt-4"
+          data-testid={`stop-${o.so_number}`}
+        >
+          <summary className="cursor-pointer list-none p-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <strong>{o.stop?.sequence ?? i + 1}.</strong>
+              <Chip>{o.order_type ?? "SO"}</Chip>
+              <strong className="font-mono text-xs">{o.so_number}</strong>
+              <OutcomeChip outcome={out?.outcome} />
+              {o.removed && <Chip tone="warn">Removed by dispatch</Chip>}
+            </div>
+            <p className="mt-1 text-sm font-semibold">
+              {o.customer_name ?? "Unknown customer"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {manilaTime(checkin?.at)} → {manilaTime(out?.at)} · Invoice/DR{" "}
+              {out?.invoice_no ?? hand?.invoice_no ?? o.order_reference ?? "—"}{" "}
+              · {invoiceWord(hand?.officer_status)}
+            </p>
+            <p className="mt-1 text-xs underline">
+              Show stop details
+              {photos.length ? ` · ${photos.length} proof photo(s)` : ""}
+            </p>
+          </summary>
+          {photos.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-t border-border p-3">
+              {photos.map((p) => (
+                <Thumb
+                  key={p.photo_id}
+                  photo={p}
+                  onOpen={() =>
+                    viewer.open(
+                      allPhotos,
+                      allPhotos.findIndex((a) => a.photo_id === p.photo_id),
+                    )
+                  }
+                />
+              ))}
+            </div>
+          )}
+          <div className="grid gap-4 border-t border-border p-3 text-xs">
+            <p className="break-words">
+              {o.address_text ?? "Address not available"}
+              {o.destination_warehouse
+                ? ` · Destination ${o.destination_warehouse}`
+                : ""}
+            </p>
+            <section>
+              <h4 className="font-bold">Loaded (acknowledged)</h4>
+              {ack ? (
+                <>
+                  <p>
+                    <Time at={ack.at} received={ack.received_at} /> · By{" "}
+                    {personName(ack.by) || "crew"}
+                  </p>
+                  <p>
+                    GPS: <Gps value={ack.gps} />
+                  </p>
+                  <p>Checklist version {ack.template_version ?? "—"}</p>
+                  <Answers answers={ack.answers} />
+                  {ack.discrepancy_note && (
+                    <p>Loading note: {ack.discrepancy_note}</p>
+                  )}
+                </>
+              ) : (
+                <p>Not loaded yet</p>
+              )}
+            </section>
+            {checkin && (
+              <section>
+                <h4 className="font-bold">Arrived</h4>
+                <p>
+                  <Time at={checkin.at} received={checkin.received_at} /> · By{" "}
+                  {personName(checkin.by) || "crew"}
+                </p>
+                <p>
+                  GPS: <Gps value={checkin.gps} />
+                </p>
+                <p>
+                  Distance from customer:{" "}
+                  {checkin.distance_m === null
+                    ? "Unknown"
+                    : `${Math.round(checkin.distance_m)} m`}
+                  {checkin.far ? " · Far from customer" : ""}
+                  {!o.stop?.address_gps && checkin.distance_m === null
+                    ? " · Address has no coordinates"
+                    : ""}
+                </p>
+              </section>
+            )}
+            {out && (
+              <section>
+                <h4 className="font-bold">Left</h4>
+                <p>
+                  <Time at={out.at} received={out.received_at} /> · By{" "}
+                  {personName(out.by) || "crew"}
+                </p>
+                <p>
+                  GPS: <Gps value={out.gps} />
+                </p>
+                <p>
+                  Outcome: {out.outcome} · Reason: {out.reason ?? "—"}
+                </p>
+                <p>
+                  Form: {out.template_name ?? "Delivery form"} · version{" "}
+                  {out.template_version ?? "—"}
+                </p>
+                <Answers answers={out.answers} />
+                <p>Time at site: {durationText(o.stop?.minutes_at_stop)}</p>
+              </section>
+            )}
+            {hand && (
+              <section>
+                <h4 className="font-bold">
+                  Invoice/DR {hand.invoice_no ?? out?.invoice_no ?? "—"}
+                </h4>
+                <p>
+                  {hand.handed_over ? "Handed to officer" : "Not handed over"} ·{" "}
+                  {invoiceWord(hand.officer_status)}
+                </p>
+                <p>Crew note: {hand.crew_note ?? "—"}</p>
+                <p>
+                  Checked by {personName(hand.checked_by) || "—"} ·{" "}
+                  {manilaDateTime(hand.checked_at)}
+                </p>
+                <p>Officer note: {hand.officer_note ?? "—"}</p>
+                {hand.resolved_at && (
+                  <p>Resolved {manilaDateTime(hand.resolved_at)}</p>
+                )}
+              </section>
+            )}
+            {t?.issues
+              ?.filter(
+                (issue) =>
+                  issue.so_id === o.so_id || issue.so_number === o.so_number,
+              )
+              .map((issue) => (
+                <IssueCard
+                  key={issue.id}
+                  issue={issue}
+                  onTrip={(trip, so) => set({ trip, stop: so ?? "" })}
+                />
+              ))}
+          </div>
+        </details>
+        {photos[0] && (
+          <div className="border-t border-border p-3">
+            <Thumb
+              photo={photos[0]}
+              small
+              onOpen={() =>
+                viewer.open(
+                  allPhotos,
+                  allPhotos.findIndex((p) => p.photo_id === photos[0].photo_id),
+                )
+              }
+            />
+          </div>
+        )}
+      </section>
+    );
+  };
   return (
     <>
-      <button type="button" onClick={() => setBig(true)} aria-label="Enlarge photo" data-testid="timeline-photo" className="block h-20 w-20 overflow-hidden border border-[#d8d7d2]">
-        <img src={photo.data} alt="Proof of delivery" className="h-full w-full object-cover" />
-      </button>
-      {big && (
-        <div role="dialog" aria-modal="true" aria-label="Photo" data-testid="photo-lightbox" onClick={() => setBig(false)} className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-4">
-          <img src={photo.data} alt="Proof of delivery, enlarged" className="max-h-full max-w-full object-contain" />
-          <button type="button" aria-label="Close photo" onClick={() => setBig(false)} className="absolute right-3 top-3 min-h-[44px] min-w-[44px] bg-white px-3 text-sm font-bold">
-            Close
-          </button>
-        </div>
-      )}
-    </>
-  );
-}
-
-function Row({ time, title, children }: { time: string | null | undefined; title: string; children?: React.ReactNode }) {
-  return (
-    <li className="relative border-l-2 border-[#d8d7d2] pb-3 pl-4 last:pb-0">
-      <span className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-black" aria-hidden="true" />
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <span className="text-sm font-semibold">{title}</span>
-        <span className="text-xs text-[#77787b]">{time ? fmtTime(time) : ""}</span>
-      </div>
-      {children && <div className="mt-0.5 grid gap-0.5 text-xs text-[#55565a]">{children}</div>}
-    </li>
-  );
-}
-
-function outcomeTone(outcome: string | null | undefined) {
-  const o = (outcome ?? "").toLowerCase();
-  return o.startsWith("delivered") ? "good" : o.startsWith("partial") ? "warn" : o.startsWith("failed") || o.startsWith("returned") ? "bad" : "neutral";
-}
-
-function OrderTimeline({ order }: { order: overviewApi.TimelineOrder }) {
-  const { ack, stop, handover } = order;
-  const out = stop?.checkout;
-  const arrivedFar = stop?.checkin?.far;
-  const addr = stop?.address_gps ?? null;
-  return (
-    <section className="border border-[#e4e3df] bg-white" data-testid={`timeline-so-${order.so_number}`}>
-      <header className="flex flex-wrap items-start justify-between gap-2 border-b border-[#efeeeb] px-3 py-2">
-        <div className="min-w-0">
-          <div className="font-mono text-xs text-[#77787b]">
-            {stop?.sequence ? `Stop ${stop.sequence} · ` : ""}
-            <OrderTypeBadge type={order.order_type} className="mr-1.5 align-middle" />
-            {order.so_number}
-            {out?.invoice_no ? ` · Invoice/DR ${out.invoice_no}` : ""}
+      <div
+        className="fixed inset-0 z-[999] bg-foreground/30"
+        onClick={() => set({ trip: "" })}
+        aria-hidden
+      />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Trip details"
+        className="fixed inset-y-0 right-0 z-[1000] flex w-full flex-col bg-background text-foreground shadow-xl sm:max-w-[560px]"
+        data-testid="trip-drawer"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
+          <h2 className="font-bold">Trip details</h2>
+          <div className="flex gap-1">
+            <button
+              className={iconButtonClass}
+              aria-label="Previous trip"
+              disabled={index <= 0}
+              onClick={() => set({ trip: rows[index - 1].batch_id, stop: "" })}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              className={iconButtonClass}
+              aria-label="Next trip"
+              disabled={index < 0 || index >= rows.length - 1}
+              onClick={() => set({ trip: rows[index + 1].batch_id, stop: "" })}
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              className={iconButtonClass}
+              data-autofocus
+              aria-label="Close trip"
+              onClick={() => set({ trip: "" })}
+            >
+              <X size={18} />
+            </button>
           </div>
-          <div className="break-words text-sm font-bold">{order.customer_name ?? "-"}</div>
-          {order.address_text && <div className="break-words text-xs text-[#55565a]">{order.address_text}</div>}
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
-          {out?.outcome && <Chip tone={outcomeTone(out.outcome)}>{out.outcome}</Chip>}
-          {typeof stop?.minutes_at_stop === "number" && <Chip>At site {formatDuration(stop.minutes_at_stop)}</Chip>}
-        </div>
-      </header>
-      <ul className="grid p-3">
-        {ack ? (
-          <Row time={ack.at} title="Acknowledged (checklist complete)">
-            <span>
-              By {personName(ack.by) || "crew"} &middot; checklist v{ack.template_version ?? "?"}
-            </span>
-            {ack.answers.map((a, i) => (
-              <span key={i} className="break-words">
-                {a.label}: <strong>{isPhotoValue(a.type, a.value) ? <Photo id={a.value as number | string} /> : displayValue(a.value)}</strong>
-                {a.note ? ` (${a.note})` : ""}
-              </span>
-            ))}
-            {ack.discrepancy_note && <span className="text-[#8a5a00]">Discrepancy: {ack.discrepancy_note}</span>}
-          </Row>
-        ) : (
-          <Row time={null} title="Not acknowledged yet" />
-        )}
-        {stop?.checkin && (
-          <Row time={stop.checkin.at} title="Arrived at site">
-            <span>By {personName(stop.checkin.by) || "crew"}</span>
-            <span>
-              GPS: <Gps gps={stop.checkin.gps} />
-            </span>
-            <span className={arrivedFar ? "font-semibold text-[#8a5a00]" : ""}>
-              Distance from the address: {formatMeters(stop.checkin.distance_m)}
-              {arrivedFar ? " (far from the address)" : ""}
-              {!addr && stop.checkin.distance_m === null ? " (the address has no coordinates)" : ""}
-            </span>
-          </Row>
-        )}
-        {out && (
-          <Row time={out.at} title="Departed from site">
-            <span>By {personName(out.by) || "crew"}</span>
-            <span>
-              GPS: <Gps gps={out.gps} />
-            </span>
-            <span>
-              Invoice/DR no.: <strong>{out.invoice_no ?? "—"}</strong> &middot; Outcome: <strong>{out.outcome ?? "—"}</strong>
-              {out.reason ? ` · Reason: ${out.reason}` : ""}
-            </span>
-            {out.answers
-              .filter((a) => !["invoice_dr_number", "outcome", "reason"].includes(String((a as { key?: string }).key ?? "")))
-              .map((a, i) => (
-                <span key={i} className="break-words">
-                  {a.label}: <strong>{a.photo_url || isPhotoValue(a.type, a.value) ? <Photo id={a.value as number | string} /> : displayValue(a.value)}</strong>
-                </span>
-              ))}
-            <span>Time at site: {formatDuration(stop?.minutes_at_stop ?? null)}</span>
-          </Row>
-        )}
-        {handover && (
-          <Row time={handover.checked_at} title={handover.officer_status && handover.officer_status !== "pending" ? `Officer: ${handover.officer_status}` : "Handover to the officer"}>
-            <span>
-              Carbon copy {handover.invoice_no ? `(Invoice/DR ${handover.invoice_no}) ` : ""}
-              {handover.handed_over ? "handed over" : "NOT handed over"}
-              {handover.crew_note ? `: ${handover.crew_note}` : ""}
-            </span>
-            {handover.officer_status && handover.officer_status !== "pending" && (
-              <span>
-                Validated by {personName(handover.checked_by) || "officer"}
-                {handover.officer_note ? `: ${handover.officer_note}` : ""}
-              </span>
-            )}
-          </Row>
-        )}
-      </ul>
-    </section>
-  );
-}
-
-export function useTrip(batchId: string) {
-  return useQuery({ queryKey: ["overview-trip", batchId], queryFn: () => overviewApi.getTrip(batchId), enabled: batchId !== "", refetchInterval: 15_000, refetchIntervalInBackground: false });
-}
-
-export function sortedOrders(orders: overviewApi.TimelineOrder[]) {
-  return [...orders].sort((a, b) => (a.stop?.sequence ?? 9999) - (b.stop?.sequence ?? 9999));
-}
-
-export function isDelivered(o: overviewApi.TimelineOrder) {
-  return (o.stop?.checkout?.outcome ?? "").toLowerCase().startsWith("delivered");
-}
-
-// "Trip stops" card: vertical timeline of completed / current / upcoming stops, from the trip detail (no extra request).
-export function StopsTimelineCard({ orders }: { orders: overviewApi.TimelineOrder[] }) {
-  const sorted = sortedOrders(orders);
-  const firstOpen = sorted.findIndex((o) => !o.stop?.checkout);
-  return (
-    <section className="min-w-0 rounded-[8px] border border-[#e4e3df] bg-white p-4" aria-label="Trip stops" data-testid="trip-stops">
-      <h3 className="mb-3 text-sm font-bold">Trip stops</h3>
-      {sorted.length === 0 ? (
-        <p className="py-4 text-center text-sm text-[#55565a]">No stops on this trip yet.</p>
-      ) : (
-        <ol className="grid">
-          {sorted.map((o, i) => {
-            const done = Boolean(o.stop?.checkout);
-            const current = !done && i === firstOpen;
-            const out = o.stop?.checkout;
-            const last = i === sorted.length - 1;
-            const time = out?.at ?? o.stop?.checkin?.at ?? null;
-            return (
-              <li key={o.so_id} className="relative flex items-start gap-3 pb-4 last:pb-0">
-                {!last && <span className="absolute left-[13px] top-7 h-[calc(100%-1.75rem)] w-px bg-[#d8d7d2]" aria-hidden="true" />}
-                <span className={`relative z-[1] grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${done ? "bg-[#1e7b44] text-white" : current ? "border-2 border-[#1d4ed8] bg-white text-[#1d4ed8] ring-4 ring-[#1d4ed8]/10" : "border border-[#c9c8c3] bg-white text-[#77787b]"}`}>
-                  {done ? <Check size={14} /> : (o.stop?.sequence ?? i + 1)}
-                </span>
-                <div className={`min-w-0 flex-1 ${!done && !current ? "opacity-75" : ""}`}>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="truncate text-[13px] font-semibold">{o.customer_name ?? "—"}</span>
-                    {current && <span className="inline-flex items-center rounded-full border border-[#1d4ed8] bg-[#eef3fc] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Current stop</span>}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[#77787b]">
-                    <span>{normalizeOrderType(o.order_type)}: {o.so_number}</span>
-                    <OrderTypeBadge type={o.order_type} className="align-middle" />
-                  </div>
-                </div>
-                <div className="shrink-0 text-right text-[11px] text-[#77787b]">
-                  {time && <div className="font-semibold text-black">{fmtTime(time)}</div>}
-                  {out?.outcome ? <span className={outcomeText(out.outcome)}>{out.outcome}</span> : current ? <span>{o.stop?.checkin ? "At stop" : "Next stop"}</span> : <span>Upcoming</span>}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </section>
-  );
-}
-
-function outcomeText(outcome: string | null | undefined) {
-  const t = outcomeTone(outcome);
-  return `font-medium ${t === "good" ? "text-[#1e7b44]" : t === "warn" ? "text-[#8a5a00]" : t === "bad" ? "text-[#c4291f]" : "text-[#55565a]"}`;
-}
-
-const label = (s: string) => {
-  const t = s.replaceAll("_", " ");
-  return t.charAt(0).toUpperCase() + t.slice(1);
-};
-
-// "Recent activity" card from the trip's audit events (newest first).
-export function RecentActivityCard({ events }: { events: overviewApi.Timeline["events"] }) {
-  const recent = [...events].filter((e) => e.at).sort((a, b) => new Date(b.at as string).getTime() - new Date(a.at as string).getTime()).slice(0, 6);
-  return (
-    <section className="min-w-0 rounded-[8px] border border-[#e4e3df] bg-white p-4" aria-label="Recent activity" data-testid="recent-activity">
-      <h3 className="mb-3 text-sm font-bold">Recent activity</h3>
-      {recent.length === 0 ? (
-        <p className="text-[13px] text-[#55565a]">No activity recorded yet.</p>
-      ) : (
-        <ul className="grid gap-2.5">
-          {recent.map((e, i) => {
-            const unassigned = e.type === "order_unassigned";
-            const p = activityParts(e, personName(e.by));
-            return (
-              <li key={i} className="flex items-start gap-2.5" data-testid={unassigned ? "activity-unassigned" : undefined}>
-                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unassigned ? "bg-[#86000B]" : "bg-[#1d4ed8]"}`} aria-hidden="true" />
-                <div className="min-w-0 flex-1 text-[13px]">
-                  <span className="font-semibold">{unassigned ? p.label : label(e.type)}</span>
-                  {e.so_number && <span className="ml-1.5 font-mono text-[11px] text-[#77787b]">{e.so_number}</span>}
-                  {unassigned && (p.detail || p.actor) && <span className="ml-1.5 text-[11px] text-[#77787b]">{[p.detail, p.actor].filter(Boolean).join(" · ")}</span>}
-                </div>
-                <span className="shrink-0 text-[11px] text-[#77787b]">{fmtTime(e.at)}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-export default function TripTimeline({ batchId }: { batchId: string }) {
-  const [showEvents, setShowEvents] = useState(false);
-  const query = useTrip(batchId);
-  if (query.isLoading) return <Skeleton className="h-24" />;
-  if (query.isError || !query.data) return <ErrorNote error={query.error} onRetry={() => void query.refetch()} />;
-  const t = query.data;
-  const trip = t.trip;
-  const assigned = (t.batch as { assigned_at?: string | null }).assigned_at;
-  return (
-    <div className="grid gap-3" data-testid={`trip-${batchId}`}>
-      <div className="rounded-[8px] border border-[#e4e3df] bg-white p-3 text-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono font-bold">{String(t.batch.vehicle ?? "-")}</span>
-          <Chip tone="info">{trip.chip_label ?? stateLabel(String(trip.status ?? ""))}</Chip>
-          {trip.handover_status && <Chip>Handover: {trip.handover_status}</Chip>}
-        </div>
-        <div className="mt-2 grid gap-1 text-xs text-[#55565a] sm:grid-cols-2">
-          <div>Crew: {t.crew.map((c) => `${c.name} (${c.role})`).join(", ") || "-"}</div>
-          <div>Trip length: {formatDuration(trip.duration_minutes ?? null)}</div>
-          <div>Assigned: {fmtDateTime(assigned)}</div>
-          <div>
-            Trip started: {fmtDateTime(trip.started_at)}
-            {personName((trip as { started_by?: unknown }).started_by) ? ` by ${personName((trip as { started_by?: unknown }).started_by)}` : ""}
-          </div>
-          <div>Trip ended: {fmtDateTime(trip.ended_at)}</div>
-          <div>Back at warehouse: {typeof trip.end_distance_m === "number" ? `${formatMeters(trip.end_distance_m as number)} from the warehouse` : "-"}</div>
-        </div>
-      </div>
-      {t.orders.length > 0 && <h4 className="-mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#77787b]">Stop details</h4>}
-      {t.orders.map((o) => (
-        <OrderTimeline key={o.so_id} order={o} />
-      ))}
-      {t.events.length > 0 && (
-        <div>
-          <button type="button" className="min-h-[36px] text-xs font-semibold underline" onClick={() => setShowEvents((v) => !v)}>
-            {showEvents ? "Hide" : "Show"} audit log ({t.events.length})
-          </button>
-          {showEvents && (
-            <ul className="mt-2 grid gap-1 border border-[#e4e3df] bg-white p-3 text-xs">
-              {t.events.map((e, i) => (
-                <li key={i} className="flex flex-wrap justify-between gap-2">
-                  <span>
-                    {e.type === "order_unassigned" ? (
-                      activityText(activityParts(e, personName(e.by)), " - ")
-                    ) : (
-                      <>
-                        {e.type.replaceAll("_", " ")}
-                        {e.so_number ? ` - ${e.so_number}` : ""}
-                        {personName(e.by) ? ` - ${personName(e.by)}` : ""}
-                      </>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          {query.isLoading ? (
+            <Skeleton className="h-48" />
+          ) : query.isError ? (
+            <ErrorLine
+              error={query.error}
+              onRetry={() => void query.refetch()}
+            />
+          ) : (
+            t && (
+              <div className="grid gap-5">
+                <section className="grid gap-3">
+                  <h3 className="text-xl font-bold">
+                    {String(t.batch.vehicle ?? row?.vehicle ?? "No vehicle")} ·
+                    Trip {row?.trip_number ?? String(t.batch.trip_number ?? 1)}
+                    {row && row.trips_on_date > 1
+                      ? ` of ${row.trips_on_date}`
+                      : ""}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {String(t.batch.delivery_date ?? row?.date ?? "—")} ·{" "}
+                    {String(t.batch.warehouse ?? row?.warehouse ?? "—")}
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    {crewOf({ batch_id: state.trip, crew: t.crew }).map(
+                      (c, i) => (
+                        <CallLink
+                          key={i}
+                          name={c.name}
+                          role={c.role}
+                          phone={c.phone}
+                        />
+                      ),
                     )}
-                  </span>
-                  <span className="text-[#77787b]">{fmtDateTime(e.at)}</span>
-                </li>
-              ))}
-            </ul>
+                  </div>
+                  <Rail
+                    row={
+                      row ?? {
+                        batch_id: state.trip,
+                        state: t.trip.status,
+                        step: t.step,
+                        so_count: t.orders.length,
+                        stops_done: t.trip.stops_done,
+                        acknowledged: t.trip.acknowledged,
+                      }
+                    }
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {t.attention?.map((flag, i) => (
+                      <AttentionChip
+                        key={i}
+                        flag={flag}
+                        onClick={() =>
+                          flag.stop_so_id
+                            ? openStop(flag.stop_so_id)
+                            : openEvent(flag.event_id)
+                        }
+                      />
+                    ))}
+                  </div>
+                  <dl className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Assigned</dt>
+                      <dd>{manilaDateTime(t.batch.assigned_at)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Trip length</dt>
+                      <dd>{durationText(t.trip.duration_minutes)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Started</dt>
+                      <dd>
+                        {manilaDateTime(t.trip.started_at)} ·{" "}
+                        {personName(t.trip.started_by)}
+                      </dd>
+                      <dd>
+                        GPS: <Gps value={t.trip.started_gps} />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Ended</dt>
+                      <dd>
+                        {manilaDateTime(t.trip.ended_at)} ·{" "}
+                        {personName(t.trip.ended_by)}
+                      </dd>
+                      <dd>
+                        GPS: <Gps value={t.trip.ended_gps} />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Weight / packs</dt>
+                      <dd>
+                        {row
+                          ? formatKg([row])?.text
+                          : String(t.batch.kg ?? "—")}{" "}
+                        · {row?.packs ?? String(t.batch.packs ?? "—")} packs
+                      </dd>
+                      {row && formatKg([row])?.note && (
+                        <dd>{formatKg([row])?.note}</dd>
+                      )}
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">
+                        Back at warehouse
+                      </dt>
+                      <dd>
+                        {typeof t.trip.end_distance_m === "number"
+                          ? `${Math.round(t.trip.end_distance_m)} m from warehouse`
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Stops done</dt>
+                      <dd>
+                        {t.trip.stops_done ?? row?.stops_done ?? 0}/
+                        {t.orders.filter((o) => !o.removed).length} ·{" "}
+                        {Math.round(
+                          ((t.trip.stops_done ?? row?.stops_done ?? 0) /
+                            Math.max(
+                              1,
+                              t.orders.filter((o) => !o.removed).length,
+                            )) *
+                            100,
+                        )}
+                        %
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Closed</dt>
+                      <dd>{manilaDateTime(t.trip.closed_at)}</dd>
+                    </div>
+                  </dl>
+                  {row && (
+                    <p className="text-xs">
+                      {Object.entries(outcomesOf(row))
+                        .map(
+                          ([k, v]) =>
+                            `${v} ${k === "failed" ? "not delivered" : k}`,
+                        )
+                        .join(" · ")}
+                    </p>
+                  )}
+                  {t.handover && (
+                    <p className="text-xs">
+                      Invoice handover:{" "}
+                      {sentence(
+                        t.handover.status ??
+                          t.trip.handover_status ??
+                          "pending",
+                      )}{" "}
+                      · Submitted {manilaDateTime(t.handover.submitted_at)} by{" "}
+                      {personName(t.handover.submitted_by)} · Officer{" "}
+                      {personName(t.handover.officer)} · Acknowledged{" "}
+                      {manilaDateTime(t.handover.officer_acknowledged_at)} ·{" "}
+                      {t.handover.note}
+                    </p>
+                  )}
+                </section>
+                <section className="grid gap-2">
+                  <h3 className="font-bold">Stops ({t.orders.length})</h3>
+                  {[...t.orders]
+                    .sort(
+                      (a, b) =>
+                        (a.stop?.sequence ?? 99999) -
+                        (b.stop?.sequence ?? 99999),
+                    )
+                    .map(stop)}
+                </section>
+                <section className="grid gap-2">
+                  <h3 className="font-bold">Invoices for this trip</h3>
+                  {(
+                    t.invoices ??
+                    t.orders.map((o) => ({
+                      so_id: o.so_id,
+                      so_number: o.so_number,
+                      invoice_no:
+                        o.handover?.invoice_no ??
+                        o.stop?.checkout?.invoice_no ??
+                        null,
+                      status:
+                        o.handover?.officer_status ??
+                        (o.handover?.handed_over
+                          ? "with_officer"
+                          : "with_driver"),
+                    }))
+                  ).map((inv) => (
+                    <button
+                      key={inv.so_id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2 text-left text-xs"
+                      onClick={() => openStop(inv.so_id)}
+                    >
+                      <span>
+                        {inv.so_number} · {inv.invoice_no ?? "—"}
+                      </span>
+                      <Chip tone={INVOICE_TONE[inv.status] ?? "neutral"}>
+                        {invoiceWord(inv.status)}
+                      </Chip>
+                    </button>
+                  ))}
+                </section>
+                <section className="grid gap-2">
+                  <h3 className="font-bold">Issues on this trip</h3>
+                  {t.issues?.length ? (
+                    t.issues.map((issue) => (
+                      <IssueCard
+                        key={issue.id}
+                        issue={issue}
+                        onTrip={(trip, so) => set({ trip, stop: so ?? "" })}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No issues reported.
+                    </p>
+                  )}
+                </section>
+                <details
+                  id="trip-activity"
+                  className="rounded-lg border border-border p-3"
+                >
+                  <summary className="cursor-pointer font-semibold">
+                    Activity log ({t.events.length})
+                  </summary>
+                  <ul className="mt-3 grid gap-3 text-xs">
+                    {t.events.map((e, i) => (
+                      <li
+                        key={e.id ?? i}
+                        id={`event-${e.id ?? i}`}
+                        data-testid={
+                          e.type === "order_unassigned"
+                            ? "activity-unassigned"
+                            : undefined
+                        }
+                      >
+                        <strong>
+                          {e.type === "order_unassigned"
+                            ? activityText(
+                                activityParts(e, personName(e.by)),
+                                " · ",
+                              )
+                            : sentence(e.type)}
+                        </strong>
+                        <p>
+                          {e.so_number} · {manilaDateTime(e.at)} ·{" "}
+                          {personName(e.by) || e.actor_name}
+                        </p>
+                        {e.received_at && (
+                          <p>Received {manilaDateTime(e.received_at)}</p>
+                        )}
+                        {e.gps && (
+                          <p>
+                            GPS: <Gps value={e.gps} />
+                          </p>
+                        )}
+                        <details>
+                          <summary className="cursor-pointer text-muted-foreground">
+                            Full event details
+                          </summary>
+                          <pre className="whitespace-pre-wrap break-all">
+                            {JSON.stringify(e, null, 2)}
+                          </pre>
+                        </details>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                <details className="rounded-lg border border-border p-3">
+                  <summary className="cursor-pointer font-semibold">
+                    Other days for this crew (last 7 days)
+                  </summary>
+                  <div className="mt-3 grid gap-2">
+                    {t.other_days?.length ? (
+                      t.other_days.map((day) => (
+                        <button
+                          className={`${buttonClass} h-auto justify-start py-2`}
+                          key={day.batch_id}
+                          onClick={() => set({ trip: day.batch_id, stop: "" })}
+                        >
+                          {day.date} · {day.vehicle} · Trip{" "}
+                          {day.trip_number ?? 1}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No other trips in the last 7 days.
+                      </p>
+                    )}
+                  </div>
+                </details>
+              </div>
+            )
           )}
         </div>
-      )}
-    </div>
+      </div>
+      {viewer.node}
+    </>
   );
 }

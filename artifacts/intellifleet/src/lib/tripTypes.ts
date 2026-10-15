@@ -87,6 +87,34 @@ export interface Batch {
   trip?: TripInfo | null;
   crew?: CrewMember[];
   ended_at?: string | null;
+  // CONTRACT 2026-10-15: same driver_step() as Driver Overview (absent on older servers -> derived on the phone).
+  step?: DriverStep | null;
+  // Officer status per invoice after End trip (read with the trip state; [] before End trip).
+  invoice_handover_items?: InvoiceHandoverItem[] | null;
+}
+
+export interface DriverStep {
+  step: 1 | 2 | 3 | "closed";
+  label_key?: string;
+  sub?: Record<string, unknown>;
+}
+
+export interface InvoiceHandoverItem {
+  so_id: string | number;
+  so_number: string;
+  order_type?: string | null;
+  invoice_no: string | null;
+  officer_status: "pending" | "received" | "missing" | "discrepancy" | string | null;
+  checked_at?: string | null;
+}
+
+// Photo metadata in payloads (CONTRACT: so_number, captured_at, kind). Captions are built from this, never from Drive.
+export interface PhotoMeta {
+  photo_id: number | string;
+  so_number?: string | null;
+  captured_at?: string | null;
+  kind?: "delivered" | "partial" | "failed" | "problem" | "other" | string | null;
+  field_key?: string | null;
 }
 
 // Today's unassign events for this crew member's batches (API contract section 3).
@@ -153,6 +181,7 @@ export interface OrderWorkflow {
     checkout_by: WhoWhen | string | null;
     outcome: string | null;
     reason: string | null;
+    photos?: PhotoMeta[];
     invoice_no?: string | null;
   } | null;
   can_acknowledge: boolean;
@@ -452,6 +481,7 @@ export interface TimelineOrder {
     } | null;
     minutes_at_stop: number | null;
   } | null;
+  photos?: PhotoMeta[];
   handover: {
     handed_over: boolean;
     crew_note: string | null;

@@ -128,7 +128,7 @@ export function detail(f: Flow) {
       {
         ack: o.ack ? { at: "2026-10-13T07:00:00+08:00", by: BY, template_version: 1 } : null,
         stop: started
-          ? { sequence: i + 1, status: o.stop, checkin_at: o.stop === "pending" ? null : "2026-10-13T09:00:00+08:00", checkin_by: o.stop === "pending" ? null : BY, checkin_distance_m: o.stop === "pending" ? null : 60, checkin_far: false, checkout_at: o.stop === "checked_out" ? "2026-10-13T09:20:00+08:00" : null, checkout_by: o.stop === "checked_out" ? BY : null, outcome: o.outcome, reason: o.reason, invoice_no: hideInvoice ? null : o.invoice }
+          ? { sequence: i + 1, status: o.stop, checkin_at: o.stop === "pending" ? null : "2026-10-13T09:00:00+08:00", checkin_by: o.stop === "pending" ? null : BY, checkin_distance_m: o.stop === "pending" ? null : 60, checkin_far: false, checkout_at: o.stop === "checked_out" ? "2026-10-13T09:20:00+08:00" : null, checkout_by: o.stop === "checked_out" ? BY : null, outcome: o.outcome, reason: o.reason, photos: o.photo ? [{ photo_id: o.photo, so_number: o.number, captured_at: "2026-10-13T01:20:00Z", kind: o.outcome === "Failed" ? "failed" : o.outcome === "Partially delivered" ? "partial" : "delivered" }] : [], invoice_no: hideInvoice ? null : o.invoice }
           : null,
         can_acknowledge: f.trip === "pending" && !o.ack,
         can_check_in: f.trip === "on_trip" && o.stop === "pending" && !open && nextPending === o,
@@ -186,7 +186,7 @@ export async function installFlow(page: Page, f: Flow): Promise<void> {
     const ok = (extra: Record<string, unknown> = {}) => r.fulfill(json({ ok: true, already_done: false, replayed: false, done_by: null, batch: detail(f), ...extra }));
 
     if (path === "/auth/session") return signedIn ? r.fulfill(json(d.session)) : reject(401, "Not authenticated", "unauthorized");
-    if (path === "/api/driver/assignments/b-f") return r.fulfill(json(detail(f)));
+    if (path === "/api/driver/assignments/b-f") return r.fulfill(json({ ...detail(f), invoice_handover_items: (f.handover?.items ?? []).map(it => ({ ...it, officer_status: it.status })) }));
     if (path === "/api/driver/today") return r.fulfill(json(today(f)));
     if (path === "/api/driver/templates") return r.fulfill(json({ ...d.templates, acknowledge_checklist_enabled: false }));
     if (path === "/api/driver/batches/b-f/route") return r.fulfill(json(route(f)));
