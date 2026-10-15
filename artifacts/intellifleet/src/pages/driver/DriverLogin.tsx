@@ -7,11 +7,11 @@ import { ApiError, clearStoredSessionId, getStoredSessionId, setStoredSessionId 
 import { postLoginRoute } from "@/lib/roles";
 import { useLang, useT } from "./i18n";
 import type { Dict } from "./i18n";
-import { C, FONT, Icon, SAFE_BOTTOM } from "./ui";
+import { C, FONT, Icon } from "./ui";
 import rareLogo from "@/assets/driver/rare-logo.jpg";
 
 const input: CSSProperties = {
-  height: 56,
+  height: 50,
   borderRadius: 12,
   border: `1px solid ${C.field}`,
   background: C.soft,
@@ -112,20 +112,20 @@ export default function DriverLogin() {
       <form
         onSubmit={submit}
         noValidate
-        style={{ width: "100%", maxWidth: 480, margin: "0 auto", minHeight: "100dvh", boxSizing: "border-box", display: "flex", flexDirection: "column", padding: `calc(clamp(28px, 7vh, 64px) + env(safe-area-inset-top)) 24px ${SAFE_BOTTOM(0)}` }}
+        style={{ width: "100%", maxWidth: 480, margin: "0 auto", minHeight: "100dvh", boxSizing: "border-box", display: "flex", flexDirection: "column", padding: `calc(clamp(14px, 4vh, 48px) + env(safe-area-inset-top)) 24px 0` }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src={rareLogo} alt={t.brandName} style={{ width: 94, height: 48, objectFit: "contain", borderRadius: 8 }} />
+          <img src={rareLogo} alt={t.brandName} style={{ width: 80, height: 40, objectFit: "contain", borderRadius: 8 }} />
           <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em" }}>{t.appName}</div>
         </div>
-        <h1 style={{ margin: "clamp(28px, 6vh, 52px) 0 12px", fontSize: "clamp(32px, 10vw, 42px)", lineHeight: 1.05, fontWeight: 800, letterSpacing: "-0.035em" }}>
+        <h1 style={{ margin: "clamp(14px, 4vh, 44px) 0 8px", fontSize: "clamp(26px, min(9vw, 5vh), 40px)", lineHeight: 1.05, fontWeight: 800, letterSpacing: "-0.035em" }}>
           {t.welcomeBack}
           <br />
           {t.welcomeDriver}
         </h1>
-        <p style={{ margin: "0 0 32px", fontSize: 17, lineHeight: 1.4, color: C.sub }}>{t.signInSub}</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 15, fontWeight: 600 }}>
+        <p style={{ margin: "0 0 clamp(14px, 3vh, 30px)", fontSize: 15, lineHeight: 1.4, color: C.sub }}>{t.signInSub}</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "clamp(10px, 1.8vh, 16px)" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14, fontWeight: 600 }}>
             {t.phoneOrEmail}
             <input
               data-testid="driver-login-identifier"
@@ -142,7 +142,7 @@ export default function DriverLogin() {
               style={fieldStyle("id")}
             />
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 15, fontWeight: 600 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14, fontWeight: 600 }}>
             {t.password}
             <span style={{ position: "relative", display: "block" }}>
               <input data-testid="driver-login-password" type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={Boolean(error)} onFocus={() => setFocus("pw")} onBlur={() => setFocus(null)} style={{ ...fieldStyle("pw"), paddingRight: 64 }} />
@@ -152,7 +152,7 @@ export default function DriverLogin() {
                 aria-label={show ? t.hidePassword : t.showPassword}
                 aria-pressed={show}
                 data-testid="driver-login-toggle"
-                style={{ position: "absolute", right: 0, top: 0, height: 56, width: 56, border: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                style={{ position: "absolute", right: 0, top: 0, height: 50, width: 50, border: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
               >
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
@@ -172,12 +172,12 @@ export default function DriverLogin() {
           type="submit"
           disabled={busy}
           data-testid="driver-login-submit"
-          style={{ height: 56, marginTop: 28, borderRadius: 12, background: C.ink, color: C.card, border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
+          style={{ height: 52, marginTop: "clamp(14px, 2.6vh, 26px)", borderRadius: 12, flexShrink: 0, background: C.ink, color: C.card, border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
         >
           <span aria-live="polite">{busy ? t.signingIn : t.signIn}</span>
           {!busy && <Icon name="arrowRight" size={22} color={C.onInk} />}
         </button>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 18, fontSize: 14, color: C.sub }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 6, fontSize: 14, color: C.sub, flexShrink: 0 }}>
           <Link href="/driver/forgot-password" data-testid="driver-forgot-link" style={{ color: C.sub, minHeight: 44, display: "flex", alignItems: "center" }}>
             {t.forgotCallDispatch}
           </Link>
@@ -191,8 +191,7 @@ export default function DriverLogin() {
             <span style={{ fontWeight: lang === "en" ? 700 : 400 }}>{t.langCodeEn}</span> · <span style={{ fontWeight: lang === "tl" ? 700 : 400 }}>{t.langCodeTl}</span>
           </button>
         </div>
-        <div aria-hidden="true" style={{ flex: 1, minHeight: 12 }} />
-        <div aria-hidden="true" style={{ position: "relative", flex: "0 0 clamp(150px, 24vh, 220px)", width: "calc(100% + 48px)", margin: "8px -24px 0", overflow: "hidden" }}>
+        <div aria-hidden="true" style={{ position: "relative", flex: "1 1 0", minHeight: 64, width: "calc(100% + 48px)", margin: "8px -24px 0", overflow: "hidden" }}>
           <img src="/driver-login-warehouse.png" alt="" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 78%" }} />
           <div style={{ position: "absolute", inset: "0 0 auto", height: "45%", background: `linear-gradient(to bottom, ${C.bg}, transparent)`, pointerEvents: "none" }} />
         </div>
