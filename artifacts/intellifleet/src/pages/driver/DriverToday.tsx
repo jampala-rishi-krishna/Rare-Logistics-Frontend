@@ -116,7 +116,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
       onKeyDown={(e) => {
         if (e.key === "Enter") setLocation(href);
       }}
-      style={{ display: "block", background: C.card, borderRadius: 20, padding: 18, color: C.ink, cursor: "pointer" }}
+      style={{ display: "block", background: C.soft, border: `1px solid ${C.line}`, borderRadius: 20, padding: 18, color: C.ink, cursor: "pointer" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <div style={{ fontSize: 13, color: C.sub, fontWeight: 500 }}>{t.tripNofM(tripNo, total)}</div>
@@ -280,7 +280,7 @@ export default function DriverToday() {
                   [stops, t.stops, "kpi-stops"],
                   [done, t.done, "kpi-done"],
                 ].map(([value, label, id]) => (
-                  <div key={String(id)} data-testid={String(id)} style={{ background: C.card, borderRadius: 16, padding: 14, minWidth: 0 }}>
+                  <div key={String(id)} data-testid={String(id)} style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 16, padding: 14, minWidth: 0 }}>
                     <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
                     <div style={{ fontSize: 13, color: C.sub }}>{label}</div>
                   </div>

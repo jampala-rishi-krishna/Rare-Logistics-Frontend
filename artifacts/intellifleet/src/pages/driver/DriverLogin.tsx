@@ -9,6 +9,7 @@ import { greetingPart } from "@/lib/driver";
 import { useLang, useT } from "./i18n";
 import type { Dict } from "./i18n";
 import { C, FONT, Icon, SAFE_BOTTOM } from "./ui";
+import rareLogo from "@/assets/driver/rare-logo.jpg";
 
 const input: CSSProperties = {
   height: 56,
@@ -109,9 +110,7 @@ export default function DriverLogin() {
         style={{ width: "100%", maxWidth: 560, margin: "0 auto", minHeight: "100dvh", boxSizing: "border-box", display: "flex", flexDirection: "column", padding: `calc(72px + env(safe-area-inset-top)) 24px ${SAFE_BOTTOM(32)}` }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="truck" color={C.onInk} />
-          </div>
+          <img src={rareLogo} alt="Rare Global Food" style={{ width: 94, height: 48, objectFit: "contain", borderRadius: 8 }} />
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" }}>{t.appName}</div>
         </div>
         <h1 style={{ margin: "56px 0 8px", fontSize: 34, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.03em" }}>
