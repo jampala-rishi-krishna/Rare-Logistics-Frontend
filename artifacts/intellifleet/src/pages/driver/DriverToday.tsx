@@ -1,5 +1,6 @@
 import { greetingPart } from "@/lib/driver";
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as driverApi from "@/services/api/driver";
@@ -15,8 +16,9 @@ import { useAlertsQuery, useToday } from "./queries";
 import { ErrorState, MissingDriverNotice, OfflineNote, errorText, useDriverMe, useDriverScope } from "./shared";
 import type { DriverScope } from "./shared";
 import { ConfirmSheet, DispatchBanners, chipOfTrip, useTripActions } from "./tripFlow";
+import { alpha } from "@/lib/themeTokens";
 import { Avatar, Banner, C, Chip, Icon, RoundButton, Skeleton } from "./ui";
-import type { ChipTone } from "./ui";
+import type { ChipTone, IconName } from "./ui";
 
 const FINISHED = new Set(["returned", "handover_submitted", "closed"]);
 
@@ -32,35 +34,57 @@ export function partnersOf(batch: Pick<Batch, "crew" | "helpers">, me: Pick<Driv
   return others.length > 0 ? others : crew.filter((p) => p.role !== (me?.role ?? "driver"));
 }
 
-export function PersonRow({ person, t }: { person: CrewMember; t: Dict }) {
+// Crew contact: role label over the name, call button only when there is a dialable number.
+export function PersonRow({ person, t, boxed = false }: { person: CrewMember; t: Dict; boxed?: boolean }) {
   const tel = telHref(person.phone);
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 14, background: C.soft }}>
-      <div style={{ fontSize: 15, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        <span style={{ color: C.sub }}>{person.role === "driver" ? t.driver : t.helper}</span> <b>{person.name}</b>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, ...(boxed ? { padding: "12px 14px", borderRadius: 16, border: `1px solid ${C.line}`, background: C.card } : {}) }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        <span aria-hidden="true" style={{ width: boxed ? 44 : 36, height: boxed ? 44 : 36, borderRadius: 22, background: C.soft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon name="user" size={boxed ? 22 : 18} color={C.body} />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: C.sub }}>{person.role === "driver" ? t.driver : t.helper}</div>
+          <div style={{ fontSize: boxed ? 17 : 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{person.name}</div>
+        </div>
       </div>
       {tel && <RoundButton icon="phone" label={t.callPerson(person.name)} href={tel} testId="driver-call-crew" />}
     </div>
   );
 }
 
+export function Fact({ icon, children, color = C.body, testId }: { icon: IconName; children: ReactNode; color?: string; testId?: string }) {
+  return (
+    <span data-testid={testId} style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      <Icon name={icon} size={18} color={color} />
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{children}</span>
+    </span>
+  );
+}
+
 function Stats({ batch, t, route }: { batch: Batch; t: Dict; route: string | null }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", columnGap: 18, rowGap: 4, marginTop: 10, fontSize: 15 }}>
-      <span>
-        <b>{batch.so_count}</b> {t.orders(batch.so_count)}
-      </span>
-      {Number.isFinite(batch.total_kg) && batch.total_kg > 0 && (
-        <span data-testid="driver-kg">
-          <b>{formatQty(Math.round(batch.total_kg * 10) / 10)}</b> {t.kg}
-        </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, fontSize: 15 }}>
+      {route && (
+        <Fact icon="pin" color={C.so} testId="driver-route-line">
+          {route}
+        </Fact>
       )}
-      {batch.total_packs !== null && batch.total_packs !== undefined && (
-        <span data-testid="driver-packs">
-          <b>{formatQty(batch.total_packs)}</b> {t.packs(batch.total_packs)}
-        </span>
-      )}
-      {route && <span style={{ color: C.sub }}>{route}</span>}
+      <div style={{ display: "flex", flexWrap: "wrap", columnGap: 20, rowGap: 8 }}>
+        <Fact icon="box">
+          <b>{batch.so_count}</b> {t.orders(batch.so_count)}
+        </Fact>
+        {Number.isFinite(batch.total_kg) && batch.total_kg > 0 && (
+          <Fact icon="weight" testId="driver-kg">
+            <b>{formatQty(Math.round(batch.total_kg * 10) / 10)}</b> {t.kg}
+          </Fact>
+        )}
+        {batch.total_packs !== null && batch.total_packs !== undefined && (
+          <span data-testid="driver-packs">
+            <b>{formatQty(batch.total_packs)}</b> {t.packs(batch.total_packs)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -74,7 +98,8 @@ function routeLine(batch: Batch, warehouse: string | null | undefined): string |
 
 // Today's chip: a trip whose stops are all done reads "Delivered" (or "Closed ✓"); "Waiting for officer" stays inside the trip screen.
 function todayChip(t: Dict, trip: TripInfo | null | undefined): { tone: ChipTone; label: string } | null {
-  if (trip?.status === "returned" || trip?.status === "handover_submitted") return { tone: "green", label: t.chipBackInvoices };
+  // Back at the warehouse but the signed invoices are not checked yet: still an open action (amber), not "completed".
+  if (trip?.status === "returned" || trip?.status === "handover_submitted") return { tone: "amber", label: t.chipBackInvoices };
   if (trip?.status === "closed") return { tone: "green", label: t.chipClosed };
   return chipOfTrip(t, trip);
 }
@@ -116,17 +141,17 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
       onKeyDown={(e) => {
         if (e.key === "Enter") setLocation(href);
       }}
-      style={{ display: "block", background: C.soft, border: `1px solid ${C.line}`, borderRadius: 20, padding: 18, color: C.ink, cursor: "pointer" }}
+      style={{ display: "block", background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 16, color: C.ink, cursor: "pointer" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <div style={{ fontSize: 13, color: C.sub, fontWeight: 500 }}>{t.tripNofM(tripNo, total)}</div>
+        <div style={{ fontSize: 13, color: C.sub, fontWeight: 500, whiteSpace: "nowrap" }}>{t.tripNofM(tripNo, total)}</div>
         {chip && (
-          <Chip tone={chip.tone} testId="driver-trip-chip">
+          <Chip tone={chip.tone} testId="driver-trip-chip" icon={chip.tone === "green" ? "check" : undefined}>
             {chip.label}
           </Chip>
         )}
       </div>
-      <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6, overflowWrap: "anywhere" }}>{batch.vehicle}</div>
+      <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 4, overflowWrap: "anywhere" }}>{batch.vehicle}</div>
       {finished && (
         <div data-testid="driver-card-delivered" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 16, fontWeight: 700, color: C.green }}>
           <Icon name="check" size={20} color={C.green} width={2.4} />
@@ -135,7 +160,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
       )}
       <Stats batch={batch} t={t} route={routeLine(batch, me?.warehouse)} />
       {partners.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.line}` }} onClick={(e) => e.stopPropagation()}>
           {partners.map((p) => (
             <PersonRow key={String(p.id)} person={p} t={t} />
           ))}
@@ -150,11 +175,23 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
             e.stopPropagation();
             button?.run();
           }}
-          style={{ width: "100%", height: 56, marginTop: 16, borderRadius: 14, border: button.secondary ? `1.5px solid ${C.ink}` : 0, background: button.secondary ? C.card : C.ink, color: button.secondary ? C.ink : C.card, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, fontFamily: "inherit", opacity: actions.busy ? 0.6 : 1, cursor: "pointer" }}
+          style={{ width: "100%", height: 52, marginTop: 14, borderRadius: 12, border: button.secondary ? `1.5px solid ${C.ink}` : 0, background: button.secondary ? C.card : C.ink, color: button.secondary ? C.ink : C.card, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, fontFamily: "inherit", opacity: actions.busy ? 0.6 : 1, cursor: "pointer" }}
         >
           {actions.busy ? t.gettingLocation : button.label}
         </button>
       )}
+      <button
+        type="button"
+        data-testid="driver-card-view-details"
+        onClick={(e) => {
+          e.stopPropagation();
+          setLocation(href);
+        }}
+        style={{ width: "100%", height: 48, marginTop: button ? 10 : 14, borderRadius: 12, border: `1px solid ${C.line}`, background: C.card, color: C.ink, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}
+      >
+        {t.viewTripDetails}
+        <Icon name="arrowRight" size={18} />
+      </button>
       <div onClick={(e) => e.stopPropagation()}>
         <ConfirmSheet
           open={startOpen}
@@ -173,6 +210,49 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
         />
       </div>
     </article>
+  );
+}
+
+// The day at a glance: stops completed out of all stops (0 stops = empty bar, never a division by zero) and three counts.
+function DailyProgress({ trips, stops, done, failed, t }: { trips: number; stops: number; done: number; failed: number; t: Dict }) {
+  const pct = stops > 0 ? Math.min(100, Math.round((done / stops) * 100)) : 0;
+  const soft = alpha("onInk", 0.7);
+  const stats: Array<[number, string, string, IconName]> = [
+    [trips, t.trips, "kpi-trips", "box"],
+    [stops, t.totalStops, "kpi-stops", "pin"],
+    [done, t.completed, "kpi-done", "check"],
+  ];
+  return (
+    <section data-testid="driver-kpis" aria-label={t.todaysProgress} style={{ margin: "14px 20px 0", padding: 18, borderRadius: 18, background: C.ink, color: C.onInk }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: soft }}>
+          {t.todaysProgress}
+          <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} />
+        </div>
+        {failed > 0 ? (
+          <span style={{ padding: "4px 10px", borderRadius: 999, background: C.negativeBg, color: C.so, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{t.nNotDelivered(failed)}</span>
+        ) : stops > 0 && done >= stops ? (
+          <span style={{ padding: "4px 10px", borderRadius: 999, background: C.greenBg, color: C.green, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{t.allDone}</span>
+        ) : null}
+      </div>
+      <div id="driver-day-progress" data-testid="driver-day-progress" style={{ fontSize: 21, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6 }}>{t.stopsCompletedOf(done, stops)}</div>
+      <div role="progressbar" aria-labelledby="driver-day-progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} style={{ height: 8, borderRadius: 4, background: alpha("onInk", 0.16), marginTop: 12, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: C.green, transition: "width .3s" }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 16 }}>
+        {stats.map(([value, label, id, icon]) => (
+          <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: 17, background: alpha("onInk", 0.12), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icon name={icon} size={17} color={C.onInk} />
+            </span>
+            <div data-testid={id} style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.1 }}>{value}</div>
+              <div style={{ fontSize: 12, color: soft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -224,15 +304,16 @@ export default function DriverToday() {
 
   return (
     <DriverLayout scope={scope} tab="today" testId="driver-today">
-      {failed > 0 && <div style={{ color: C.so, padding: "12px 20px 0", fontWeight: 700 }}>{t.nNotDelivered(failed)}</div>}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "20px 20px 8px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <Avatar name={name} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, color: C.sub }}>{dayLabel(me.data?.today ?? data?.date ?? null, lang)}</div>
-            <div data-testid="driver-greeting" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {t.greet(greetingPart(new Date().getHours()), firstName(name))}
+          <Avatar name={name} size={52} />
+          <div data-testid="driver-greeting" style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, color: C.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {t.greet(greetingPart(new Date().getHours()), "")}
+              {firstName(name) ? "," : ""}
             </div>
+            {firstName(name) && <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{firstName(name)}</div>}
+            <div style={{ fontSize: 13, color: C.sub, marginTop: 1 }}>{dayLabel(me.data?.today ?? data?.date ?? null, lang)}</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -274,25 +355,20 @@ export default function DriverToday() {
             </div>
           ) : (
             <>
-              <div data-testid="driver-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, padding: "16px 20px 4px" }}>
-                {[
-                  [batches.length, t.trips, "kpi-trips"],
-                  [stops, t.stops, "kpi-stops"],
-                  [done, t.done, "kpi-done"],
-                ].map(([value, label, id]) => (
-                  <div key={String(id)} data-testid={String(id)} style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 16, padding: 14, minWidth: 0 }}>
-                    <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
-                    <div style={{ fontSize: 13, color: C.sub }}>{label}</div>
-                  </div>
-                ))}
-              </div>
+              <DailyProgress trips={batches.length} stops={stops} done={done} failed={failed} t={t} />
+              {batches.length > 0 && (
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "22px 20px 0" }}>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>{t.yourTrips}</h2>
+                  <span style={{ fontSize: 14, color: C.sub, whiteSpace: "nowrap" }}>{t.nAssigned(batches.length)}</span>
+                </div>
+              )}
               {batches.length === 0 ? (
                 <div data-testid="driver-empty-today" style={{ margin: "16px 20px 0", background: C.card, borderRadius: 20, padding: 24, textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{t.noTripsToday}</div>
                   <div style={{ fontSize: 14, color: C.sub, marginTop: 4 }}>{t.noTripsHint}</div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 20px 20px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "12px 20px 20px" }}>
                   {batches.map((b, i) => (
                     <TripCard
                       key={b.batch_id}

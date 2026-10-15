@@ -14,6 +14,7 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const en = {
   // sign in
   appName: "RareChain Driver",
+  brandName: "Rare Global Food",
   greetMorning: "Good morning.",
   greetAfternoon: "Good afternoon.",
   greetEvening: "Good evening.",
@@ -309,6 +310,30 @@ const en = {
   chooseDriver: "Choose a driver",
   tripGone: "This trip is no longer yours.",
   orderGone: "This order is no longer on your trip.",
+  // 2026-10-15 premium layout
+  welcomeBack: "Welcome back,",
+  welcomeDriver: "Driver.",
+  signInSub: "Sign in to manage your deliveries, routes and daily assignments.",
+  phoneOrEmail: "Phone number or email",
+  phoneOrEmailPlaceholder: "09xx xxx xxxx or email",
+  todaysProgress: "Today's progress",
+  stopsCompletedOf: (k: number, n: number) => `${k} of ${n} ${plural(n, "stop", "stops")} completed`,
+  allDone: "All done",
+  totalStops: "Total stops",
+  completed: "Completed",
+  yourTrips: "Your Trips",
+  nAssigned: (n: number) => `${n} assigned`,
+  viewTripDetails: "View trip details",
+  tripDetails: "Trip Details",
+  ordersLabel: "Orders",
+  totalWeight: "Total weight",
+  startPoint: "Start",
+  stopN: (n: number) => `Stop ${n}`,
+  returnPoint: "Back at warehouse",
+  orderSummary: "Order Summary",
+  documentsProof: "Documents & Proof of Delivery",
+  noProofYet: "No delivery photos yet",
+  viewRouteNavigate: "View Route / Navigate",
 };
 
 export type Dict = typeof en;
@@ -316,6 +341,7 @@ export type Dict = typeof en;
 // reviewed-by: pending (Logistics)
 const tl: Dict = {
   appName: "RareChain Driver",
+  brandName: "Rare Global Food",
   greetMorning: "Magandang umaga.",
   greetAfternoon: "Magandang hapon.",
   greetEvening: "Magandang gabi.",
@@ -588,6 +614,29 @@ const tl: Dict = {
   chooseDriver: "Pumili ng driver",
   tripGone: "Hindi na sa iyo ang biyaheng ito.",
   orderGone: "Wala na sa biyahe mo ang order na ito.",
+  welcomeBack: "Maligayang pagbabalik,",
+  welcomeDriver: "Driver.",
+  signInSub: "Mag-sign in para makita ang deliveries, ruta at biyahe mo ngayon.",
+  phoneOrEmail: "Phone number o email",
+  phoneOrEmailPlaceholder: "09xx xxx xxxx o email",
+  todaysProgress: "Progress ngayon",
+  stopsCompletedOf: (k, n) => `${k} sa ${n} stop tapos na`,
+  allDone: "Tapos lahat",
+  totalStops: "Lahat ng stop",
+  completed: "Tapos",
+  yourTrips: "Mga biyahe mo",
+  nAssigned: (n) => `${n} naka-assign`,
+  viewTripDetails: "Tingnan ang biyahe",
+  tripDetails: "Detalye ng biyahe",
+  ordersLabel: "Order",
+  totalWeight: "Kabuuang timbang",
+  startPoint: "Simula",
+  stopN: (n) => `Stop ${n}`,
+  returnPoint: "Balik sa warehouse",
+  orderSummary: "Buod ng order",
+  documentsProof: "Dokumento at patunay ng delivery",
+  noProofYet: "Wala pang litrato ng delivery",
+  viewRouteNavigate: "Tingnan ang ruta / Navigate",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, tl };

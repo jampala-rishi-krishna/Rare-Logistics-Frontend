@@ -31,6 +31,7 @@ import { FieldLabel, PhotoTiles, TemplateField, fieldInput } from "./fields";
 import { ConfirmSheet, DispatchBanners, handoverKey, tripChip, useTripActions } from "./tripFlow";
 import { PersonRow, partnersOf } from "./DriverToday";
 import { ActionBar, Banner, C, Chip, FieldError, Icon, NumberDot, OutlineButton, Pill, PrimaryButton, RoundButton, Sheet, SheetTitle, Skeleton, TextButton, TypeBadge } from "./ui";
+import type { IconName } from "./ui";
 
 // ---------- small pieces ----------
 
@@ -97,14 +98,15 @@ function OrderRef({ order }: { order: DriverOrder }) {
 
 function Header({ batch, state, t, backHref, backLabel, me, done }: { batch: BatchDetail; state: EffectiveBatch; t: Dict; backHref: string; backLabel: string; me: ReturnType<typeof useDriverMe>["data"]; done?: ReactNode }) {
   const chip = tripChip(t, state.status, state.acknowledged, state.total, state.stopsDone);
-  const partners = partnersOf(batch, me);
   const onTrip = state.status === "on_trip";
   const pct = state.total > 0 ? Math.round((state.stopsDone / state.total) * 100) : 0;
   return (
-    <div data-testid="driver-trip-header" style={{ background: C.card, padding: done ? "16px 20px 22px" : "16px 20px 18px", borderBottom: `1px solid ${C.line}` }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <RoundButton icon="back" label={backLabel} href={backHref} filled testId="driver-trip-back" />
-        <Chip tone={chip.tone} big testId="driver-trip-chip">
+    <div data-testid="driver-trip-header" style={{ background: C.card, padding: "12px 20px 4px" }}>
+      <RoundButton icon="back" label={backLabel} href={backHref} testId="driver-trip-back" />
+      <div style={{ fontSize: 15, color: C.sub, marginTop: 12 }}>{t.tripDetails}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 2 }}>
+        <h1 style={{ margin: 0, fontSize: "clamp(28px, 8.5vw, 34px)", fontWeight: 800, letterSpacing: "-0.03em", overflowWrap: "anywhere", minWidth: 0 }}>{batch.vehicle}</h1>
+        <Chip tone={chip.tone} big testId="driver-trip-chip" icon={chip.tone === "green" ? "check" : undefined}>
           {chip.label}
         </Chip>
       </div>
@@ -112,21 +114,15 @@ function Header({ batch, state, t, backHref, backLabel, me, done }: { batch: Bat
         done
       ) : onTrip ? (
         <>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 12 }}>
-            <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", overflowWrap: "anywhere" }}>{batch.vehicle}</div>
-            <div data-testid="driver-progress" style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }}>
-              {t.nOfMDone(state.stopsDone, state.total)}
-            </div>
+          <div data-testid="driver-progress" style={{ fontSize: 15, fontWeight: 700, marginTop: 8 }}>
+            {t.nOfMDone(state.stopsDone, state.total)}
           </div>
-          <div style={{ height: 8, borderRadius: 4, background: C.muted, marginTop: 12 }}>
-            <div style={{ width: `${Math.max(pct, 4)}%`, height: 8, borderRadius: 4, background: C.ink, transition: "width .3s" }} />
+          <div style={{ height: 8, borderRadius: 4, background: C.muted, marginTop: 8, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, height: 8, borderRadius: 4, background: C.green, transition: "width .3s" }} />
           </div>
         </>
       ) : (
-        <>
-          <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", marginTop: 12, overflowWrap: "anywhere" }}>{batch.vehicle}</div>
-          <div style={{ fontSize: 15, color: C.sub, marginTop: 2 }}>{t.tripSummary(batch.trip_number ?? 1, state.total, me?.warehouse ?? null)}</div>
-        </>
+        <div style={{ fontSize: 15, color: C.sub, marginTop: 4 }}>{t.tripSummary(batch.trip_number ?? 1, state.total, me?.warehouse ?? null)}</div>
       )}
       <div data-testid="driver-step-rail" aria-label={t.stepsLabel} style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap", fontSize: 14 }}>
         {[t.stepLoad, t.stepDeliver, t.stepReturn].map((label, index) => {
@@ -135,14 +131,180 @@ function Header({ batch, state, t, backHref, backLabel, me, done }: { batch: Bat
           return <span key={index} aria-current={step === index + 1 ? "step" : undefined} style={{ fontWeight: active ? 700 : 400, color: active ? C.ink : C.sub }}>{step === "closed" || (typeof step === "number" && index + 1 < step) ? "\u2713" : index + 1} {label}</span>;
         })}
       </div>
-      {!done && partners.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
-          {partners.map((p) => (
-            <PersonRow key={String(p.id)} person={p} t={t} />
+    </div>
+  );
+}
+
+// ---------- trip overview: metrics, stop timeline, order summary, crew, proofs ----------
+
+function Metrics({ batch, state, t }: { batch: BatchDetail; state: EffectiveBatch; t: Dict }) {
+  const kg = batch.total_kg > 0 ? batch.total_kg : state.orders.reduce((n, e) => n + (e.order.total_kg || 0), 0);
+  // A stop is a delivery point: two orders for the same customer at the same address are one stop.
+  const stops = new Set(state.orders.map((e) => `${e.order.customer_name}|${e.order.address_text}`)).size;
+  const cells: Array<[ReactNode, string, string]> = [
+    [state.total, t.ordersLabel, "driver-metric-orders"],
+    [kg > 0 ? `${formatQty(Math.round(kg * 10) / 10)} ${t.kg}` : "—", t.totalWeight, "driver-metric-kg"],
+    [stops, t.stops, "driver-metric-stops"],
+  ];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+      {cells.map(([value, label, id]) => (
+        <div key={id} data-testid={id} style={{ background: C.soft, borderRadius: 14, padding: "12px 12px", minWidth: 0 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+          <div style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type NodeKind = "done" | "here" | "problem" | "waiting";
+
+function TimelineNode({ kind, n }: { kind: NodeKind; n?: number }) {
+  const bg = kind === "done" ? C.green : kind === "problem" ? C.negativeBg : kind === "here" ? C.ink : C.card;
+  const fg = kind === "done" || kind === "here" ? C.onInk : kind === "problem" ? C.so : C.body;
+  return (
+    <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 14, background: bg, color: fg, border: kind === "waiting" ? `1.5px solid ${C.field}` : 0, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0, position: "relative", zIndex: 1 }}>
+      {kind === "done" ? <Icon name="check" size={16} color={C.onInk} width={2.6} /> : kind === "problem" ? <Icon name="info" size={16} color={C.so} /> : n ?? ""}
+    </span>
+  );
+}
+
+// One timeline row: node + connector on the left, content on the right, time (when known) at the end.
+function TimelineRow({ node, last, lineDone, children, time, testId, dataState, dataSo }: { node: ReactNode; last: boolean; lineDone: boolean; children: ReactNode; time?: string; testId?: string; dataState?: string; dataSo?: string }) {
+  return (
+    <div data-testid={testId} data-state={dataState} data-so={dataSo} style={{ display: "flex", gap: 12, position: "relative", paddingBottom: last ? 0 : 16 }}>
+      {!last && <span aria-hidden="true" style={{ position: "absolute", left: 13, top: 28, bottom: 0, width: 2, background: lineDone ? C.green : C.line }} />}
+      {node}
+      <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>{children}</div>
+      {time && <div style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap", paddingTop: 5 }}>{time}</div>}
+    </div>
+  );
+}
+
+function stopNode(s: ReturnType<typeof stopState>): NodeKind {
+  return s === "delivered" ? "done" : s === "problem" ? "problem" : s === "here" ? "here" : "waiting";
+}
+
+function Timeline({ batch, state, t, current, warehouse }: { batch: BatchDetail; state: EffectiveBatch; t: Dict; current: EffectiveOrder | null; warehouse: string | null }) {
+  const startedAt = batch.trip?.started_at ?? null;
+  const endedAt = batch.trip?.ended_at ?? batch.ended_at ?? null;
+  const started = Boolean(startedAt) || state.status !== "pending";
+  const ended = Boolean(endedAt) || ["returned", "handover_submitted", "closed"].includes(state.status);
+  const rows = state.orders;
+  return (
+    <div data-testid="driver-stop-timeline" style={{ display: "flex", flexDirection: "column" }}>
+      <TimelineRow node={<TimelineNode kind={started ? "done" : "waiting"} />} last={rows.length === 0 && !ended} lineDone={started} time={formatClock(startedAt) || undefined}>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>{t.startPoint}</div>
+        {warehouse && <div style={{ fontSize: 14, color: C.sub, overflowWrap: "anywhere" }}>{warehouse}</div>}
+      </TimelineRow>
+      {rows.map((eff, i) => {
+        const o = eff.order;
+        const s = stopState(eff);
+        const isLast = i === rows.length - 1 && !ended;
+        const stop = o.workflow?.stop;
+        const time = formatClock(stop?.checkout_at ?? stop?.checkin_at ?? null) || undefined;
+        if (current && eff.so_id === current.so_id && state.status === "on_trip")
+          return (
+            <TimelineRow key={eff.so_id} node={<TimelineNode kind={stopNode(s)} n={i + 1} />} last={isLast} lineDone={false}>
+              <CurrentStopCard eff={eff} t={t} here={eff.stopStatus === "checked_in"} />
+            </TimelineRow>
+          );
+        const sub = stopSubline(o, t);
+        return (
+          <TimelineRow key={eff.so_id} testId={`driver-order-${o.so_number}`} dataState={s} node={<TimelineNode kind={stopNode(s)} n={i + 1} />} last={isLast} lineDone={s === "delivered"} time={time}>
+            <div style={{ fontSize: 13, color: C.sub }}>{t.stopN(i + 1)}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, overflowWrap: "anywhere" }}>{o.customer_name}</div>
+            {sub && <div style={{ fontSize: 14, color: C.sub, overflowWrap: "anywhere" }}>{sub}</div>}
+            <div style={{ fontSize: 13, color: s === "problem" ? C.so : C.sub, display: "flex", alignItems: "center", gap: 6, minWidth: 0, marginTop: 4 }}>
+              <TypeBadge type={o.order_type} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {o.so_number} · {stateLabel(t, s)}
+                {eff.stopStatus === "checked_out" && eff.outcome && !/^deliver/i.test(eff.outcome) ? ` (${/^partial/i.test(eff.outcome) ? t.partial : t.failed})` : ""}
+              </span>
+            </div>
+          </TimelineRow>
+        );
+      })}
+      {ended && (
+        <TimelineRow node={<TimelineNode kind="done" />} last lineDone time={formatClock(endedAt) || undefined}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>{t.returnPoint}</div>
+          {warehouse && <div style={{ fontSize: 14, color: C.sub, overflowWrap: "anywhere" }}>{warehouse}</div>}
+        </TimelineRow>
+      )}
+    </div>
+  );
+}
+
+function SectionCard({ children, testId }: { children: ReactNode; testId?: string }) {
+  return (
+    <section data-testid={testId} style={{ border: `1px solid ${C.line}`, borderRadius: 16, background: C.card, overflow: "hidden" }}>
+      {children}
+    </section>
+  );
+}
+
+function SectionHead({ icon, title, open, onToggle, extra }: { icon: IconName; title: string; open?: boolean; onToggle?: () => void; extra?: ReactNode }) {
+  const inner = (
+    <>
+      <Icon name={icon} size={20} />
+      <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, textAlign: "left" }}>{title}</span>
+      {extra}
+      {onToggle && <Icon name={open ? "chevronDown" : "chevronRight"} size={20} color={C.sub} />}
+    </>
+  );
+  const style = { display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 52, padding: "0 16px", border: 0, background: "transparent", fontFamily: "inherit", color: C.ink, boxSizing: "border-box" } as const;
+  return onToggle ? (
+    <button type="button" aria-expanded={open} onClick={onToggle} style={{ ...style, cursor: "pointer" }}>
+      {inner}
+    </button>
+  ) : (
+    <div style={style}>{inner}</div>
+  );
+}
+
+function OrderSummary({ state, t }: { state: EffectiveBatch; t: Dict }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <SectionCard testId="driver-order-summary">
+      <SectionHead icon="file" title={t.orderSummary} open={open} onToggle={() => setOpen((v) => !v)} />
+      {open && (
+        <div data-testid="driver-order-summary-list" style={{ display: "flex", flexDirection: "column", padding: "0 16px 8px" }}>
+          {state.orders.map((eff, i) => (
+            <div key={eff.so_id} style={{ padding: "10px 0", borderTop: i === 0 ? 0 : `1px solid ${C.line}` }}>
+              <OrderRef order={eff.order} />
+              <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, overflowWrap: "anywhere" }}>{eff.order.customer_name}</div>
+              <ItemsLine order={eff.order} t={t} />
+            </div>
           ))}
         </div>
       )}
-    </div>
+    </SectionCard>
+  );
+}
+
+function Documents({ state, t }: { state: EffectiveBatch; t: Dict }) {
+  const withPhotos = state.orders.filter((e) => (e.order.workflow?.stop?.photos ?? []).length > 0);
+  const count = withPhotos.reduce((n, e) => n + (e.order.workflow?.stop?.photos?.length ?? 0), 0);
+  const [open, setOpen] = useState(count > 0);
+  return (
+    <SectionCard testId="driver-documents">
+      <SectionHead icon="file" title={t.documentsProof} open={open} onToggle={() => setOpen((v) => !v)} extra={count > 0 ? <span style={{ fontSize: 14, color: C.sub }}>{count}</span> : undefined} />
+      {open && (
+        <div style={{ padding: "0 16px 14px" }}>
+          {withPhotos.length === 0 ? (
+            <div style={{ fontSize: 14, color: C.sub }}>{t.noProofYet}</div>
+          ) : (
+            withPhotos.map((eff) => (
+              <div key={eff.so_id} style={{ marginTop: 6 }}>
+                <OrderRef order={eff.order} />
+                <OrderProofs order={eff.order} />
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -249,41 +411,6 @@ function OrderProofs({ order }: { order: DriverOrder }) {
  return <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 10 }}>
   {photos.map(photo => <MediaPhoto key={photo.photo_id} photoId={photo.photo_id} alt={t.photos} meta={{ ...photo, so_number: photo.so_number ?? order.so_number }} />)}
  </div>;
-}
-
-function StopRow({ eff, index, t }: { eff: EffectiveOrder; index: number; t: Dict }) {
-  const o = eff.order;
-  const s = stopState(eff);
-  return (
-    <div data-testid={`driver-order-${o.so_number}`} data-state={s} style={{ background: C.card, borderRadius: 18, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-      <NumberDot n={index + 1} active={false} size={32} done={s === "delivered"} />
-      <div style={{ flexGrow: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.customer_name}</div>
-        <div style={{ fontSize: 13, color: s === "problem" ? C.so : C.sub, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-          <TypeBadge type={o.order_type} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {o.so_number} · {stateLabel(t, s)}
-            {eff.stopStatus === "checked_out" && eff.outcome && !/^deliver/i.test(eff.outcome) ? ` (${/^partial/i.test(eff.outcome) ? t.partial : t.failed})` : ""}
-          </span>
-        </div>
-        <OrderProofs order={o} />
-      </div>
-    </div>
-  );
-}
-
-function StopList({ state, t, current }: { state: EffectiveBatch; t: Dict; current: EffectiveOrder | null }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 20px" }}>
-      {state.orders.map((eff, i) =>
-        current && eff.so_id === current.so_id && state.status === "on_trip" ? (
-          <CurrentStopCard key={eff.so_id} eff={eff} t={t} here={eff.stopStatus === "checked_in"} />
-        ) : (
-          <StopRow key={eff.so_id} eff={eff} index={i} t={t} />
-        ),
-      )}
-    </div>
-  );
 }
 
 // ---------- after End trip (screen 6) ----------
@@ -668,7 +795,12 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
   const queryClient = useQueryClient();
   const actions = useTripActions(scope, batch.batch_id);
   const templates = useTemplatesQuery(scope);
-  const route = useRouteQuery(scope, batch.batch_id, !readOnly && state.status === "on_trip");
+  // Same GET .../route as before; now also read before the start so an active trip can open its full route in Google Maps.
+  const active = !readOnly && (state.status === "on_trip" || state.status === "pending");
+  const route = useRouteQuery(scope, batch.batch_id, active);
+  const routeInfo = route.data?.data as RouteInfo | undefined;
+  const fullRouteUrl = active ? routeInfo?.maps_links?.[0]?.url ?? null : null;
+  const partners = partnersOf(batch, me.data);
   const handover = useQuery<AutoHandover | undefined>({ queryKey: handoverKey(batch.batch_id), queryFn: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)), enabled: false, initialData: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)) });
   const [sheet, setSheet] = useState<SheetName>(null);
   const step = tripStep(state);
@@ -684,7 +816,7 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
     if (sheet === "deliver" && (!current || current.stopStatus !== "checked_in")) setSheet(null);
   }, [sheet, current]);
 
-  const routeStop = current ? (route.data?.data as RouteInfo | undefined)?.stops.find((s) => String(s.so_id) === current.so_id) ?? null : null;
+  const routeStop = current ? routeInfo?.stops.find((s) => String(s.so_id) === current.so_id) ?? null : null;
   const navUrl = current ? directionsUrl(current.order, routeStop) : null;
 
   let bar: ReactNode = null;
@@ -768,13 +900,29 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
         <DispatchBanners changes={changes} batchId={batch.batch_id} />
         <OfflineNote offline={offline} savedAt={savedAt} />
       </div>
-      {step === "waiting" || step === "closed" ? (
-        <DoneView batch={batch} state={state} t={t} handover={handover.data} />
-      ) : step === "acknowledge" && !readOnly ? (
+      {step === "waiting" || step === "closed" ? <DoneView batch={batch} state={state} t={t} handover={handover.data} /> : null}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "14px 20px 0" }}>
+        <Metrics batch={batch} state={state} t={t} />
+        {fullRouteUrl && (
+          <OutlineButton icon="navigate" href={fullRouteUrl} external height={52} fontSize={16} testId="driver-full-route">
+            {t.viewRouteNavigate}
+          </OutlineButton>
+        )}
+      </div>
+      {step === "acknowledge" && !readOnly ? (
         <AckList state={state} t={t} />
       ) : (
-        <StopList state={state} t={t} current={current} />
+        <div style={{ padding: "18px 20px 0" }}>
+          <Timeline batch={batch} state={state} t={t} current={current} warehouse={routeInfo?.origin?.name ?? me.data?.warehouse ?? null} />
+        </div>
       )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "18px 20px 20px" }}>
+        <OrderSummary state={state} t={t} />
+        {partners.map((p) => (
+          <PersonRow key={String(p.id)} person={p} t={t} boxed />
+        ))}
+        {step !== "waiting" && step !== "closed" && step !== "acknowledge" && <Documents state={state} t={t} />}
+      </div>
       <div style={{ flexGrow: 1 }} />
       {bar && <ActionBar>{bar}</ActionBar>}
 

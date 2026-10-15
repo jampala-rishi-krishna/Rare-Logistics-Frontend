@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as authApi from "@/services/api/auth";
 import { ApiError, clearStoredSessionId, getStoredSessionId, setStoredSessionId } from "@/services/api/client";
 import { postLoginRoute } from "@/lib/roles";
-import { greetingPart } from "@/lib/driver";
 import { useLang, useT } from "./i18n";
 import type { Dict } from "./i18n";
 import { C, FONT, Icon, SAFE_BOTTOM } from "./ui";
@@ -13,9 +12,9 @@ import rareLogo from "@/assets/driver/rare-logo.jpg";
 
 const input: CSSProperties = {
   height: 56,
-  borderRadius: 14,
+  borderRadius: 12,
   border: `1px solid ${C.field}`,
-  background: C.card,
+  background: C.soft,
   padding: "0 16px",
   fontSize: 18,
   fontFamily: "inherit",
@@ -34,7 +33,7 @@ function loginError(t: Dict, status: number | null, serverMessage: string | null
 }
 
 // Driver / helper sign-in. Same POST /auth/login as every role (throttling and the generic 401 are server-side). The
-// backend accepts the phone number (or the email) as the identifier, so the field is labelled "Phone number" as designed.
+// backend accepts the phone number OR the email as the identifier, so the field says both and opens the full keyboard.
 export default function DriverLogin() {
   const t = useT();
   const [lang, setLang] = useLang();
@@ -43,6 +42,7 @@ export default function DriverLogin() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
+  const [focus, setFocus] = useState<"id" | "pw" | null>(null);
   const [errorKey, setErrorKey] = useState<keyof Dict | null>(null);
   const setError = (value: string) => setErrorKey((Object.keys(t) as Array<keyof Dict>).find(k => t[k] === value) ?? null);
   const error = errorKey ? String(t[errorKey]) : "";
@@ -96,8 +96,13 @@ export default function DriverLogin() {
     }
   };
 
-  const part = greetingPart(new Date().getHours());
-  const hello = part === "morning" ? t.greetMorning : part === "afternoon" ? t.greetAfternoon : t.greetEvening;
+  // Focus = ink border + soft ring; a sign-in error outlines both fields in red.
+  const fieldStyle = (name: "id" | "pw"): CSSProperties => ({
+    ...input,
+    borderColor: error ? C.so : focus === name ? C.ink : C.field,
+    background: focus === name ? C.card : C.soft,
+    boxShadow: focus === name ? `0 0 0 3px ${C.muted}` : "none",
+  });
 
   if (checking)
     return <div style={{ minHeight: "100dvh", background: C.bg, fontFamily: FONT, color: C.sub, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>{t.checkingSession}</div>;
@@ -107,38 +112,40 @@ export default function DriverLogin() {
       <form
         onSubmit={submit}
         noValidate
-        style={{ width: "100%", maxWidth: 560, margin: "0 auto", minHeight: "100dvh", boxSizing: "border-box", display: "flex", flexDirection: "column", padding: `calc(72px + env(safe-area-inset-top)) 24px ${SAFE_BOTTOM(32)}` }}
+        style={{ width: "100%", maxWidth: 480, margin: "0 auto", minHeight: "100dvh", boxSizing: "border-box", display: "flex", flexDirection: "column", padding: `calc(clamp(28px, 7vh, 64px) + env(safe-area-inset-top)) 24px ${SAFE_BOTTOM(0)}` }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src={rareLogo} alt="Rare Global Food" style={{ width: 94, height: 48, objectFit: "contain", borderRadius: 8 }} />
-          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" }}>{t.appName}</div>
+          <img src={rareLogo} alt={t.brandName} style={{ width: 94, height: 48, objectFit: "contain", borderRadius: 8 }} />
+          <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em" }}>{t.appName}</div>
         </div>
-        <h1 style={{ margin: "56px 0 8px", fontSize: 34, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.03em" }}>
-          {hello}
+        <h1 style={{ margin: "clamp(28px, 6vh, 52px) 0 12px", fontSize: "clamp(32px, 10vw, 42px)", lineHeight: 1.05, fontWeight: 800, letterSpacing: "-0.035em" }}>
+          {t.welcomeBack}
           <br />
-          {t.letsRoll}
+          {t.welcomeDriver}
         </h1>
-        <p style={{ margin: "0 0 36px", fontSize: 16, color: C.sub }}>{t.signInWith}</p>
+        <p style={{ margin: "0 0 32px", fontSize: 17, lineHeight: 1.4, color: C.sub }}>{t.signInSub}</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 14, fontWeight: 500 }}>
-            {t.phoneNumber}
+          <label style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 15, fontWeight: 600 }}>
+            {t.phoneOrEmail}
             <input
               data-testid="driver-login-identifier"
               type="text"
-              inputMode="tel"
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect="off"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder={t.phonePlaceholder}
-              style={input}
+              placeholder={t.phoneOrEmailPlaceholder}
+              aria-invalid={Boolean(error)}
+              onFocus={() => setFocus("id")}
+              onBlur={() => setFocus(null)}
+              style={fieldStyle("id")}
             />
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 14, fontWeight: 500 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 15, fontWeight: 600 }}>
             {t.password}
             <span style={{ position: "relative", display: "block" }}>
-              <input data-testid="driver-login-password" type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...input, paddingRight: 64 }} />
+              <input data-testid="driver-login-password" type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={Boolean(error)} onFocus={() => setFocus("pw")} onBlur={() => setFocus(null)} style={{ ...fieldStyle("pw"), paddingRight: 64 }} />
               <button
                 type="button"
                 onClick={() => setShow((s) => !s)}
@@ -165,9 +172,9 @@ export default function DriverLogin() {
           type="submit"
           disabled={busy}
           data-testid="driver-login-submit"
-          style={{ height: 60, marginTop: 28, borderRadius: 16, background: C.ink, color: C.card, border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
+          style={{ height: 56, marginTop: 28, borderRadius: 12, background: C.ink, color: C.card, border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
         >
-          {busy ? t.signingIn : t.signIn}
+          <span aria-live="polite">{busy ? t.signingIn : t.signIn}</span>
           {!busy && <Icon name="arrowRight" size={22} color={C.onInk} />}
         </button>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 18, fontSize: 14, color: C.sub }}>
@@ -183,6 +190,11 @@ export default function DriverLogin() {
           >
             <span style={{ fontWeight: lang === "en" ? 700 : 400 }}>{t.langCodeEn}</span> · <span style={{ fontWeight: lang === "tl" ? 700 : 400 }}>{t.langCodeTl}</span>
           </button>
+        </div>
+        <div aria-hidden="true" style={{ flex: 1, minHeight: 12 }} />
+        <div aria-hidden="true" style={{ position: "relative", flex: "0 0 clamp(150px, 24vh, 220px)", width: "calc(100% + 48px)", margin: "8px -24px 0", overflow: "hidden" }}>
+          <img src="/driver-login-warehouse.png" alt="" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 78%" }} />
+          <div style={{ position: "absolute", inset: "0 0 auto", height: "45%", background: `linear-gradient(to bottom, ${C.bg}, transparent)`, pointerEvents: "none" }} />
         </div>
       </form>
     </div>

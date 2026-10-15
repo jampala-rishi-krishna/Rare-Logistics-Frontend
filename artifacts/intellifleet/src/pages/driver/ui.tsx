@@ -108,6 +108,29 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7 21v-8h10v8" />
     </>
   ),
+  box: (
+    <>
+      <path d="M21 8l-9-5-9 5v8l9 5 9-5z" />
+      <path d="M3 8l9 5 9-5" />
+      <path d="M12 13v8" />
+    </>
+  ),
+  weight: (
+    <>
+      <path d="M6.5 8h11l2.5 13H4z" />
+      <circle cx="12" cy="5" r="2" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M14 3H6v18h12V7z" />
+      <path d="M14 3v4h4" />
+      <path d="M9 13h6" />
+      <path d="M9 17h6" />
+    </>
+  ),
+  chevronRight: <path d="M9 6l6 6-6 6" />,
+  chevronDown: <path d="M6 9l6 6 6-6" />,
 };
 
 export type IconName = keyof typeof PATHS;
@@ -176,7 +199,7 @@ export function BottomNav({ active, adminDriverId, badge = 0 }: { active: Tab; a
     { tab: "profile", href: "/driver/profile", icon: "user", label: t.tabProfile },
   ];
   return (
-    <FixedBottom style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", padding: `8px 0 ${SAFE_BOTTOM(22)}`, boxSizing: "border-box" }}>
+    <FixedBottom style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", padding: `6px 0 ${SAFE_BOTTOM(18)}`, boxSizing: "border-box" }}>
       {items.map((it) => {
         const on = it.tab === active;
         const color = on ? C.ink : C.navOff;
@@ -186,7 +209,7 @@ export function BottomNav({ active, adminDriverId, badge = 0 }: { active: Tab; a
             href={withDriverParams(it.href, { driver_id: adminDriverId })}
             data-testid={`driver-nav-${it.tab}`}
             aria-current={on ? "page" : undefined}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 0", fontSize: 13, fontWeight: on ? 700 : 400, color, textDecoration: "none", minHeight: 48, minWidth: 0 }}
+            style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 0 10px", fontSize: 13, fontWeight: on ? 700 : 500, color, textDecoration: "none", minHeight: 48, minWidth: 0 }}
           >
             <span style={{ position: "relative", display: "inline-flex" }}>
               <Icon name={it.icon} color={color} width={on ? 2.2 : 2} />
@@ -197,6 +220,7 @@ export function BottomNav({ active, adminDriverId, badge = 0 }: { active: Tab; a
               )}
             </span>
             <span style={{ maxWidth: "100%", padding: "0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", boxSizing: "border-box" }}>{it.label}</span>
+            {on && <span aria-hidden="true" style={{ position: "absolute", bottom: 0, left: "50%", width: 40, height: 3, marginLeft: -20, borderRadius: 2, background: C.ink }} />}
           </Link>
         );
       })}
@@ -321,11 +345,12 @@ const TONES: Record<ChipTone, [string, string]> = {
   grey: [C.muted, C.body],
 };
 
-export function Chip({ tone, children, big = false, testId }: { tone: ChipTone; children: ReactNode; big?: boolean; testId?: string }) {
+export function Chip({ tone, children, big = false, testId, icon }: { tone: ChipTone; children: ReactNode; big?: boolean; testId?: string; icon?: IconName }) {
   const [bg, fg] = TONES[tone];
   return (
-    <span data-testid={testId} style={{ display: "inline-flex", alignItems: "center", padding: big ? "6px 12px" : "5px 10px", borderRadius: 999, background: bg, color: fg, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>
-      {children}
+    <span data-testid={testId} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: big ? "6px 12px" : "5px 10px", borderRadius: 999, background: bg, color: fg, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>
+      {icon && <Icon name={icon} size={14} color={fg} width={2.6} />}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{children}</span>
     </span>
   );
 }
