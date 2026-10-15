@@ -161,12 +161,11 @@ export default function DriverLogin() {
             </p>
           )}
         </div>
-        <div style={{ flexGrow: 1, minHeight: 32 }} />
         <button
           type="submit"
           disabled={busy}
           data-testid="driver-login-submit"
-          style={{ height: 60, borderRadius: 16, background: C.ink, color: C.card, border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
+          style={{ height: 60, marginTop: 28, borderRadius: 16, background: C.ink, color: C.card, border: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 18, fontWeight: 700, fontFamily: "inherit", opacity: busy ? 0.6 : 1, cursor: "pointer" }}
         >
           {busy ? t.signingIn : t.signIn}
           {!busy && <Icon name="arrowRight" size={22} color={C.onInk} />}
