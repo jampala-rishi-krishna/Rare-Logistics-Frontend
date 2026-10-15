@@ -129,7 +129,25 @@ Additive only, no new table. Three columns on `sales_orders`: `order_type` (NOT 
 
 - LIVE: the Draft Mets<->Glacier TO list (matched by Zoho warehouse ID, `services/transfer_orders.py`) and each TO's lines are read from Zoho into memory only; the list is pulled on first load / after the TTL / on the TO tab's "Hard refresh", never per render. No Neon read for "today".
 - Neon reads: past-dated Confirmed Orders (same path as SOs, now filtered by `order_type`), and the driver app / Driver Overview (same rows as SOs).
-- PO: postponed, nothing stored.
+- PO: see the next section.
+
+## Purchase orders and Wet Market orders (2026-10-15, requested by Rishi) - NO schema change
+
+`sales_orders.order_type` is `varchar(4)` with no check constraint, so the two new codes need no migration. Values are now
+`SO | WM | PO | TO`; existing rows are untouched (a WM order saved as `'SO'` before the split is still read as WM by its `WM-SO` number,
+`services/order_types.py`). No new table, no new column, no new write path: PO and WM rows are written by the same `sync_history_row`
+call, at the same moments (assign / unassign / status change / delivery), as SO and TO.
+
+- **WM** (sales orders numbered `WM-SO...`): the SAME Zoho sales-order list and cache as SO, split by number prefix; no extra Zoho call
+  and no extra Neon read. Stored exactly like an SO with `order_type = 'WM'`.
+- **PO** (only `PO-` numbers, never `SS PO-`, never the SariSuki Store Inc. branch): stored **only when assigned**, like a TO: id
+  `PO:<zoho id>`, `salesorder_number` = the PO#, `customer_name` = the vendor, `shipping_address` = the vendor (pickup) address,
+  `expected_shipment_date` = the Expected Delivery Date (else the PO date), `order_status` = the Zoho PO status,
+  **`source_warehouse` = the vendor name (pickup point)**, `destination_warehouse` = the receiving warehouse; lines in `sales_order_lines`.
+- LIVE: the PO list (`services/purchase_orders.py`) and each PO's lines are read from Zoho into memory only; the list is pulled on first
+  load / after the TTL / on the PO tab's "Hard refresh", line details only for the POs being shown or assigned.
+- Neon reads: past-dated Confirmed Orders (filtered by `order_type`; asking for WM also reads `'SO'` rows and keeps the `WM-SO` numbers),
+  and the driver app / Driver Overview (same rows as SOs).
 
 ## Admin-editable settings (`app_settings`, migration `p6b7c8d9e0f1`, approved 2026-10-12)
 

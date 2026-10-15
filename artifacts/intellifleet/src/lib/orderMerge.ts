@@ -1,8 +1,8 @@
-import { orderTypeOfRow, type OrderType } from "./orderType.ts";
+import { ORDER_TYPES, orderTypeOfRow, type OrderType } from "./orderType.ts";
 
-/** Pure helpers for the combined SO + TO lists (Load Planning, Confirmed Orders). */
+/** Pure helpers for the combined SO + WM + PO + TO lists (Load Planning, Confirmed Orders). */
 
-export type TypeFilter = "all" | "SO" | "TO";
+export type TypeFilter = "all" | OrderType;
 
 type Row = {
   id: string;
@@ -30,14 +30,14 @@ export function filterByType<T extends Row>(orders: T[], filter: TypeFilter): T[
 }
 
 export function countByType(orders: Row[]): Record<OrderType, number> {
-  const counts: Record<OrderType, number> = { SO: 0, TO: 0, PO: 0 };
+  const counts: Record<OrderType, number> = { SO: 0, WM: 0, PO: 0, TO: 0 };
   for (const order of orders) counts[orderTypeOfRow(order)] += 1;
   return counts;
 }
 
-/** "SO 3 / TO 2" (types with zero orders are left out). */
-export function describeCounts(counts: { SO?: number; TO?: number; PO?: number }): string {
-  return (["SO", "TO", "PO"] as const)
+/** "SO 3 / WM 1 / TO 2" (types with zero orders are left out). */
+export function describeCounts(counts: Partial<Record<OrderType, number>>): string {
+  return ORDER_TYPES
     .filter((type) => (counts[type] ?? 0) > 0)
     .map((type) => `${type} ${counts[type]}`)
     .join(" / ");
@@ -45,7 +45,7 @@ export function describeCounts(counts: { SO?: number; TO?: number; PO?: number }
 
 /** The `order_types` query value for the Confirmed Orders list. */
 export function orderTypesParam(filter: TypeFilter): string {
-  return filter === "all" ? "SO,TO" : filter;
+  return filter === "all" ? ORDER_TYPES.join(",") : filter;
 }
 
 /** Total kg of the known line weights, and how many lines have no weight yet. */

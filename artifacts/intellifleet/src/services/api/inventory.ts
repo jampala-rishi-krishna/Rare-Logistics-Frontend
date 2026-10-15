@@ -53,8 +53,20 @@ export interface SalesOrderSummary {
   unit_count?: number;
   total_item_quantity?: number;
   zoho_lock?: ZohoLockStatus;
-  /** "SO" (default when absent) or "TO". TO rows have id `TO:<zoho id>` and salesorder_number = the TO number. */
-  order_type?: "SO" | "TO" | null;
+  /** "SO" (default when absent), "WM" (WM-SO numbered sales order), "PO" or "TO". TO / PO rows have id `TO:<zoho id>` / `PO:<zoho id>`
+   * and salesorder_number = the TO / PO number. */
+  order_type?: "SO" | "WM" | "PO" | "TO" | null;
+  /** PO only: vendor = customer_name; pickup at the vendor, delivered to destination_warehouse. */
+  purchaseorder_number?: string | null;
+  vendor_name?: string | null;
+  pickup_from?: string | null;
+  po_date?: string | null;
+  expected_delivery_date?: string | null;
+  /** PO has no Expected Delivery Date: it is planned on its PO date. */
+  no_expected_date?: boolean;
+  status_label?: string | null;
+  /** TO / PO: false while the line items are still loading from Zoho (weight unknown, never 0). */
+  lines_loaded?: boolean;
   transfer_order_number?: string | null;
   reason?: string | null;
   source_warehouse?: string | null;
@@ -108,6 +120,13 @@ export interface TransferOrdersPage {
   details_pending?: boolean;
   last_refreshed_at?: string | null;
   source?: string;
+}
+
+export interface PurchaseOrdersPage extends TransferOrdersPage {
+  /** Every PO status in the date range (before the status filter) -> count. */
+  status_counts?: Record<string, number>;
+  /** Statuses hidden when no status filter is chosen (cancelled, closed). */
+  hidden_by_default?: string[];
 }
 
 export interface AssignmentOptions {
@@ -254,7 +273,7 @@ export function listSalesOrders(
     customer: filters.customer,
     delivery_status: filters.deliveryStatus,
     branches: filters.branches?.length ? filters.branches.join(",") : undefined,
-    // Only meaningful with assignment=assigned (Confirmed Orders): merges assigned SO + TO rows.
+    // SO | WM | PO | TO, comma-separated. Absent = SO + WM. The SO / WM Inventory tabs send one each; Confirmed Orders all four.
     order_types: filters.orderTypes || undefined,
   });
 }
@@ -282,10 +301,35 @@ export function refreshTransferOrders(): Promise<{ refreshed_at: string; count: 
   return api.post("/api/load-planning/inventory/transfer-orders/refresh", undefined, undefined, 90000);
 }
 
+/** Purchase orders (PO- numbers only, never SariSuki). `statuses` omitted = all except Cancelled / Closed; "all" = every status. */
+export function listPurchaseOrders(
+  dateFrom: string,
+  dateTo: string,
+  page = 1,
+  search = "",
+  assignment?: "assigned" | "unassigned",
+  statuses?: string[],
+): Promise<PurchaseOrdersPage> {
+  return api.get<PurchaseOrdersPage>("/api/load-planning/inventory/purchase-orders", {
+    date_from: dateFrom,
+    date_to: dateTo,
+    search,
+    assignment,
+    statuses: statuses?.length ? statuses.join(",") : undefined,
+    page,
+    per_page: 100,
+  });
+}
+
+/** PO Hard refresh: bypasses the backend cache and re-reads Zoho. */
+export function refreshPurchaseOrders(): Promise<{ refreshed_at: string; count: number; status_counts?: Record<string, number> }> {
+  return api.post("/api/load-planning/inventory/purchase-orders/refresh", undefined, undefined, 90000);
+}
+
 export interface BulkUnassignResult {
   unassigned: string[];
   count: number;
-  count_by_type: { SO?: number; TO?: number };
+  count_by_type: { SO?: number; WM?: number; PO?: number; TO?: number };
   skipped: { id: string; reason: string }[];
 }
 

@@ -24,6 +24,8 @@ export const C = {
   blueBg: "#E6EEFB",
   blue: "#1B4A8F",
   so: "#B42318",
+  wm: "#7C3AED",
+  po: "#1B4A8F",
   to: "#1D7A3A",
   scrim: "#5E5E59", // solid, as drawn in the Delivered sheet design
 } as const;
@@ -342,9 +344,10 @@ export function Chip({ tone, children, big = false, testId }: { tone: ChipTone; 
 }
 
 export function TypeBadge({ type }: { type: string | null | undefined }) {
-  const isTo = String(type ?? "SO").toUpperCase() === "TO";
-  const color = isTo ? C.to : C.so;
-  return <span style={{ padding: "2px 7px", borderRadius: 6, border: `1.5px solid ${color}`, color, fontSize: 12, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>{isTo ? "TO" : "SO"}</span>;
+  const raw = String(type ?? "SO").toUpperCase();
+  const kind = raw === "TO" || raw === "PO" || raw === "WM" ? raw : "SO";
+  const color = { SO: C.so, WM: C.wm, PO: C.po, TO: C.to }[kind];
+  return <span data-testid={`driver-type-badge-${kind}`} style={{ padding: "2px 7px", borderRadius: 6, border: `1.5px solid ${color}`, color, fontSize: 12, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>{kind}</span>;
 }
 
 export function NumberDot({ n, active = true, size = 36, done = false }: { n: number; active?: boolean; size?: number; done?: boolean }) {

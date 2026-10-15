@@ -7,7 +7,7 @@ export function OrderTypeBadge({ type, className = "" }: { type?: unknown; class
     <span
       className={`inline-flex h-[18px] shrink-0 items-center rounded-[3px] border px-1.5 text-[10px] font-bold leading-none tracking-wide ${s.badge} ${className}`}
       data-testid={`order-type-badge-${t}`}
-      title={t === "TO" ? "Transfer Order" : t === "PO" ? "Purchase Order" : "Sales Order"}
+      title={s.title}
     >
       {s.label}
     </span>

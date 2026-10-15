@@ -24,6 +24,7 @@ import { ChecklistSheet, checklistOf, useTripActions } from "./tripFlow";
 import { Banner, C, Chip, Icon, NumberDot, Pill, PrimaryButton, Skeleton, TypeBadge } from "./ui";
 
 function shortAddress(o: DriverOrder, t: Dict): string {
+  if (String(o.order_type ?? "SO").toUpperCase() === "PO") return t.pickupFrom(o.pickup_from ?? o.customer_name ?? "", o.destination_warehouse ?? null);
   if (String(o.order_type ?? "SO").toUpperCase() === "TO") return o.source_warehouse ? t.transferFrom(o.source_warehouse) : (o.destination_warehouse ?? "");
   if (o.area) return o.area;
   const lines = o.address_lines ?? [];

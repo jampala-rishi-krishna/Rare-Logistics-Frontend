@@ -108,7 +108,7 @@ export interface DriverFlags {
 export interface AutoHandoverItem {
   so_id: string | number;
   so_number: string;
-  order_type: "SO" | "TO" | string;
+  order_type: "SO" | "WM" | "PO" | "TO" | string;
   invoice_no: string | null;
   customer_name: string;
   status: string;
@@ -165,8 +165,10 @@ export interface DriverOrder {
   id: number | string;
   so_number: string;
   // Order type: absent = "SO". TO/PO use the order number as the reference (no invoice/DR number at check-out).
-  order_type?: "SO" | "TO" | "PO" | null;
+  order_type?: "SO" | "WM" | "PO" | "TO" | null;
   order_reference?: string | null;
+  /** PO: the vendor the crew picks up from (then delivers to destination_warehouse). */
+  pickup_from?: string | null;
   destination_warehouse?: string | null;
   source_warehouse?: string | null;
   area?: string | null;
@@ -335,8 +337,10 @@ export interface RouteStop {
   so_id: string | number;
   so_number: string;
   // Order type: absent = "SO". TO/PO use the order number as the reference (no invoice/DR number at check-out).
-  order_type?: "SO" | "TO" | "PO" | null;
+  order_type?: "SO" | "WM" | "PO" | "TO" | null;
   order_reference?: string | null;
+  /** PO: the vendor the crew picks up from (then delivers to destination_warehouse). */
+  pickup_from?: string | null;
   destination_warehouse?: string | null;
   customer_name: string;
   address_text: string;
@@ -419,8 +423,10 @@ export interface TimelineOrder {
   so_id: string | number;
   so_number: string;
   // Order type: absent = "SO". TO/PO use the order number as the reference (no invoice/DR number at check-out).
-  order_type?: "SO" | "TO" | "PO" | null;
+  order_type?: "SO" | "WM" | "PO" | "TO" | null;
   order_reference?: string | null;
+  /** PO: the vendor the crew picks up from (then delivers to destination_warehouse). */
+  pickup_from?: string | null;
   destination_warehouse?: string | null;
   customer_name: string;
   address_text: string;

@@ -96,7 +96,7 @@ export interface TimelineOrder {
   so_id: string;
   so_number: string;
   // Order type: absent = "SO". TO/PO use the order number as the reference (no invoice/DR number at check-out).
-  order_type?: "SO" | "TO" | "PO" | null;
+  order_type?: "SO" | "WM" | "PO" | "TO" | null;
   order_reference?: string | null;
   destination_warehouse?: string | null;
   customer_name: string | null;
@@ -315,7 +315,7 @@ export function getTrips(f: OverviewFilter): Promise<{ from: string; to: string;
 
 export interface HardCopyRow {
   so_number: string | null;
-  order_type?: "SO" | "TO" | "PO" | null;
+  order_type?: "SO" | "WM" | "PO" | "TO" | null;
   customer_name: string | null;
   invoice_no: string | null;
   state: "with_driver" | "with_officer" | "not_handed_over" | "missing" | "discrepancy" | string;

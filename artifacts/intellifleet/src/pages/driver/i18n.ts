@@ -102,6 +102,8 @@ const en = {
   // acknowledge
   checkOrders: "Check these orders are on the truck",
   transferFrom: (wh: string) => `Transfer from ${wh}`,
+  // PO stop: the crew picks up at the vendor and brings the goods to the destination warehouse.
+  pickupFrom: (vendor: string, wh: string | null) => (wh ? `Pick up at ${vendor} → ${wh}` : `Pick up at ${vendor}`),
   // Owner's labels (replace the design copy "I have the orders" / "I have all N orders"): one tap acknowledges every order.
   haveOrders: "Acknowledge",
   haveAll: (_n: number) => "Acknowledge",
@@ -137,6 +139,7 @@ const en = {
   deliveredQ: "Delivered?",
   invoiceOrDr: "Invoice or DR number",
   toNumber: "TO number",
+  poNumber: "PO number",
   photoOfDelivery: "Photo of delivery",
   photoOptional: "Photo (optional)",
   photoN: (n: number) => `Photo ${n} ✓`,
@@ -349,6 +352,7 @@ const tl: Dict = {
   adminReadOnly: "Admin view · tingin lang",
   checkOrders: "I-check kung nasa truck ang mga order",
   transferFrom: (wh) => `Transfer galing ${wh}`,
+  pickupFrom: (vendor, wh) => (wh ? `Kunin sa ${vendor} → ${wh}` : `Kunin sa ${vendor}`),
   haveOrders: "Kumpirmahin",
   haveAll: () => "Kumpirmahin",
   ackDone: "Nakumpirma ✓",
@@ -380,6 +384,7 @@ const tl: Dict = {
   deliveredQ: "Naihatid na?",
   invoiceOrDr: "Invoice o DR number",
   toNumber: "TO number",
+  poNumber: "PO number",
   photoOfDelivery: "Picture ng delivery",
   photoOptional: "Picture (kung meron)",
   photoN: (n) => `Picture ${n} ✓`,

@@ -27,11 +27,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import { OrderTypeBadge } from "./OrderTypeBadge";
 import { TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
 import TransferOrdersTab, { TRANSFER_ORDERS_KEY } from "./TransferOrdersTab";
+import PurchaseOrdersTab, { PURCHASE_ORDERS_KEY } from "./PurchaseOrdersTab";
 import ConfirmedEmailDialog from "./ConfirmedEmailDialog";
 import UnassignConfirmDialog from "./UnassignConfirmDialog";
 import { confirmRequiredOrders, planUnassign, skippedText, type UnassignPlan, type UnassignPreviewOrder } from "@/lib/unassignConfirm";
 import { describeCounts, orderTypesParam, countByType, type TypeFilter } from "@/lib/orderMerge";
-import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
+import { isReferenceType, orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
 
 // Query-key prefixes. The Inventory list's key carries its scope ("inventory" | "assigned"), so
 // the Inventory and Confirmed Orders tabs can never share a cache entry.
@@ -55,6 +56,7 @@ function refetchOrderLists(client: QueryClient, ids: string[]) {
     client.invalidateQueries({ queryKey: [INVENTORY_LIST_KEY] }),
     client.invalidateQueries({ queryKey: [LOAD_PLANNING_LIST_KEY] }),
     client.invalidateQueries({ queryKey: [TRANSFER_ORDERS_KEY] }),
+    client.invalidateQueries({ queryKey: [PURCHASE_ORDERS_KEY] }),
     client.invalidateQueries({ queryKey: ["dispatch-dashboard"] }),
     client.invalidateQueries({ queryKey: ["orders"] }),
     ...ids.map((id) => client.invalidateQueries({ queryKey: ["inventory-sales-order", id] })),
@@ -318,7 +320,8 @@ type FlatRow = {
   city: string;
 };
 
-/** Inventory tab: SO | PO (coming soon) | TO switch. Confirmed Orders (assignmentScope) has no switch. */
+/** Inventory tab: SO | WM | PO | TO switch. Confirmed Orders (assignmentScope) has no switch. WM is the same sales-order list as SO,
+ * split by the "WM-SO" number prefix (no extra Zoho call), with exactly the SO behaviour (dates, acknowledgement, columns, refresh). */
 export default function LoadPlanningInventoryTab({
   assignmentScope,
   orderKind = "SO",
@@ -329,15 +332,20 @@ export default function LoadPlanningInventoryTab({
   viewMode?: ViewMode;
 }) {
   if (assignmentScope) return <SalesOrdersView assignmentScope={assignmentScope} viewMode={viewMode} />;
-  return orderKind === "TO" ? <TransferOrdersTab /> : <SalesOrdersView />;
+  if (orderKind === "TO") return <TransferOrdersTab />;
+  if (orderKind === "PO") return <PurchaseOrdersTab />;
+  return <SalesOrdersView key={orderKind} series={orderKind === "WM" ? "WM" : "SO"} />;
 }
 
 function SalesOrdersView({
   assignmentScope,
   viewMode = "spreadsheet",
+  series = "SO",
 }: {
   assignmentScope?: "assigned";
   viewMode?: ViewMode;
+  /** Inventory only: which sales-order series this tab lists (SO excludes WM-SO numbers, WM has only them). */
+  series?: "SO" | "WM";
 }) {
   const [, navigate] = useLocation();
   const [emailOpen, setEmailOpen] = useState(false);
@@ -395,7 +403,7 @@ function SalesOrdersView({
     ...(assignmentScope ? [180, 220, 80] : []),
   ];
   const orders = useQuery({
-    queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query, selectedBranches.join(","), assignmentScope ? orderTypesParam(typeFilter) : ""],
+    queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query, selectedBranches.join(","), assignmentScope ? orderTypesParam(typeFilter) : series],
     queryFn: () =>
       inventoryApi.listSalesOrders(
         from,
@@ -405,7 +413,7 @@ function SalesOrdersView({
         query,
         assignmentScope,
         [],
-        { branches: selectedBranches, orderTypes: assignmentScope ? orderTypesParam(typeFilter) : undefined },
+        { branches: selectedBranches, orderTypes: assignmentScope ? orderTypesParam(typeFilter) : series },
       ),
     retry: false,
     staleTime: 0,
@@ -495,6 +503,7 @@ function SalesOrdersView({
                 apiOrderStatus,
                 query,
                 selectedBranches.join(","),
+                assignmentScope ? orderTypesParam(typeFilter) : series,
               ],
             });
             setSyncMessage(`Synced ${result.synced_count} orders - just now`);
@@ -670,9 +679,9 @@ function SalesOrdersView({
     setPage(1);
     setCardPage(1);
   }, [from, to, orderStatus, query, selectedBranches, typeFilter]);
-  // Transfer orders have no Zoho sales-order drawer (and no Acknowledge): only SO rows open it.
+  // Transfer / purchase orders have no Zoho sales-order drawer (and no Acknowledge): only SO / WM rows open it.
   const openOrder = (order: inventoryApi.SalesOrderSummary) => {
-    if (orderTypeOfRow(order) === "SO") setSelected(order);
+    if (!isReferenceType(orderTypeOfRow(order))) setSelected(order);
   };
   const download = async (format: "pdf" | "excel") => {
     setExportOpen(false);
@@ -696,7 +705,7 @@ function SalesOrdersView({
   return (
     <div className="load-planning-panel min-w-0 border border-[#e4e3df] bg-white">
       <Toolbar
-        title={assignmentScope ? "Confirmed Orders" : "Sales Orders"}
+        title={assignmentScope ? "Confirmed Orders" : series === "WM" ? "Wet Market Orders" : "Sales Orders"}
         count={orderCount}
         selectedCount={selectedOrderIds.length}
         headerActions={
@@ -739,7 +748,7 @@ function SalesOrdersView({
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder={assignmentScope ? "Search orders" : "Search sales orders"}
+                  placeholder={assignmentScope ? "Search orders" : series === "WM" ? "Search wet market orders" : "Search sales orders"}
                   aria-label="Search orders"
                   className={`${inputClass} w-full pl-9 pr-3`}
                 />
@@ -840,7 +849,7 @@ function SalesOrdersView({
         </>
       ) : (
         <>
-          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, lineIndex, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); const product = lineProduct(order, item, lineIndex); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => openOrder(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{assignmentScope && <span className="mr-1.5"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{lineProductName(product, item)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{lineWeightLabel(product, orders.data?.stock_pending)}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
+          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, lineIndex, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); const product = lineProduct(order, item, lineIndex); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => openOrder(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{(assignmentScope || series === "WM") && <span className="mr-1.5"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{lineProductName(product, item)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{lineWeightLabel(product, orders.data?.stock_pending)}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
             <table className="w-full min-w-[2200px] table-fixed text-left text-xs">
               <colgroup>
                 {columnWidths.map((width, index) => (
@@ -904,7 +913,7 @@ function SalesOrdersView({
                           {dateLabel(order.expected_shipment_date)}
                         </td>
                         <td className="sticky left-[120px] z-[1] bg-white px-3 py-4 align-top font-semibold">
-                          <div style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{assignmentScope && <span className="mr-1.5 align-middle"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
+                          <div style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{(assignmentScope || series === "WM") && <span className="mr-1.5 align-middle"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
                           {ackErrors[String(order.id)] && <div className="mt-1 text-[10px] font-normal text-[#a32720]">{ackErrors[String(order.id)]}</div>}
                           {order.zoho_lock?.is_locked && (
                             <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal text-[#1e7b44]" title={[order.zoho_lock.config_name, order.zoho_lock.locked_by, order.zoho_lock.lock_time].filter(Boolean).join(" - ")}>

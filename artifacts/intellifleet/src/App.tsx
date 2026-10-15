@@ -214,7 +214,7 @@ interface Order {
   batchId?: string | null;
   emailStatus?: inventoryApi.SalesOrderSummary["email_status"];
   emailError?: string | null;
-  orderType?: "SO" | "TO" | "PO";
+  orderType?: "SO" | "WM" | "PO" | "TO";
 }
 
 const orders: Order[] = [];
@@ -3474,7 +3474,7 @@ function DataTablePage({
   const [showOrderFilters, setShowOrderFilters] = useState(false);
   const [showOrderColumns, setShowOrderColumns] = useState(false);
   const [orderColumns, setOrderColumns] = useState({ customer: true, route: true, vehicle: true, status: true, eta: true });
-  const orderOptions = { search: query, status: orderStatus, assignment: orderAssignment, vehicle: orderVehicle, customer: orderCustomer, deliveryStatus: orderDelivery, orderTypes: "SO,TO" };
+  const orderOptions = { search: query, status: orderStatus, assignment: orderAssignment, vehicle: orderVehicle, customer: orderCustomer, deliveryStatus: orderDelivery, orderTypes: "SO,WM,PO,TO" };
   const { data: ordersData, total: ordersTotal, refetch: refetchOrders, isFetching: ordersFetching } = useOrdersData(orderFrom, orderTo, orderOptions);
   const zohoUsage = useQuery({
     queryKey: ["zoho-usage"],
@@ -3710,7 +3710,7 @@ function TableFrame({
   );
 }
 function FleetMobileCards({ vehicles, onSelect }: { vehicles: Vehicle[]; onSelect: (vehicle: Vehicle) => void }) {
-  return <div className="grid gap-2 p-2 md:hidden">{vehicles.map((v) => { const sos = v.associatedSos || []; return <article key={v.id} className={`rounded-[4px] border p-3 ${v.locked ? "border-[#d7d7d3] bg-[#e7e7e4] text-[#77787b]" : "border-[#e4e3df] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><div className="mono text-sm font-bold text-black">{v.plate}</div><div className="mt-0.5 text-xs">Vehicle ID: {v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</div><StatusChip status={v.status} /></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#efeeeb] pt-3 text-xs"><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Speed</div><div className="font-semibold">{v.speed} kph</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fuel</div><div className="font-semibold">{v.fuel}%</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Zone</div><div>{v.zone || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Warehouse pickup</div><div>{v.warehousePickup || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Load</div><div className={loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) ? "font-semibold text-[#c4291f]" : ""}>{v.load ? `${v.load.assignedWeightKg.toLocaleString()} / ${v.load.capacityKg.toLocaleString()} kg` : "—"}</div>{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) && <div className="text-[10px] font-semibold text-[#c4291f]">{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg)!.text}</div>}</div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fulfillment</div><div>{v.fulfillment ? `${Math.round(v.fulfillment.percent)}% ${v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}` : "—"}</div></div></div><div className="mt-3 border-t border-[#efeeeb] pt-2"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Associated orders (SO / TO)</div>{sos.length ? <button className="mt-1 flex flex-wrap gap-1 text-left" onClick={() => onSelect(v)}>{sos.slice(0, 3).map((so) => <span className="inline-flex items-center gap-1 rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }} key={so.soNumber}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</span>)}{sos.length > 3 && <span className="px-1 text-[10px] text-black">+{sos.length - 3} more</span>}</button> : <div className="mt-1 text-xs">—</div>}</div></article>; })}</div>;
+  return <div className="grid gap-2 p-2 md:hidden">{vehicles.map((v) => { const sos = v.associatedSos || []; return <article key={v.id} className={`rounded-[4px] border p-3 ${v.locked ? "border-[#d7d7d3] bg-[#e7e7e4] text-[#77787b]" : "border-[#e4e3df] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><div className="mono text-sm font-bold text-black">{v.plate}</div><div className="mt-0.5 text-xs">Vehicle ID: {v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</div><StatusChip status={v.status} /></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#efeeeb] pt-3 text-xs"><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Speed</div><div className="font-semibold">{v.speed} kph</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fuel</div><div className="font-semibold">{v.fuel}%</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Zone</div><div>{v.zone || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Warehouse pickup</div><div>{v.warehousePickup || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Load</div><div className={loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) ? "font-semibold text-[#c4291f]" : ""}>{v.load ? `${v.load.assignedWeightKg.toLocaleString()} / ${v.load.capacityKg.toLocaleString()} kg` : "—"}</div>{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) && <div className="text-[10px] font-semibold text-[#c4291f]">{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg)!.text}</div>}</div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fulfillment</div><div>{v.fulfillment ? `${Math.round(v.fulfillment.percent)}% ${v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}` : "—"}</div></div></div><div className="mt-3 border-t border-[#efeeeb] pt-2"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Associated orders (SO / WM / PO / TO)</div>{sos.length ? <button className="mt-1 flex flex-wrap gap-1 text-left" onClick={() => onSelect(v)}>{sos.slice(0, 3).map((so) => <span className="inline-flex items-center gap-1 rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }} key={so.soNumber}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</span>)}{sos.length > 3 && <span className="px-1 text-[10px] text-black">+{sos.length - 3} more</span>}</button> : <div className="mt-1 text-xs">—</div>}</div></article>; })}</div>;
 }
 function FleetTable({ vehicles }: { vehicles: Vehicle[] }) {
   const [selected, setSelected] = useState<Vehicle | null>(null);
@@ -6013,9 +6013,10 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         : "";
       await queryClient.invalidateQueries({ queryKey: ["dispatch-dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["inventory-sales-orders"] });
-      // Assigned SO + TO leave the Inventory SO/TO tabs and the Load Planning unassigned list (and show in Confirmed Orders).
+      // Assigned SO / WM / PO / TO leave their Inventory tabs and the Load Planning unassigned list (and show in Confirmed Orders).
       await queryClient.invalidateQueries({ queryKey: ["load-planning-unassigned"] });
       await queryClient.invalidateQueries({ queryKey: ["inventory-transfer-orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["inventory-purchase-orders"] });
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
       if (!assignedDriverIds.length) {
         onNotice(`${ids.length} order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Third-party truck has no staff notification recipient.${overCapacityNote}`);
@@ -6100,12 +6101,12 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
         </div>
         <div className="mt-4 border-b border-[#e4e3df] pb-4 text-base font-bold leading-7 text-black">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#55565a]">
-            Selected orders (SO / TO)
+            Selected orders (SO / WM / PO / TO)
           </div>
           {ids.map((selectedId) => (
             <div key={selectedId} className="flex items-center gap-2 rounded bg-white px-2 py-1">
-              <OrderTypeBadge type={orderTypeOfRow({ id: selectedId })} />
-              <span style={{ color: orderTypeColor(orderTypeOfRow({ id: selectedId })) }}>{selectedId === id ? data.order.number || selectedId : selectedId.replace(/^TO:/, "")}</span>
+              <OrderTypeBadge type={orderTypeOfRow({ id: selectedId, salesorder_number: selectedId === id ? data.order.number : null })} />
+              <span style={{ color: orderTypeColor(orderTypeOfRow({ id: selectedId, salesorder_number: selectedId === id ? data.order.number : null })) }}>{selectedId === id ? data.order.number || selectedId : selectedId.replace(/^(TO|PO):/, "")}</span>
             </div>
           ))}
         </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
+import { normalizeOrderType } from "@/lib/orderType";
 import { useQuery } from "@tanstack/react-query";
 import { Check, MapPin } from "lucide-react";
 import * as overviewApi from "@/services/api/overview";
@@ -199,7 +200,7 @@ export function StopsTimelineCard({ orders }: { orders: overviewApi.TimelineOrde
                     {current && <span className="inline-flex items-center rounded-full border border-[#1d4ed8] bg-[#eef3fc] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Current stop</span>}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[#77787b]">
-                    <span>{o.order_type === "TO" ? "TO" : "SO"}: {o.so_number}</span>
+                    <span>{normalizeOrderType(o.order_type)}: {o.so_number}</span>
                     <OrderTypeBadge type={o.order_type} className="align-middle" />
                   </div>
                 </div>

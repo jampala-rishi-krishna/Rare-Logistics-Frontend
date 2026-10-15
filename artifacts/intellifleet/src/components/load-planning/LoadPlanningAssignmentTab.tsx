@@ -108,15 +108,31 @@ export default function LoadPlanningAssignmentTab() {
     retry: false,
     refetchInterval: (query) => (query.state.data?.details_pending ? 4000 : false),
   });
+  // Unassigned purchase orders (PO- only, default statuses: everything except Cancelled / Closed). Same prefix as above.
+  const purchaseOrders = useQuery({
+    queryKey: ["load-planning-unassigned", "po", from, to, search],
+    queryFn: async () => {
+      const first = await inventoryApi.listPurchaseOrders(from, to, 1, search, "unassigned");
+      let items = first.items;
+      let last = first;
+      for (let page = 2; last.has_more && page <= 20; page += 1) {
+        last = await inventoryApi.listPurchaseOrders(from, to, page, search, "unassigned");
+        items = [...items, ...last.items];
+      }
+      return { ...first, items, has_more: false, details_pending: last.details_pending };
+    },
+    retry: false,
+    refetchInterval: (query) => (query.state.data?.details_pending ? 4000 : false),
+  });
   const orders = useQuery({
     queryKey: ["load-planning-unassigned", from, to, search, selectedBranches.join(",")],
     // Load every page so the city filter and the total weight cover all filtered orders.
     queryFn: async () => {
-      const first = await inventoryApi.listSalesOrders(from, to, 1, "Acknowledged", search, "unassigned", [], { branches: selectedBranches });
+      const first = await inventoryApi.listSalesOrders(from, to, 1, "Acknowledged", search, "unassigned", [], { branches: selectedBranches, orderTypes: "SO,WM" });
       let items = first.items;
       let last = first;
       for (let page = 2; last.has_more && page <= 20; page += 1) {
-        last = await inventoryApi.listSalesOrders(from, to, page, "Acknowledged", search, "unassigned", [], { branches: selectedBranches });
+        last = await inventoryApi.listSalesOrders(from, to, page, "Acknowledged", search, "unassigned", [], { branches: selectedBranches, orderTypes: "SO,WM" });
         items = [...items, ...last.items];
       }
       return { ...first, items, has_more: false, stock_pending: last.stock_pending, branch_counts: first.branch_counts, branches: first.branches };
@@ -130,11 +146,11 @@ export default function LoadPlanningAssignmentTab() {
   // Both city choices and table rows use the same acknowledged, unassigned list.
   const citySource = orders;
   const cityOptions = useMemo(() => {
-    const values = [...(citySource.data?.items ?? []), ...(transferOrders.data?.items ?? [])]
+    const values = [...(citySource.data?.items ?? []), ...(transferOrders.data?.items ?? []), ...(purchaseOrders.data?.items ?? [])]
       .map(orderCity)
       .filter((value): value is string => Boolean(value && value !== "-"));
     return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
-  }, [citySource.data, transferOrders.data]);
+  }, [citySource.data, transferOrders.data, purchaseOrders.data]);
   const visibleOrders = useMemo(() => {
     const merged = new Map<string, Order>();
     for (const order of sessionAcknowledgedOrders()) {
@@ -145,15 +161,15 @@ export default function LoadPlanningAssignmentTab() {
       if (matchesDate && matchesSearch && matchesBranch) merged.set(String(order.id), { ...order, order_status: "acknowledged" });
     }
     for (const order of orders.data?.items ?? []) merged.set(String(order.id), order);
-    // One combined list: SO (acknowledged, unassigned) + TO (unassigned), same city/type filters and totals.
-    const items = filterByType(mergeOrders(Array.from(merged.values()), transferOrders.data?.items ?? []), typeFilter);
+    // One combined list: SO + WM (acknowledged, unassigned) + PO + TO (unassigned), same city/type filters and totals.
+    const items = filterByType(mergeOrders(Array.from(merged.values()), transferOrders.data?.items ?? [], purchaseOrders.data?.items ?? []), typeFilter);
     if (!selectedCities.length) return items;
     return items.filter((order) => selectedCities.includes(orderCity(order)));
-  }, [orders.data, transferOrders.data, selectedCities, from, to, search, selectedBranches, typeFilter]);
+  }, [orders.data, transferOrders.data, purchaseOrders.data, selectedCities, from, to, search, selectedBranches, typeFilter]);
   const ids = useMemo(() => visibleOrders.map((x) => x.id), [visibleOrders]);
   // Total weight of exactly what the filters leave on screen.
   const weight = useMemo(() => weightTotals(visibleOrders), [visibleOrders]);
-  const calculating = orders.isLoading || Boolean(orders.data?.stock_pending) || transferOrders.isLoading || Boolean(transferOrders.data?.details_pending);
+  const calculating = orders.isLoading || Boolean(orders.data?.stock_pending) || transferOrders.isLoading || Boolean(transferOrders.data?.details_pending) || purchaseOrders.isLoading || Boolean(purchaseOrders.data?.details_pending);
   // An order that was assigned elsewhere leaves the list: drop it from the selection too.
   useEffect(() => {
     setSelected((current) => {
@@ -193,7 +209,7 @@ export default function LoadPlanningAssignmentTab() {
                 ? "Item weights are still loading from Zoho"
                 : weight.unknown
                   ? `${weight.unknown} line${weight.unknown === 1 ? " has" : "s have"} no weight in Zoho and ${weight.unknown === 1 ? "is" : "are"} not included`
-                  : "Total weight of the filtered sales and transfer orders"
+                  : "Total weight of the filtered sales, wet market, purchase and transfer orders"
             }
           >
             <Scale size={13} className="shrink-0" />
@@ -294,11 +310,12 @@ export default function LoadPlanningAssignmentTab() {
             onClick={() => {
               void orders.refetch();
               void transferOrders.refetch();
+              void purchaseOrders.refetch();
             }}
-            disabled={orders.isFetching || citySource.isFetching || transferOrders.isFetching}
+            disabled={orders.isFetching || citySource.isFetching || transferOrders.isFetching || purchaseOrders.isFetching}
             className={primaryButtonClass}
           >
-            <RefreshCw size={15} className={orders.isFetching || transferOrders.isFetching ? "animate-spin" : ""} />
+            <RefreshCw size={15} className={orders.isFetching || transferOrders.isFetching || purchaseOrders.isFetching ? "animate-spin" : ""} />
             Refresh
           </button>
         }
@@ -334,6 +351,10 @@ export default function LoadPlanningAssignmentTab() {
         <div className="p-10 text-center text-sm text-[#a32720]">
           {(transferOrders.error as Error).message}
         </div>
+      ) : purchaseOrders.isError && typeFilter === "PO" ? (
+        <div className="p-10 text-center text-sm text-[#a32720]">
+          {(purchaseOrders.error as Error).message}
+        </div>
       ) : visibleOrders.length ? (
         <>
           <div className="grid gap-3 p-3 md:hidden">
@@ -362,7 +383,7 @@ export default function LoadPlanningAssignmentTab() {
                       </h3>
                     </div>
                     <span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">
-                      {orderTypeOfRow(order) === "TO" ? "Draft" : "Acknowledged"}
+                      {orderTypeOfRow(order) === "TO" ? "Draft" : orderTypeOfRow(order) === "PO" ? (order.status_label ?? order.order_status ?? "PO") : "Acknowledged"}
                     </span>
                   </div>
                   <div className="mt-4 grid min-w-0 max-w-full gap-2 overflow-hidden border-t pt-3 text-xs text-[#55565a]">

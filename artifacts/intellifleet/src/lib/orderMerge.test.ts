@@ -15,14 +15,31 @@ test("type filter and counts (type taken from field or TO: id)", () => {
   assert.equal(filterByType(list, "all").length, 3);
   assert.deepEqual(filterByType(list, "TO").map((o) => o.id), ["TO:2", "TO:3"]);
   assert.deepEqual(filterByType(list, "SO").map((o) => o.id), ["1"]);
-  assert.deepEqual(countByType(list), { SO: 1, TO: 2, PO: 0 });
+  assert.deepEqual(countByType(list), { SO: 1, WM: 0, PO: 0, TO: 2 });
   assert.equal(describeCounts(countByType(list)), "SO 1 / TO 2");
   assert.equal(describeCounts({ SO: 0, TO: 4 }), "TO 4");
 });
 
 test("order_types query value", () => {
-  assert.equal(orderTypesParam("all"), "SO,TO");
+  assert.equal(orderTypesParam("all"), "SO,WM,PO,TO");
   assert.equal(orderTypesParam("TO"), "TO");
+  assert.equal(orderTypesParam("WM"), "WM");
+});
+
+test("SO + WM + PO + TO in one list: type filter, counts and description", () => {
+  const list = [
+    so("1", "d", "SO-1"),
+    { id: "2", salesorder_number: "WM-SO26-00282", order_type: "WM" },
+    { id: "3", salesorder_number: "WM-SO26-00283" }, // no order_type: read from the WM-SO number
+    { id: "PO:4", salesorder_number: "PO-1026-01704" }, // no order_type: read from the PO: id
+    to("5", "d", "TO-1"),
+  ];
+  assert.deepEqual(filterByType(list, "WM").map((o) => o.id), ["2", "3"]);
+  assert.deepEqual(filterByType(list, "PO").map((o) => o.id), ["PO:4"]);
+  assert.deepEqual(filterByType(list, "SO").map((o) => o.id), ["1"]);
+  assert.deepEqual(countByType(list), { SO: 1, WM: 2, PO: 1, TO: 1 });
+  assert.equal(describeCounts(countByType(list)), "SO 1 / WM 2 / PO 1 / TO 1");
+  assert.equal(describeCounts({ SO: 0, WM: 0, PO: 3, TO: 0 }), "PO 3");
 });
 
 test("weight totals count unknown lines across mixed orders", () => {

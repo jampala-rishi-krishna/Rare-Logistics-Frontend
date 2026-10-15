@@ -40,8 +40,21 @@ function shortAddress(o: DriverOrder): string {
   return lines.length > 1 ? lines.slice(-2).join(", ") : o.address_text;
 }
 
+/** TO or PO: no invoice, the order number is the reference. */
 function isTo(o: Pick<DriverOrder, "order_type">): boolean {
-  return String(o.order_type ?? "SO").toUpperCase() === "TO";
+  const kind = String(o.order_type ?? "SO").toUpperCase();
+  return kind === "TO" || kind === "PO";
+}
+
+function isPo(o: Pick<DriverOrder, "order_type">): boolean {
+  return String(o.order_type ?? "SO").toUpperCase() === "PO";
+}
+
+/** The grey line under a stop: TO = where it comes from; PO = pick up at the vendor -> destination warehouse; SO / WM = the area. */
+function stopSubline(o: DriverOrder, t: Dict): string {
+  if (isPo(o)) return t.pickupFrom(o.pickup_from ?? o.customer_name ?? "", o.destination_warehouse ?? null);
+  if (isTo(o)) return o.source_warehouse ? t.transferFrom(o.source_warehouse) : o.destination_warehouse ?? "";
+  return shortAddress(o);
 }
 
 function ItemsLine({ order, t, extra }: { order: DriverOrder; t: Dict; extra?: string | null }) {
@@ -134,7 +147,7 @@ function AckList({ state, t }: { state: EffectiveBatch; t: Dict }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "6px 20px 16px" }}>
         {state.orders.map((eff, i) => {
           const o = eff.order;
-          const sub = isTo(o) ? (o.source_warehouse ? t.transferFrom(o.source_warehouse) : o.destination_warehouse ?? "") : shortAddress(o);
+          const sub = stopSubline(o, t);
           return (
             <div key={eff.so_id} data-testid={`driver-order-${o.so_number}`} style={{ background: C.card, borderRadius: 18, padding: 16, display: "flex", gap: 14 }}>
               <NumberDot n={i + 1} done={eff.acked || eff.ackPending} />
@@ -173,6 +186,11 @@ function CurrentStopCard({ eff, t, here }: { eff: EffectiveOrder; t: Dict; here:
       </div>
       <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 8, overflowWrap: "anywhere" }}>{o.customer_name}</div>
       {address && <div style={{ fontSize: 15, color: C.body, marginTop: 4, lineHeight: 1.4, overflowWrap: "anywhere" }}>{address}</div>}
+      {isPo(o) && (
+        <div data-testid="driver-po-pickup" style={{ marginTop: 10, padding: "8px 12px", borderRadius: 14, background: C.blueBg, color: C.blue, fontSize: 14, fontWeight: 700, overflowWrap: "anywhere" }}>
+          {stopSubline(o, t)}
+        </div>
+      )}
       {(contactName || tel) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 14, padding: "10px 12px", borderRadius: 14, background: C.soft }}>
           <div style={{ fontSize: 15, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -420,7 +438,7 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
 
   const invoiceField = to ? (
     <label style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 14, fontWeight: 700 }}>
-      {t.toNumber}
+      {isPo(o) ? t.poNumber : t.toNumber}
       <input data-testid="driver-invoice-input" type="text" readOnly value={o.invoice_no_prefill ?? o.order_reference ?? o.so_number} style={{ height: 58, borderRadius: 14, border: `1.5px solid ${C.field}`, background: C.soft, padding: "0 16px", fontSize: 22, fontWeight: 700, letterSpacing: "0.04em", fontFamily: "inherit", color: C.body, width: "100%", boxSizing: "border-box" }} />
     </label>
   ) : invoiceItem ? (

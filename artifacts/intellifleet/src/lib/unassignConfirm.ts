@@ -7,7 +7,7 @@ export type UnassignState = "assigned" | "acknowledged" | "trip_started" | "chec
 export interface UnassignPreviewOrder {
   id: string;
   number: string | null;
-  order_type?: "SO" | "TO" | null;
+  order_type?: "SO" | "WM" | "PO" | "TO" | null;
   state?: UnassignState | string | null;
   acknowledged_by?: string | null;
   acknowledged_at?: string | null;
