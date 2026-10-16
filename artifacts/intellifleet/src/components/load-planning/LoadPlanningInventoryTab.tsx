@@ -29,6 +29,8 @@ import { OrderTypeBadge } from "./OrderTypeBadge";
 import { TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
 import TransferOrdersTab, { TRANSFER_ORDERS_KEY } from "./TransferOrdersTab";
 import PurchaseOrdersTab, { PURCHASE_ORDERS_KEY } from "./PurchaseOrdersTab";
+import { useAccess } from "@/hooks/use-access";
+import { RequestUnassignDialog } from "./RequestUnassignDialog";
 import ConfirmedEmailDialog from "./ConfirmedEmailDialog";
 import UnassignConfirmDialog from "./UnassignConfirmDialog";
 import { confirmRequiredOrders, planUnassign, skippedText, type UnassignPlan, type UnassignPreviewOrder } from "@/lib/unassignConfirm";
@@ -349,6 +351,8 @@ function SalesOrdersView({
   series?: "SO" | "WM";
 }) {
   const [, navigate] = useLocation();
+  const { manager, readOnly } = useAccess();
+  const [requestIds, setRequestIds] = useState<string[]>([]);
   const [emailOpen, setEmailOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [confirmUnassign, setConfirmUnassign] = useState(false);
@@ -356,10 +360,11 @@ function SalesOrdersView({
   // Unassign guard: the one dialog for acknowledged / started / checked-in (confirm) and delivered (blocked) orders.
   const [unassignGuard, setUnassignGuard] = useState<{ plan: Extract<UnassignPlan, { kind: "dialog" }>; single?: inventoryApi.SalesOrderSummary } | null>(null);
   const [unassignPreviewing, setUnassignPreviewing] = useState(false);
-  const initial = tomorrowPht();
+  const initial = new URLSearchParams(window.location.search).get("date") || tomorrowPht();
   const [from, setFrom] = useState(initial);
   const [to, setTo] = useState(initial);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(new URLSearchParams(window.location.search).get("order") || "");
+  useEffect(() => { const value = new URLSearchParams(window.location.search).get("order"); if(value) setQuery(value); const day = new URLSearchParams(window.location.search).get("date"); if(day) {setFrom(day); setTo(day);} }, [window.location.search]);
   const [selected, setSelected] =
     useState<inventoryApi.SalesOrderSummary | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -401,7 +406,7 @@ function SalesOrdersView({
     130,
     90,
     120,
-    ...(assignmentScope ? [180, 220, 80] : []),
+    ...(assignmentScope ? [180, 220, ...(manager ? [220] : []), 120] : []),
   ];
   const orders = useQuery({
     queryKey: [INVENTORY_LIST_KEY, assignmentScope ?? "inventory", from, to, page, apiOrderStatus, query, selectedBranches.join(","), assignmentScope ? orderTypesParam(typeFilter) : series],
@@ -615,6 +620,7 @@ function SalesOrdersView({
     }
   };
   const unassign = async (order: inventoryApi.SalesOrderSummary) => {
+    if (!manager) { if (!readOnly) setRequestIds([order.id]); return; }
     setUnassignPreviewing(true);
     const plan = await previewUnassignPlan([order.id]);
     setUnassignPreviewing(false);
@@ -665,6 +671,7 @@ function SalesOrdersView({
   };
   /** "Unassign selected": preview first; only orders already in progress / delivered get the extra dialog. */
   const openBulkUnassign = async () => {
+    if (!manager) {if (!readOnly) setRequestIds(selectedOrderIds); return;}
     setUnassignPreviewing(true);
     const plan = await previewUnassignPlan(selectedOrderIds);
     setUnassignPreviewing(false);
@@ -714,10 +721,10 @@ function SalesOrdersView({
         headerActions={
           assignmentScope ? (
             <>
-              <button onClick={() => void openBulkUnassign()} disabled={bulkUnassigning || unassignPreviewing || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
-                {bulkUnassigning || unassignPreviewing ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Unassign selected ({selectedOrderIds.length})
+              <button hidden={readOnly} onClick={() => void openBulkUnassign()} disabled={readOnly || bulkUnassigning || unassignPreviewing || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
+                {bulkUnassigning || unassignPreviewing ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} {manager ? "Unassign selected" : "Request unassign"} ({selectedOrderIds.length})
               </button>
-              <button onClick={() => setEmailOpen(true)} disabled={!visibleOrderIds.length} className={dangerButtonClass} data-testid="confirmed-email-button">
+              <button hidden={readOnly} onClick={() => setEmailOpen(true)} disabled={!visibleOrderIds.length} className={dangerButtonClass} data-testid="confirmed-email-button">
                 <Mail size={14} /> Email
               </button>
               <div className="relative">
@@ -737,7 +744,7 @@ function SalesOrdersView({
               </div>
             </>
           ) : (
-            <button onClick={acknowledgeFiltered} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass} data-testid="acknowledge-selected">
+            <button onClick={acknowledgeFiltered} hidden={readOnly} disabled={bulkAcknowledging || !selectedOrderIds.length} className={primaryButtonClass} data-testid="acknowledge-selected">
               {bulkAcknowledging ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{" "}
               {bulkAcknowledging ? "Acknowledging..." : `Acknowledge selected (${selectedOrderIds.length})`}
             </button>
@@ -783,13 +790,13 @@ function SalesOrdersView({
         actions={
           assignmentScope ? (
             <>
-              <button onClick={refresh} disabled={syncing} className={primaryButtonClass} data-testid="confirmed-refresh">
+              <button hidden={readOnly} onClick={refresh} disabled={syncing} className={primaryButtonClass} data-testid="confirmed-refresh">
                 {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
               </button>
             </>
           ) : (
             <>
-              <button onClick={refresh} disabled={syncing} className={buttonClass} data-testid="inventory-refresh">
+              <button hidden={readOnly} onClick={refresh} disabled={syncing} className={buttonClass} data-testid="inventory-refresh">
                 {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? "Refreshing..." : "Refresh"}
               </button>
             </>
@@ -836,8 +843,9 @@ function SalesOrdersView({
             showAssignment
             onToggle={toggleOrder}
             onOpen={openOrder}
-            onEdit={(order) => navigate(`/app/routes?assign=${encodeURIComponent(order.id)}`)}
-            onUnassign={(order) => void unassign(order)}
+            onEdit={manager ? (order) => navigate(`/app/routes?assign=${encodeURIComponent(order.id)}`) : undefined}
+            onUnassign={readOnly ? undefined : (order) => void unassign(order)}
+            unassignLabel={manager ? "Unassign" : "Request unassign"}
           />
           {(page > 1 || orders.data?.has_more) && (
             <div className="flex items-center justify-end gap-2 border-t border-[#e4e3df] px-4 py-3">
@@ -886,7 +894,7 @@ function SalesOrdersView({
                     "Shipped",
                     "Amount",
                     ...(assignmentScope
-                      ? ["Assigned Truck", "Assigned Driver", "Edit"]
+                      ? ["Assigned Truck", "Assigned Driver", ...(manager ? ["Assigned by"] : []), "Actions"]
                       : []),
                   ].map((heading, index) => (
                     <th
@@ -910,7 +918,7 @@ function SalesOrdersView({
                       <tr
                         key={`${order.id}-${item.line_item_id ?? index}`}
                         onClick={() => openOrder(order)}
-                        className="cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8]"
+                        className={`cursor-pointer border-b border-[#efeeeb] hover:bg-[#fafaf8] ${new URLSearchParams(window.location.search).get("highlight") === order.id ? "bg-amber-100 outline outline-amber-400" : ""}`}
                       >
                         <td className="sticky left-0 z-[2] bg-white px-3 py-4 align-top"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={(event) => { event.stopPropagation(); toggleOrder(String(order.id)); }} onClick={(event) => event.stopPropagation()} /></td>
                         <td className="sticky left-[44px] z-[1] bg-white px-3 py-4 align-top">
@@ -998,9 +1006,10 @@ function SalesOrdersView({
                                   ? `Driver #${order.driver_id}`
                                   : "-")}
                             </td>
-                            <td className="w-[80px] whitespace-nowrap px-3 py-4 align-top">
+                            {manager && <td className="px-3 py-4 align-top text-xs">{order.assigned_by_name ? <>{order.assigned_by_name}<br/>{order.assigned_at ? new Date(order.assigned_at).toLocaleString("en-GB", {timeZone:"Asia/Manila"}) : "—"}</> : "—"}</td>}
+                            <td className="w-[120px] whitespace-nowrap px-3 py-4 align-top">
                               <div className="flex flex-col items-start gap-1">
-                                <button
+                                {manager && <button
                                   className="text-xs font-semibold underline"
                                   onClick={(event) => {
                                     event.stopPropagation();
@@ -1008,8 +1017,8 @@ function SalesOrdersView({
                                   }}
                                 >
                                   Edit
-                                </button>
-                                {order.assignment_status === "assigned" && (
+                                </button>}
+                                {!readOnly && order.assignment_status === "assigned" && (
                                   <button
                                     className="text-xs font-semibold text-[#86000B] underline"
                                     onClick={(event) => {
@@ -1017,7 +1026,7 @@ function SalesOrdersView({
                                       void unassign(order);
                                     }}
                                   >
-                                    Unassign
+                                    {manager ? "Unassign" : "Request unassign"}
                                   </button>
                                 )}
                               </div>
@@ -1089,6 +1098,7 @@ function SalesOrdersView({
           </section>
         </div>
       )}
+      {requestIds.length > 0 && <RequestUnassignDialog ids={requestIds} onClose={() => setRequestIds([])} onSent={() => {setRequestIds([]); setSyncMessage("Unassign request sent to managers."); void client.invalidateQueries({queryKey:["access-alerts"]});}}/>}
       {unassignGuard && (
         <UnassignConfirmDialog
           plan={unassignGuard.plan}
@@ -1131,7 +1141,9 @@ function SalesOrderDetailDrawer({
   )
     .toLowerCase()
     .replaceAll("_", " ");
+  const { readOnly } = useAccess();
   const canAcknowledge =
+    !readOnly &&
     !detail.isLoading &&
     !detail.isError &&
     !["acknowledged", "void", "cancelled", "canceled"].includes(rawStatus);
@@ -1202,7 +1214,7 @@ function SalesOrderDetailDrawer({
     }
   };
   const canRemoveAcknowledge =
-    !detail.isLoading && !detail.isError && rawStatus === "acknowledged";
+    !readOnly && !detail.isLoading && !detail.isError && rawStatus === "acknowledged";
   const lockStatus = (detail.data?.zoho_lock ?? raw.zoho_lock ?? order.zoho_lock) as inventoryApi.ZohoLockStatus | undefined;
   const fields = [
     ["Reference #", raw.reference_number],
@@ -1277,7 +1289,7 @@ function SalesOrderDetailDrawer({
                   {actionMessage}
                 </span>
               )}
-              {(lockRetryVisible || (rawStatus === "acknowledged" && lockStatus?.is_locked === false && !lockStatus?.lock_error)) && (
+              {!readOnly && (lockRetryVisible || (rawStatus === "acknowledged" && lockStatus?.is_locked === false && !lockStatus?.lock_error)) && (
                 <button
                   onClick={retryLock}
                   disabled={retryingLock}

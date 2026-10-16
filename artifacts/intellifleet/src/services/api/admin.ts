@@ -44,6 +44,7 @@ export interface ApiUser {
   staff_id: number | string | null;
   must_change_password: boolean;
   invite_state: InviteState;
+  is_manager?: boolean;
 }
 
 export interface ApiRole {
@@ -71,6 +72,10 @@ export function sendInvite(userId: number | string, purpose: InvitePurpose): Pro
 
 export function setUserStatus(userId: number | string, status: "active" | "disabled"): Promise<{ ok: true }> {
   return api.post<{ ok: true }>(`/api/admin/users/${encodeURIComponent(String(userId))}/status`, { status });
+}
+
+export function setManager(userId: string | number, is_manager: boolean): Promise<{ok: boolean}> {
+  return api.patch(`/api/admin/users/${encodeURIComponent(String(userId))}/manager`, {is_manager});
 }
 
 export function listRoles(): Promise<ApiRole[]> {
@@ -101,7 +106,7 @@ export function getZohoUsage(): Promise<ZohoUsageHealth> {
   return api.get<ZohoUsageHealth>("/api/admin/zoho-usage");
 }
 
-export type CreatableRole = "logistics_officer" | "driver" | "helper" | "dispatcher" | "planner" | "warehouse";
+export type CreatableRole = "admin" | "planner" | "driver" | "sales" | "wet_market" | "helper" | "logistics_officer";
 
 export interface CreateUserBody {
   full_name: string;

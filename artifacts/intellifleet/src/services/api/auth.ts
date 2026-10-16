@@ -8,6 +8,7 @@ export interface ApiUser {
   status: string;
   mustChangePassword?: boolean;
   staffId?: number | string | null;
+  is_manager?: boolean;
 }
 
 export interface LoginResult {

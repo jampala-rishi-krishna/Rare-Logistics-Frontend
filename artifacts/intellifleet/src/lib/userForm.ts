@@ -1,12 +1,13 @@
 // Pure helpers for the Admin > Users "Add user" form.
 
 export const CREATABLE_ROLES = [
-  { value: "logistics_officer", label: "Logistics officer" },
-  { value: "driver", label: "Driver" },
-  { value: "helper", label: "Helper" },
-  { value: "dispatcher", label: "Dispatcher" },
+  { value: "admin", label: "Admin" },
   { value: "planner", label: "Planner" },
-  { value: "warehouse", label: "Warehouse" },
+  { value: "driver", label: "Driver" },
+  { value: "sales", label: "Sales" },
+  { value: "wet_market", label: "Wet Market" },
+  { value: "helper", label: "Helper" },
+  { value: "logistics_officer", label: "Logistics Officer" },
 ] as const;
 
 export type CreatableRoleValue = (typeof CREATABLE_ROLES)[number]["value"];

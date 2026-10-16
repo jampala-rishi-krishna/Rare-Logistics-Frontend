@@ -1,3 +1,4 @@
+import { useAccess } from "@/hooks/use-access";
 import { BranchBadge } from "./BranchControls";
 import { OrderTypeBadge } from "./OrderTypeBadge";
 import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
@@ -66,6 +67,7 @@ export function SalesOrderCard({
   onOpen,
   onEdit,
   onUnassign,
+  unassignLabel = "Unassign",
 }: {
   order: SalesOrderSummary;
   selected: boolean;
@@ -75,7 +77,9 @@ export function SalesOrderCard({
   onOpen: (order: SalesOrderSummary) => void;
   onEdit?: (order: SalesOrderSummary) => void;
   onUnassign?: (order: SalesOrderSummary) => void;
+  unassignLabel?: string;
 }) {
+  const { manager } = useAccess();
   const weight = orderWeight(order);
   const raw = (order as any).raw_json ?? {};
   const location = (order as any).shipping_city || (Array.isArray(raw.shipping_address) ? raw.shipping_address[0]?.city : raw.shipping_address?.city) || "-";
@@ -112,6 +116,7 @@ export function SalesOrderCard({
         <Field label="City">{location}</Field>
         {showAssignment && (
           <>
+            {manager && <Field label="Assigned by">{order.assigned_by_name ? <>{order.assigned_by_name}<br/>{order.assigned_at ? new Date(order.assigned_at).toLocaleString("en-GB", {timeZone:"Asia/Manila"}) : "—"}</> : "—"}</Field>}
             <Field label="Truck">{order.vehicle_id ?? "-"}</Field>
             <Field label="Driver">{order.driver_name ?? (order.driver_id ? `Driver #${order.driver_id}` : "-")}</Field>
           </>
@@ -130,7 +135,7 @@ export function SalesOrderCard({
           )}
           {onUnassign && order.assignment_status === "assigned" && (
             <button type="button" className="text-xs font-semibold text-[#86000B] underline" onClick={() => onUnassign(order)}>
-              Unassign
+              {unassignLabel}
             </button>
           )}
         </div>
@@ -155,6 +160,7 @@ export function SalesOrderCardGrid({
   onOpen,
   onEdit,
   onUnassign,
+  unassignLabel = "Unassign",
 }: {
   orders: SalesOrderSummary[];
   page: number;
@@ -166,6 +172,7 @@ export function SalesOrderCardGrid({
   onOpen: (order: SalesOrderSummary) => void;
   onEdit?: (order: SalesOrderSummary) => void;
   onUnassign?: (order: SalesOrderSummary) => void;
+  unassignLabel?: string;
 }) {
   const view = pageOfCards(orders, page);
   return (
@@ -182,6 +189,7 @@ export function SalesOrderCardGrid({
             onOpen={onOpen}
             onEdit={onEdit}
             onUnassign={onUnassign}
+            unassignLabel={unassignLabel}
           />
         ))}
       </div>

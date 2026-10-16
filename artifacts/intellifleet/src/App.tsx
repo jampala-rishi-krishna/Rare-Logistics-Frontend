@@ -151,8 +151,10 @@ import {
 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import { formatAddress } from "@/lib/address";
-import { SECTION_ROLES, filterNavGroups, postLoginRoute, redirectForDisallowedRole } from "@/lib/roles";
+import { SECTION_ROLES, canSeeNavItem, filterNavGroups, postLoginRoute, redirectForDisallowedRole } from "@/lib/roles";
 import AddUserForm from "@/components/admin/AddUserForm";
+import AccessAlerts from "@/components/AccessAlerts";
+import { useAccess } from "@/hooks/use-access";
 import { showInviteActions } from "@/lib/userForm";
 import OfficerPending from "@/pages/officer/OfficerPending";
 import OfficerHandover from "@/pages/officer/OfficerHandover";
@@ -164,7 +166,7 @@ import DriverLogin from "@/pages/driver/DriverLogin";
 import DriverForgot from "@/pages/driver/DriverForgot";
 import DriverRoutes from "@/pages/driver/DriverRoutes";
 
-type Role = "Dispatcher" | "Planner" | "Driver" | "Warehouse" | "Client" | "Admin";
+type Role = "Planner" | "Driver" | "Admin" | "Sales" | "Wet Market" | "Helper" | "Logistics Officer";
 // Widened from a fixed enum to a plain string: real order status values come
 // from whatever ops writes to the live orders table, not a closed demo set.
 type OrderStatus = string;
@@ -577,11 +579,12 @@ const navGroups = [
   },
 ];
 const rolePaths: Record<Role, string> = {
-  Dispatcher: "/app/tower",
   Planner: "/app/tower",
   Driver: "/driver/today",
-  Warehouse: "/warehouse/dashboard",
-  Client: "/portal/orders",
+  Sales: "/app/orders",
+  "Wet Market": "/app/orders",
+  Helper: "/driver/today",
+  "Logistics Officer": "/officer/pending",
   Admin: "/admin/users",
 };
 
@@ -1002,8 +1005,8 @@ const roleStories: Record<
     bullets: string[];
   }
 > = {
-  Dispatcher: {
-    eyebrow: "For dispatchers",
+  Planner: {
+    eyebrow: "For planners",
     title: "The whole network, at a glance.",
     body: "A calm command surface for making the next right decision before an exception becomes a delay.",
     image: dispatcherImage,
@@ -1024,8 +1027,8 @@ const roleStories: Record<
       "Clear handoffs at every stop",
     ],
   },
-  Warehouse: {
-    eyebrow: "For warehouses",
+  Admin: {
+    eyebrow: "For administrators",
     title: "Make the dock the source of truth.",
     body: "Turn loading, receiving, and cold-chain exceptions into visible, accountable work.",
     image: coldStorageImage,
@@ -1035,8 +1038,8 @@ const roleStories: Record<
       "Fast tablet-friendly checklists",
     ],
   },
-  Customer: {
-    eyebrow: "For customers",
+  Sales: {
+    eyebrow: "For sales",
     title: "A delivery update worth trusting.",
     body: "A simple view of what is moving, when it will arrive, and what happened at the door.",
     image:
@@ -1351,7 +1354,7 @@ function JourneySection() {
 }
 
 function Landing() {
-  const [story, setStory] = useState("Dispatcher");
+  const [story, setStory] = useState("Planner");
   const [pulse, setPulse] = useState(247);
   useEffect(() => {
     const id = window.setInterval(
@@ -1918,10 +1921,13 @@ function RequestDemo() {
                 data-testid="select-demo-role"
                 className="border border-[#d8d7d2] bg-white px-3 py-3 font-normal outline-none focus:border-black"
               >
-                <option>Dispatcher / Ops Manager</option>
-                <option>Warehouse Manager</option>
-                <option>Fleet Owner</option>
-                <option>Customer / Client</option>
+                <option>Planner</option>
+                <option>Admin</option>
+                <option>Driver</option>
+                <option>Sales</option>
+                <option>Wet Market</option>
+                <option>Helper</option>
+                <option>Logistics Officer</option>
               </select>
             </label>
             <label className="grid gap-2 text-sm font-semibold">
@@ -1959,7 +1965,7 @@ function RequestDemo() {
 
 function RoleSwitcher({ role }: { role: string }) {
   const [, setLocation] = useLocation();
-  const initialRole = (Object.keys(rolePaths).find((key) => key.toLowerCase() === role.toLowerCase()) || "Dispatcher") as Role;
+  const initialRole = (Object.keys(rolePaths).find((key) => key.toLowerCase() === role.toLowerCase()) || "Planner") as Role;
   const [view, setView] = useState<Role>(initialRole);
   const adminSession = role.toLowerCase() === "admin";
   const choose = (next: Role) => {
@@ -1974,11 +1980,12 @@ function RoleSwitcher({ role }: { role: string }) {
       onChange={(e) => choose(e.target.value as Role)}
       className="hidden border border-[#d8d7d2] bg-white px-2 py-2 text-xs font-semibold outline-none md:block"
     >
-      <option>Dispatcher</option>
       <option>Planner</option>
       <option>Driver</option>
-      <option>Warehouse</option>
-      <option>Client</option>
+      <option>Sales</option>
+      <option>Wet Market</option>
+      <option>Helper</option>
+      <option>Logistics Officer</option>
       <option>Admin</option>
     </select>
   );
@@ -2055,12 +2062,11 @@ function Login() {
   const selectRole = (item: Role) => {
     setRole(item);
     const sharedLogin: Partial<Record<Role, string>> = {
-      Dispatcher: "dispatcher@rgf.com",
       Planner: "planner@rgf.com",
       Admin: "admin@rgf.com",
     };
     if (sharedLogin[item]) setIdentifier(sharedLogin[item] as string);
-    if (item === "Driver" || item === "Warehouse" || item === "Client") setIdentifier("");
+    if (["Driver", "Helper", "Logistics Officer", "Sales", "Wet Market"].includes(item)) setIdentifier("");
   };
   if (checkingSession)
     return (
@@ -2129,11 +2135,12 @@ function Login() {
               <div className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-6">
                 {(
                   [
-                    "Dispatcher",
                     "Planner",
                     "Driver",
-                    "Warehouse",
-                    "Client",
+                    "Sales",
+                    "Wet Market",
+                    "Helper",
+                    "Logistics Officer",
                     "Admin",
                   ] as Role[]
                 ).map((item) => (
@@ -2219,7 +2226,7 @@ function AppShell({
   const queryClient = useQueryClient();
   const currentRole = currentUser?.role?.toLowerCase() || "dispatcher";
   const isAdmin = currentRole === "admin";
-  const roleLabel = isAdmin ? "Admin" : currentRole === "planner" ? "Planner" : "Dispatcher";
+  const roleLabel = isAdmin ? "Admin" : currentRole === "wet_market" ? "Wet Market" : currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
   const roleInitial = roleLabel.charAt(0);
   const doLogout = async () => {
     if (getStoredSessionId()) {
@@ -2285,6 +2292,9 @@ function AppShell({
       setLocation("/app/tower");
     }
   }, [checkingAuth, currentUser, isAdmin, location, setLocation]);
+  useEffect(() => {
+    if (currentUser && location.startsWith("/app/") && !canSeeNavItem(location.split("?")[0], currentUser.role)) setLocation(postLoginRoute(currentUser));
+  }, [currentUser, location, setLocation]);
   useEffect(() => {
     if (!getStoredSessionId()) return;
     let timer: number;
@@ -2493,6 +2503,7 @@ function AppShell({
               <span>Live feed</span>
               <LivePhtClock />
             </div>
+            <AccessAlerts />
             {isAdmin && <RoleSwitcher role="Admin" />}
             {isAdmin && (
               <Link
@@ -3497,7 +3508,8 @@ function DataTablePage({
     return () => window.clearInterval(timer);
   }, [kind, refetchOrders, orderFrom, orderTo]);
   const filtered = ordersData;
-  const [lpTab, setLpTab] = useState<LoadPlanningTab>("inventory");
+  const [lpTab, setLpTab] = useState<LoadPlanningTab>(new URLSearchParams(window.location.search).get("tab") === "confirmed" ? "confirmed" : "inventory");
+  useEffect(() => {if (new URLSearchParams(window.location.search).get("tab") === "confirmed") setLpTab("confirmed");}, [window.location.search]);
   const [lpViewMode, setLpViewModeState] = useState<ViewMode>(() => readViewMode());
   const setLpViewMode = (mode: ViewMode) => {
     setLpViewModeState(mode);
@@ -3749,6 +3761,7 @@ function OrderTable({
   columns: { customer: boolean; route: boolean; vehicle: boolean; status: boolean; eta: boolean };
 }) {
   const queryClient = useQueryClient();
+  const { readOnly } = useAccess();
   const [retrying, setRetrying] = useState<string | null>(null);
   const [sendingNow, setSendingNow] = useState<string | null>(null);
   // "Not sent" chip -> Send: the first Send of the assignment (email + WhatsApp/SMS/voice), identified by its batch id so the
@@ -3824,7 +3837,7 @@ function OrderTable({
             <td className="mono text-xs">
               {o.vehicle}
               <div>
-                <EmailStatusChip status={o.emailStatus} error={o.emailError} retrying={retrying === o.sourceId} onRetry={() => retryEmail(o)} sending={sendingNow === o.sourceId} onSend={() => sendNow(o)} />
+                <EmailStatusChip status={o.emailStatus} error={o.emailError} retrying={retrying === o.sourceId} onRetry={readOnly ? undefined : () => retryEmail(o)} sending={sendingNow === o.sourceId} onSend={readOnly ? undefined : () => sendNow(o)} />
               </div>
             </td>
           )}
@@ -4667,6 +4680,7 @@ function UsersTable() {
               <th>Phone</th>
               <th>Role</th>
               <th>Status</th>
+              <th>Manager</th>
               <th>Staff ID</th>
               <th>Invite</th>
               <th>Actions</th>
@@ -4688,6 +4702,10 @@ function UsersTable() {
                 <td>
                   <StatusChip status={u.status ?? "unknown"} tone={disabled ? "bad" : "good"} />
                 </td>
+                <td><input type="checkbox" aria-label={`Manager: ${u.full_name}`} checked={Boolean(u.is_manager)} disabled={busy} onChange={async e => {
+                  try {await adminApi.setManager(u.id, e.target.checked); await queryClient.invalidateQueries({queryKey:["users"]}); await queryClient.invalidateQueries({queryKey:["access-session"]});}
+                  catch(error: any) {window.alert(error.message);}
+                }}/></td>
                 <td className="mono text-xs">{u.staff_id ?? "-"}</td>
                 <td className="text-xs text-[#55565a]">{INVITE_STATE_LABEL[u.invite_state] ?? u.invite_state}</td>
                 <td className="py-3 pr-4">
@@ -7361,6 +7379,8 @@ function LoadPlanningWorkspace({
   orderKind: InventoryOrderKind;
   viewMode: ViewMode;
 }) {
+  const { readOnly } = useAccess();
+  const visibleTab = readOnly && tab === "planning" ? "confirmed" : tab;
   return (
     <div>
       <div className="load-planning-tabs mb-5 flex gap-1 overflow-x-auto border-b border-[#e4e3df]">
@@ -7376,6 +7396,7 @@ function LoadPlanningWorkspace({
           Inventory
         </button>
         <button
+          hidden={readOnly}
           onClick={() => setTab("planning")}
           className={cx(
             "min-w-[130px] shrink-0 border-b-2 px-3 pb-3 text-sm font-semibold",
@@ -7398,9 +7419,9 @@ function LoadPlanningWorkspace({
           Confirmed Orders
         </button>
       </div>
-      {tab === "inventory" ? (
-        <LoadPlanningInventoryTab orderKind={orderKind} />
-      ) : tab === "confirmed" ? (
+      {visibleTab === "inventory" ? (
+        <LoadPlanningInventoryTab orderKind={readOnly && !["SO", "WM"].includes(orderKind) ? "SO" : orderKind} />
+      ) : visibleTab === "confirmed" ? (
         <LoadPlanningInventoryTab assignmentScope="assigned" viewMode={viewMode} />
       ) : (
         <LoadPlanningAssignmentTab />

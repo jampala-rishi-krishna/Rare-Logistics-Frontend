@@ -66,7 +66,7 @@ export default function AddUserForm({
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} autoComplete="off" />
         </label>
         <label className="grid gap-1 text-xs font-semibold">
-          Phone
+          Phone (optional; email login when blank)
           <input value={phone} onChange={(e) => setPhone(e.target.value)} className={field} inputMode="tel" autoComplete="off" />
         </label>
         <label className="grid gap-1 text-xs font-semibold">

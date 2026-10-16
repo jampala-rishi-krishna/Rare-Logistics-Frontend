@@ -4,12 +4,12 @@ export const SECTION_ROLES = {
   driver: ["driver", "helper", "admin"],
   // Logistics officers validate invoices; dispatchers get a read-only view of the same screens.
   officer: ["logistics_officer", "admin", "dispatcher"],
-  app: ["admin", "dispatcher", "planner", "warehouse"],
-  // Driver Overview and Fleet Health are admin-only operational workspaces.
-  driverOverview: ["admin"],
+  app: ["admin", "dispatcher", "planner", "warehouse", "sales", "wet_market"],
+  // Planners use Driver Overview; Fleet Health stays admin-only.
+  driverOverview: ["admin", "planner", "dispatcher"],
   fleetHealth: ["admin"],
   admin: ["admin"],
-  warehouse: ["warehouse", "admin", "dispatcher", "planner"],
+  warehouse: ["warehouse", "admin"],
   portal: ["client", "admin"],
 } as const;
 
@@ -23,6 +23,7 @@ export const NAV_ROLES: Record<string, readonly string[]> = {
 export const OFFICER_READ_ONLY_ROLES: readonly string[] = ["dispatcher"];
 
 export function canSeeNavItem(href: string, role: string | null | undefined): boolean {
+  if (["sales", "wet_market"].includes((role ?? "").toLowerCase())) return ["/app/orders", "/app/loads"].includes(href);
   const allowed = NAV_ROLES[href];
   if (!allowed) return true;
   return allowed.includes((role ?? "").toLowerCase());
@@ -59,6 +60,9 @@ export function routeForRole(role: string | null | undefined): string {
       return "/warehouse/dashboard";
     case "client":
       return "/portal/orders";
+    case "sales":
+    case "wet_market":
+      return "/app/orders";
     case "dispatcher":
     case "planner":
       return "/app/tower";

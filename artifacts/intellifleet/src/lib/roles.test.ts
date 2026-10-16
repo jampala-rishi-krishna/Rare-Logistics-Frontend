@@ -46,10 +46,10 @@ test("crew and officers outside their section go home", () => {
   assert.equal(redirectForDisallowedRole("mystery"), "/login");
 });
 
-test("driver overview and fleet health are admin only", () => {
+test("planner may use driver overview; fleet health is admin only", () => {
   const allowed = SECTION_ROLES.driverOverview as readonly string[];
-  assert.deepEqual(allowed, ["admin"]);
-  for (const r of ["dispatcher", "planner", "warehouse", "driver", "helper", "client", "logistics_officer"]) assert.ok(!allowed.includes(r));
+  assert.deepEqual(allowed, ["admin", "planner", "dispatcher"]);
+  for (const r of ["warehouse", "driver", "helper", "client", "logistics_officer"]) assert.ok(!allowed.includes(r));
   assert.deepEqual(SECTION_ROLES.fleetHealth as readonly string[], ["admin"]);
   assert.ok("/app/driver-overview" in NAV_ROLES);
   assert.ok("/app/fleet-health" in NAV_ROLES);
@@ -60,7 +60,7 @@ test("nav filtering hides admin-only operations from non-admin roles", () => {
     { label: "Control", items: [["/app/tower", "Tower"], ["/app/fleet-health", "Fleet Health"]] as const },
     { label: "Execution", items: [["/app/orders", "Orders"], ["/app/driver-overview", "Driver Overview"]] as const },
   ];
-  assert.ok(!canSeeNavItem("/app/driver-overview", "Dispatcher"));
+  assert.ok(canSeeNavItem("/app/driver-overview", "Dispatcher"));
   assert.ok(!canSeeNavItem("/app/driver-overview", "warehouse"));
   assert.ok(!canSeeNavItem("/app/fleet-health", "planner"));
   assert.ok(canSeeNavItem("/app/tower", "warehouse"));

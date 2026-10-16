@@ -41,6 +41,11 @@ export interface SalesOrderSummary {
   glacier_qty_available_for_sale?: number | null;
   assigned_at?: string | null;
   assigned_by?: number | null;
+  assigned_by_name?: string | null;
+  vendor_contact?: {person: string; phone: string};
+  vendor_address_missing?: boolean;
+  changed_after_cutoff?: boolean;
+  pickup_state?: string;
   driver_ids?: number[];
   assignment_batch_id?: string | null;
   email_status?: "not_sent" | "queued" | "sent" | "failed" | "skipped" | null;

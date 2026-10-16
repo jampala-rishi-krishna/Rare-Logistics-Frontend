@@ -10,9 +10,8 @@ const staff = [
   { id: 30, name: "Office", title: "Dispatcher", active: true },
 ];
 
-test("admin is never creatable", () => {
-  assert.ok(!CREATABLE_ROLES.some((r) => (r.value as string) === "admin"));
-  assert.equal(CREATABLE_ROLES.length, 6);
+test("approved role choices preserve crew and officer roles", () => {
+  assert.deepEqual(CREATABLE_ROLES.map(r => r.value).sort(), ["admin", "driver", "helper", "logistics_officer", "planner", "sales", "wet_market"]);
 });
 
 test("staff picker filters by role and hides linked staff", () => {
@@ -30,6 +29,6 @@ test("invite actions show for driver, helper and logistics officer only", () => 
 
 test("new user validation", () => {
   assert.deepEqual(validateNewUser({ full_name: "Ana Cruz", email: "ana@x.com", phone: "", role: "helper", password: "long-enough" }), []);
-  assert.equal(validateNewUser({ full_name: "", email: "bad", phone: "", role: "admin" }).length, 3);
+  assert.equal(validateNewUser({ full_name: "", email: "bad", phone: "", role: "admin" }).length, 2);
   assert.ok(validateNewUser({ full_name: "Ana Cruz", email: "ana@x.com", phone: "", role: "helper", password: "short" }).includes("Password must be at least 8 characters."));
 });
