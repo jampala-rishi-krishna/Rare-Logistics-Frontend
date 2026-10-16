@@ -7,6 +7,22 @@ import { installMocks } from "./mockApi.ts";
 let browser: Browser;
 before(async () => {await startServer(); browser=await launch();});
 after(async () => {await browser?.close(); stopServer();});
+
+test("department login choices fill dedicated emails and clear the previous password",async()=>{
+  const context=await browser.newContext();
+  const page=await context.newPage();
+  await installMocks(page,{session:null});
+  await page.goto(`${BASE}/login`);
+  for(const [role,email] of [["Sales","sales@rgf.com"],["Wet Market","wetmarket@rgf.com"],["Admin","admin@rgf.com"]]) {
+    await page.getByTestId("input-login-password").fill("previous-password");
+    await page.getByRole("button",{name:role,exact:true}).click();
+    assert.equal(await page.getByTestId("input-login-email").inputValue(),email);
+    assert.equal(await page.getByTestId("input-login-password").inputValue(),"");
+  }
+  await page.getByRole("button",{name:"Driver",exact:true}).click();
+  assert.equal(await page.getByTestId("input-login-email").inputValue(),"");
+  await context.close();
+});
 const order={id:"one",salesorder_number:"SO26-18449",customer_name:"Fresh Foods",order_status:"confirmed",expected_shipment_date:"2026-10-17",shipping_address:{address:"1 Farm Road",city:"Lipa"},assignment_status:"assigned",vehicle_id:"TRK1",driver_name:"Juan",assigned_by:1,assigned_by_name:"Paulo Guevarra",assigned_at:"2026-10-16T06:00:00Z",products:[{name:"Pork",sku:"P1",quantity:12,unit:"kg",total_weight_kg:12}],total:1200};
 
 async function open(role: string, manager=false, identity={fullName:"Test User",email:"test@example.test"}) {

@@ -2064,9 +2064,11 @@ function Login() {
     const sharedLogin: Partial<Record<Role, string>> = {
       Planner: "planner@rgf.com",
       Admin: "admin@rgf.com",
+      Sales: "sales@rgf.com",
+      "Wet Market": "wetmarket@rgf.com",
     };
-    if (sharedLogin[item]) setIdentifier(sharedLogin[item] as string);
-    if (["Driver", "Helper", "Logistics Officer", "Sales", "Wet Market"].includes(item)) setIdentifier("");
+    setIdentifier(sharedLogin[item] || "");
+    setPassword("");
   };
   if (checkingSession)
     return (
