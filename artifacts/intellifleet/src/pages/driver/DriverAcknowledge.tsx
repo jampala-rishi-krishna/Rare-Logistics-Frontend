@@ -147,7 +147,10 @@ export default function DriverAcknowledge() {
   const [, setLocation] = useLocation();
   const todayYmd = me.data?.today ?? today.data?.data.date ?? "";
   const date = params.get("date") || todayYmd;
-  const isToday = !params.get("date") || date === todayYmd;
+  // Tomorrow: next-day assignments are acknowledged the day before; /api/driver/today already carries them (live, not read-only).
+  const tomorrowYmd = todayYmd ? shiftYmd(todayYmd, 1) : "";
+  const isTomorrow = Boolean(params.get("date")) && Boolean(tomorrowYmd) && date === tomorrowYmd;
+  const isToday = !params.get("date") || date === todayYmd || isTomorrow; // live data
   const focusBatch = params.get("batch");
   const enabled = !scope.sessionLoading && !scope.missingDriverId;
 
@@ -157,7 +160,7 @@ export default function DriverAcknowledge() {
     enabled: enabled && !isToday && Boolean(date),
     retry: 1,
   });
-  const batches: Batch[] = isToday ? (today.data?.data.batches ?? []) : (past.data?.batches ?? []).filter((b) => !b.delivery_date || b.delivery_date === date);
+  const batches: Batch[] = isToday ? (today.data?.data.batches ?? []).filter((b) => (isTomorrow ? b.delivery_date === tomorrowYmd : b.delivery_date !== tomorrowYmd)) : (past.data?.batches ?? []).filter((b) => !b.delivery_date || b.delivery_date === date);
   const details = useQueries({
     queries: batches.map((b) => ({
       queryKey: ["driver-assignment", b.batch_id, scope.adminDriverId],
@@ -196,8 +199,11 @@ export default function DriverAcknowledge() {
       <div style={{ padding: "24px 20px 8px" }}>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em" }}>{t.ackTitle}</h1>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 14 }}>
-          <Pill on={isToday} onClick={() => go(null)} testId="driver-ack-date-today">
+          <Pill on={isToday && !isTomorrow} onClick={() => go(null)} testId="driver-ack-date-today">
             {t.dateToday}
+          </Pill>
+          <Pill on={isTomorrow} onClick={() => go(tomorrowYmd)} testId="driver-ack-date-tomorrow">
+            {t.dateTomorrow}
           </Pill>
           <Pill on={!isToday && date === yesterday} onClick={() => go(yesterday)} testId="driver-ack-date-yesterday">
             {t.dateYesterday}
@@ -209,7 +215,7 @@ export default function DriverAcknowledge() {
               type="date"
               data-testid="driver-ack-date-input"
               value={date}
-              max={todayYmd || undefined}
+              max={tomorrowYmd || todayYmd || undefined}
               onChange={(e) => e.target.value && go(e.target.value)}
               style={{ height: 40, border: 0, background: "transparent", fontFamily: "inherit", fontSize: 14, color: C.ink, minWidth: 0, maxWidth: 150 }}
             />

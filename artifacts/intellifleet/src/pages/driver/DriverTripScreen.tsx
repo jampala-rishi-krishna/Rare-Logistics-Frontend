@@ -843,14 +843,21 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
   const partners = crewCallsOf(batch, me.data);
   const handover = useQuery<AutoHandover | undefined>({ queryKey: handoverKey(batch.batch_id), queryFn: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)), enabled: false, initialData: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)) });
   const [sheet, setSheet] = useState<SheetName>(null);
-  const step = tripStep(state);
-  // The helper picks which stop to deliver next; a checked-in stop is always the current one.
+  const baseStep = tripStep(state);
+  // The helper picks which stop to deliver next. A reached stop is the current one unless the helper taps
+  // "Choose another stop" (switching); Reached at the new stop reopens the old one on the server.
   const [chosen, setChosen] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
   const kept = keepChoice(state.orders, chosen);
   useEffect(() => {
     if (kept !== chosen) setChosen(kept);
   }, [kept, chosen]);
-  const view = stopView(state.orders, kept);
+  const activeSoId = state.orders.find((o) => o.stopStatus === "checked_in")?.so_id ?? null;
+  useEffect(() => {
+    setSwitching(false);
+  }, [activeSoId]);
+  const view = stopView(state.orders, kept, switching);
+  const step = baseStep === "deliver" && view.kind !== "current" ? "arrive" : baseStep;
   const current = state.status === "on_trip" ? focusStop(view) : null;
   const choosing = !readOnly && state.status === "on_trip" && view.kind === "choose";
   const pendingLeft = state.orders.filter((o) => o.stopStatus === "pending").length;
@@ -927,9 +934,16 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
     );
   } else if (step === "arrive" && choosing) {
     bar = (
-      <TextButton onClick={() => setSheet("problem")} testId="driver-problem">
-        {t.problem}
-      </TextButton>
+      <>
+        {switching && (
+          <TextButton onClick={() => { setSwitching(false); setChosen(null); }} disabled={busy} testId="driver-back-current">
+            {t.backToCurrentStop}
+          </TextButton>
+        )}
+        <TextButton onClick={() => setSheet("problem")} testId="driver-problem">
+          {t.problem}
+        </TextButton>
+      </>
     );
   } else if (step === "deliver" && current) {
     bar = (
@@ -937,6 +951,11 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
         <PrimaryButton icon="check" disabled={busy || !tpl} onClick={() => setSheet("deliver")} testId="driver-delivered">
           {t.deliveredBtn}
         </PrimaryButton>
+        {pendingLeft > 0 && (
+          <TextButton onClick={() => { setChosen(null); setSwitching(true); }} disabled={busy} testId="driver-switch-stop">
+            {t.chooseAnotherStop}
+          </TextButton>
+        )}
         <TextButton onClick={() => setSheet("problem")} testId="driver-problem">
           {t.problem}
         </TextButton>

@@ -36,10 +36,11 @@ export type StopView<T> =
   | { kind: "none" }; // every stop done (End trip)
 
 /** What the trip screen shows while on the trip, given the stop the helper tapped (null = none picked yet). */
-export function stopView<T extends ChoosableStop>(stops: readonly T[], chosenSoId: string | null | undefined): StopView<T> {
+export function stopView<T extends ChoosableStop>(stops: readonly T[], chosenSoId: string | null | undefined, switching = false): StopView<T> {
   const active = activeStop(stops);
-  if (active) return { kind: "current", stop: active };
   const pending = pendingStops(stops);
+  // switching: the crew reached a stop but wants to deliver another first; arriving there reopens the reached one.
+  if (active && !(switching && pending.length > 0)) return { kind: "current", stop: active };
   const chosen = chosenSoId ? pending.find((s) => s.so_id === String(chosenSoId)) : undefined;
   if (chosen) return { kind: "chosen", stop: chosen };
   if (pending.length > 0) return { kind: "choose", pending };
