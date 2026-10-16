@@ -1,5 +1,5 @@
 // THE trip screen: everything for one trip on one page, with ONE big button that changes with each step:
-// I have the orders -> Start trip (sheet) -> Navigate / I'm here -> Delivered (sheet) -> next stop ... -> End trip (sheet)
+// I have the orders -> Start trip (sheet) -> choose a stop -> Navigate / I'm here -> Delivered (sheet) -> choose the next stop ... -> End trip (sheet)
 // -> "Give the signed invoice copies to the Logistics Officer" -> Waiting for officer -> Closed ✓.
 // Opened from History (?from=history) or by an admin (?driver_id=) it is read-only.
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,14 +15,16 @@ import { buildCheckoutAnswers, checkoutItemsForOrder, initialCheckoutForm, isIte
 import type { FieldErrors, FormValue, FormValues } from "@/lib/tripForms";
 import { newIdempotencyKey } from "@/lib/tripActions";
 import { isRemovedByDispatch } from "@/lib/offlineQueue";
-import { acknowledgePath, actionsEnabled, currentStop, directionsUrl, stopState, tripStep } from "@/lib/tripNav";
+import { acknowledgePath, actionsEnabled, directionsUrl, stopState, tripStep } from "@/lib/tripNav";
+import { focusStop, keepChoice, stopView } from "@/lib/stopChoice";
+import { canStartOnDay } from "@/lib/tripDays";
 import { deriveBatchState } from "@/lib/tripState";
 import type { EffectiveBatch, EffectiveOrder } from "@/lib/tripState";
 import type { AutoHandover, BatchDetail, DriverOrder, DriverToday, RouteInfo, Templates } from "@/lib/tripTypes";
 import type { Cached } from "@/lib/offlineCache";
 import { MediaPhoto } from "./media";
 import DriverLayout from "./DriverLayout";
-import { DICTS, useT, driverMessage } from "./i18n";
+import { DICTS, dayLabel, useLang, useT, driverMessage } from "./i18n";
 import type { Dict } from "./i18n";
 import { useAssignmentQuery, useRouteQuery, useTemplatesQuery } from "./queries";
 import { ErrorState, MissingDriverNotice, OfflineNote, errorText, showToast, useDriverMe, useDriverScope } from "./shared";
@@ -784,12 +786,50 @@ function ProblemSheet({ open, onClose, batch, orders, defaultSoId, photoOn, scop
   );
 }
 
+// ---------- choose the next stop (any order) ----------
+
+function ChooseStop({ pending, state, t, onPick, disabled }: { pending: EffectiveOrder[]; state: EffectiveBatch; t: Dict; onPick: (soId: string) => void; disabled: boolean }) {
+  return (
+    <section data-testid="driver-choose-stop" style={{ border: `2px solid ${C.ink}`, borderRadius: 20, background: C.card, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em" }}>{t.chooseNextStop}</h2>
+        <span style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap" }}>{t.nStopsLeft(pending.length)}</span>
+      </div>
+      <div style={{ fontSize: 14, color: C.sub, marginTop: 4 }}>{t.chooseNextStopHint}</div>
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 8 }}>
+        {pending.map((eff, i) => {
+          const o = eff.order;
+          const n = state.orders.findIndex((x) => x.so_id === eff.so_id) + 1;
+          const address = isTo(o) ? stopSubline(o, t) : o.address_lines.length > 0 ? o.address_lines.join(", ") : o.address_text;
+          return (
+            <div key={eff.so_id} data-testid={`driver-choose-${o.so_number}`} style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 0", borderTop: i === 0 ? 0 : `1px solid ${C.line}` }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap" }}>{t.stopN(n)}</span>
+                  <OrderRef order={o} />
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4, overflowWrap: "anywhere" }}>{o.customer_name}</div>
+                {address && <div style={{ fontSize: 14, color: C.body, marginTop: 2, lineHeight: 1.4, overflowWrap: "anywhere" }}>{address}</div>}
+                {isPo(o) && <div style={{ fontSize: 14, color: C.blue, marginTop: 2, overflowWrap: "anywhere" }}>{stopSubline(o, t)}</div>}
+              </div>
+              <PrimaryButton icon="arrowRight" height={50} fontSize={16} disabled={disabled} onClick={() => onPick(eff.so_id)} testId="driver-deliver-this-next">
+                {t.deliverThisNext}
+              </PrimaryButton>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // ---------- the screen ----------
 
 type SheetName = "start" | "deliver" | "end" | "problem" | null;
 
 function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline, savedAt }: { batch: BatchDetail; state: EffectiveBatch; scope: DriverScope; readOnly: boolean; backHref: string; backLabel: string; offline: boolean; savedAt: number | null }) {
   const t = useT();
+  const [lang] = useLang();
   const me = useDriverMe(scope);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -804,11 +844,23 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
   const handover = useQuery<AutoHandover | undefined>({ queryKey: handoverKey(batch.batch_id), queryFn: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)), enabled: false, initialData: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)) });
   const [sheet, setSheet] = useState<SheetName>(null);
   const step = tripStep(state);
-  const current = currentStop(state.orders);
+  // The helper picks which stop to deliver next; a checked-in stop is always the current one.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const kept = keepChoice(state.orders, chosen);
+  useEffect(() => {
+    if (kept !== chosen) setChosen(kept);
+  }, [kept, chosen]);
+  const view = stopView(state.orders, kept);
+  const current = state.status === "on_trip" ? focusStop(view) : null;
+  const choosing = !readOnly && state.status === "on_trip" && view.kind === "choose";
+  const pendingLeft = state.orders.filter((o) => o.stopStatus === "pending").length;
   const tpl: Templates | undefined = templates.data?.data;
   const photoOn = Boolean(batch.photo_storage_enabled ?? tpl?.photo_storage_enabled);
   const busy = actions.busy || !actions.ready;
   const today = queryClient.getQueryData<Cached<DriverToday>>(["driver-today", scope.adminDriverId])?.data;
+  // Next-day assignment: acknowledge today, Start trip only on the delivery morning.
+  const dayItem = batch.day ? batch : today?.batches.find((b) => b.batch_id === batch.batch_id) ?? batch;
+  const startable = canStartOnDay(dayItem);
   const changes = [...(batch.dispatch_changes ?? []), ...(today?.dispatch_changes ?? []).filter((c) => !(batch.dispatch_changes ?? []).some((b) => b.at === c.at && b.so_id === c.so_id))];
 
   // The Delivered sheet's order was removed by dispatch while open: close it and say so.
@@ -837,9 +889,16 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
   } else if (step === "start") {
     bar = (
       <>
-        <PrimaryButton icon="play" disabled={busy} onClick={() => setSheet("start")} testId="driver-start-trip">
-          {t.startTrip}
-        </PrimaryButton>
+        {startable ? (
+          <PrimaryButton icon="play" disabled={busy} onClick={() => setSheet("start")} testId="driver-start-trip">
+            {t.startTrip}
+          </PrimaryButton>
+        ) : (
+          <div data-testid="driver-start-later" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 56, borderRadius: 14, background: C.soft, color: C.body, fontSize: 16, fontWeight: 700, textAlign: "center", padding: "0 12px" }}>
+            <Icon name="play" size={20} color={C.sub} />
+            {t.startOnMorning(dayLabel(batch.delivery_date, lang))}
+          </div>
+        )}
         <TextButton onClick={() => setSheet("problem")} testId="driver-problem">
           {t.problem}
         </TextButton>
@@ -856,10 +915,21 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
             {actions.busy ? "..." : t.imHere}
           </PrimaryButton>
         </div>
+        {view.kind === "chosen" && pendingLeft > 1 && (
+          <TextButton onClick={() => setChosen(null)} disabled={busy} testId="driver-choose-another">
+            {t.chooseAnotherStop}
+          </TextButton>
+        )}
         <TextButton onClick={() => setSheet("problem")} testId="driver-problem">
           {t.problem}
         </TextButton>
       </>
+    );
+  } else if (step === "arrive" && choosing) {
+    bar = (
+      <TextButton onClick={() => setSheet("problem")} testId="driver-problem">
+        {t.problem}
+      </TextButton>
     );
   } else if (step === "deliver" && current) {
     bar = (
@@ -909,6 +979,20 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
           </OutlineButton>
         )}
       </div>
+      {choosing && view.kind === "choose" && (
+        <div style={{ padding: "18px 20px 0" }}>
+          <ChooseStop
+            pending={view.pending}
+            state={state}
+            t={t}
+            disabled={busy}
+            onPick={(soId) => {
+              setChosen(soId);
+              window.scrollTo(0, 0);
+            }}
+          />
+        </div>
+      )}
       {step === "acknowledge" && !readOnly ? (
         <AckList state={state} t={t} />
       ) : (
@@ -968,7 +1052,8 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
               templates={tpl}
               scope={scope}
               onSaved={() => {
-                // Auto-advance: the next stop becomes the current one as soon as this one is checked out.
+                // No auto-advance: the remaining pending stops are listed again for the helper to choose from.
+                setChosen(null);
                 setSheet(null);
                 window.scrollTo(0, 0);
               }}

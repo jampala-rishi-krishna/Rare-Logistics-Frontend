@@ -19,6 +19,7 @@ import { ErrorState, MissingDriverNotice, OfflineNote, errorText, useDriverMe, u
 import type { DriverScope } from "./shared";
 import { ConfirmSheet, DispatchBanners, chipOfTrip, useTripActions } from "./tripFlow";
 import { alpha } from "@/lib/themeTokens";
+import { canStartOnDay, dayOf, daySections, groupTripDays, nextYmd } from "@/lib/tripDays";
 import { Avatar, Banner, C, Chip, Icon, RoundButton, Skeleton } from "./ui";
 import type { ChipTone, IconName } from "./ui";
 
@@ -122,6 +123,10 @@ export function deliveredCount(b: Pick<Batch, "progress" | "trip">): number {
 
 function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: Batch; scope: DriverScope; me: DriverMe | undefined; index: number; total: number; active: boolean; waitFor: number | null }) {
   const t = useT();
+  const [lang] = useLang();
+  // Next-day assignment: acknowledge today, Start trip only on the delivery morning.
+  const startable = canStartOnDay(batch);
+  const overdue = dayOf(batch) === "overdue";
   const [, setLocation] = useLocation();
   const actions = useTripActions(scope, batch.batch_id);
   const [startOpen, setStartOpen] = useState(false);
@@ -137,8 +142,8 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
   // Acknowledging happens only in the Acknowledge tab: the card just takes the driver there (to this trip).
   let button: { label: string; testId: string; run: () => void; secondary?: boolean } | null = null;
   if (crew && status === "pending" && left > 0)
-    button = { label: t.acknowledgeOrdersN(left), testId: "driver-card-action-acknowledge", secondary: !active, run: () => setLocation(acknowledgePath(scope.adminDriverId, { batch: batch.batch_id })) };
-  else if (active && crew) {
+    button = { label: t.acknowledgeOrdersN(left), testId: "driver-card-action-acknowledge", secondary: startable && !active, run: () => setLocation(acknowledgePath(scope.adminDriverId, { batch: batch.batch_id })) };
+  else if (active && crew && startable) {
     if (status === "pending") button = { label: t.startTrip, testId: "driver-card-action-start", run: () => setStartOpen(true) };
     else if (status === "on_trip") button = { label: t.continueTrip, testId: "driver-card-action-continue", run: () => setLocation(href) };
   }
@@ -156,7 +161,14 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
       style={{ display: "block", background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 16, color: C.ink, cursor: "pointer" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <div style={{ fontSize: 13, color: C.sub, fontWeight: 500, whiteSpace: "nowrap" }}>{t.tripNofM(tripNo, total)}</div>
+        <div style={{ fontSize: 13, color: C.sub, fontWeight: 500, whiteSpace: "nowrap" }}>
+          {t.tripNofM(tripNo, total)}
+          {overdue && (
+            <span data-testid="driver-card-overdue" style={{ marginLeft: 8, color: C.so, fontWeight: 700 }}>
+              {t.overdue}
+            </span>
+          )}
+        </div>
         {chip && (
           <Chip tone={chip.tone} testId="driver-trip-chip" icon={chip.tone === "green" ? "check" : undefined}>
             {chip.label}
@@ -176,6 +188,12 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
           {partners.map((p) => (
             <PersonRow key={p.key} call={p} t={t} />
           ))}
+        </div>
+      )}
+      {!startable && crew && !finished && (
+        <div data-testid="driver-card-start-later" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, padding: "10px 12px", borderRadius: 12, background: C.soft, color: C.body, fontSize: 14, fontWeight: 700 }}>
+          <Icon name="play" size={18} color={C.sub} />
+          {t.startOnMorning(dayLabel(batch.delivery_date, lang))}
         </div>
       )}
       {button && (
@@ -307,12 +325,19 @@ export default function DriverToday() {
   const data = today.data?.data;
   const name = me.data?.name ?? data?.driver.name ?? null;
   const dispatchTel = telHref(me.data?.dispatch_phone);
-  const batches = data?.batches ?? [];
+  const allBatches = data?.batches ?? [];
+  // Today's (and overdue) trips are delivered now; tomorrow's are acknowledge-only. Progress counts today's only.
+  const groups = groupTripDays(allBatches);
+  const batches = groups.today;
   const stops = batches.reduce((n, b) => n + (b.so_count ?? 0), 0);
   const done = batches.reduce((n, b) => n + deliveredCount(b), 0);
   const failed = batches.reduce((n, b) => n + (b.progress?.failed ?? 0), 0);
   const unread = alerts.data?.unread ?? 0;
   const firstOpen = batches.findIndex((b) => !isFinished(b));
+  const todayYmd = me.data?.today ?? data?.date ?? "";
+  const tomorrowYmd = groups.tomorrowDate ?? nextYmd(todayYmd);
+  const sections = daySections(groups);
+  const split = groups.tomorrow.length > 0;
 
   return (
     <DriverLayout scope={scope} tab="today" testId="driver-today">
@@ -368,32 +393,45 @@ export default function DriverToday() {
           ) : (
             <>
               <DailyProgress trips={batches.length} stops={stops} done={done} failed={failed} t={t} />
-              {batches.length > 0 && (
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "22px 20px 0" }}>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>{t.yourTrips}</h2>
-                  <span style={{ fontSize: 14, color: C.sub, whiteSpace: "nowrap" }}>{t.nAssigned(batches.length)}</span>
-                </div>
-              )}
-              {batches.length === 0 ? (
+              {allBatches.length === 0 ? (
                 <div data-testid="driver-empty-today" style={{ margin: "16px 20px 0", background: C.card, borderRadius: 20, padding: 24, textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{t.noTripsToday}</div>
                   <div style={{ fontSize: 14, color: C.sub, marginTop: 4 }}>{t.noTripsHint}</div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "12px 20px 20px" }}>
-                  {batches.map((b, i) => (
-                    <TripCard
-                      key={b.batch_id}
-                      batch={b}
-                      scope={scope}
-                      me={me.data}
-                      index={i}
-                      total={batches.length}
-                      active={i === firstOpen}
-                      waitFor={firstOpen >= 0 && i > firstOpen && !isFinished(b) && (b.trip?.status ?? "pending") === "pending" ? (batches[firstOpen].trip_number ?? firstOpen + 1) : null}
-                    />
-                  ))}
-                </div>
+                sections.map((sec) => {
+                  const list = sec.items;
+                  const isTomorrow = sec.day === "tomorrow";
+                  const title = !split ? t.yourTrips : isTomorrow ? t.tomorrowSection(dayLabel(tomorrowYmd, lang)) : t.todaySection(dayLabel(todayYmd, lang));
+                  return (
+                    <section key={sec.day} data-testid={`driver-day-${sec.day}`} aria-label={title}>
+                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "22px 20px 0" }}>
+                        <h2 style={{ margin: 0, fontSize: split ? 18 : 20, fontWeight: 800, letterSpacing: "-0.02em", minWidth: 0, overflowWrap: "anywhere" }}>{title}</h2>
+                        {list.length > 0 && <span style={{ fontSize: 14, color: C.sub, whiteSpace: "nowrap" }}>{t.nAssigned(list.length)}</span>}
+                      </div>
+                      {list.length === 0 ? (
+                        <div data-testid="driver-empty-today" style={{ margin: "12px 20px 0", background: C.card, borderRadius: 20, padding: 20, textAlign: "center" }}>
+                          <div style={{ fontSize: 16, fontWeight: 700 }}>{t.noTripsToday}</div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "12px 20px 20px" }}>
+                          {list.map((b, i) => (
+                            <TripCard
+                              key={b.batch_id}
+                              batch={b}
+                              scope={scope}
+                              me={me.data}
+                              index={i}
+                              total={list.length}
+                              active={!isTomorrow && i === firstOpen}
+                              waitFor={!isTomorrow && firstOpen >= 0 && i > firstOpen && !isFinished(b) && (b.trip?.status ?? "pending") === "pending" ? (batches[firstOpen].trip_number ?? firstOpen + 1) : null}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })
               )}
             </>
           )}

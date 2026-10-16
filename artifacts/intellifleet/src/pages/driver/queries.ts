@@ -127,6 +127,9 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
           showToast(t.savedOffline, "warn");
         } else if (outcome.status === "unauthorized") {
           setLocation("/driver/login");
+        } else if (outcome.info.code === "not_today") {
+          // Next-day trip: the server says when it can start (e.g. "Start this trip on 17 Oct"); show its words as they are.
+          showToast(outcome.info.message, "error");
         } else if (isRemovedByDispatch(outcome.info.code)) {
           showToast(outcome.info.code === "trip_removed" ? t.removedTrip : t.orderRemovedByDispatch, "error");
         } else {

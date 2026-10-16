@@ -79,6 +79,8 @@ export interface TripInfo {
 export interface Batch {
   batch_id: string;
   delivery_date: string;
+  // CONTRACT 2026-10-16: /today returns today's AND tomorrow's items (absent = today). See lib/tripDays.ts.
+  day?: "today" | "tomorrow" | "overdue" | null;
   vehicle: string;
   so_count: number;
   total_kg: number;
@@ -186,6 +188,8 @@ export interface OrderWorkflow {
   stop: {
     sequence: number;
     status: "pending" | "checked_in" | "checked_out" | string;
+    // CONTRACT 2026-10-16: the stop the crew has checked in to (any pending stop may be chosen, not only the next one).
+    is_active?: boolean;
     checkin_at: string | null;
     checkin_by: WhoWhen | string | null;
     checkin_distance_m: number | null;
@@ -232,6 +236,7 @@ export interface DriverOrder {
   shipment_status?: string | null;
   delivery_status: string | null;
   details_loading: boolean;
+  is_active?: boolean;
   workflow?: OrderWorkflow | null;
   // Values the delivery form is prefilled from, keyed by template item `prefill` (or `key`).
   checkout_prefill?: Record<string, unknown> | null;

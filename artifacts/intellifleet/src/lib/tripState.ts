@@ -3,6 +3,7 @@
 // `trip.can_*`, `trip.next_action`, `blocker`). With queued actions the same rules the server
 // enforces are replayed locally; the server stays the authority once the queue syncs.
 import type { BatchDetail, DriverOrder, NextAction, TripChip, TripStatus } from "./tripTypes.ts";
+import { normalizeStopStatus } from "./stopChoice.ts";
 
 export interface QueuedAction {
   batch_id: string;
@@ -105,7 +106,7 @@ export function deriveBatchState(batch: BatchDetail, queue: QueuedAction[]): Eff
   const orders: EffectiveOrder[] = batch.orders.map((order) => {
     const wf = order.workflow ?? null;
     const raw = wf?.stop?.status;
-    const stopStatus: StopStatus = raw === "checked_in" || raw === "checked_out" ? raw : "pending";
+    const stopStatus: StopStatus = normalizeStopStatus(raw, wf?.stop?.is_active ?? order.is_active);
     return {
       so_id: soIdOf(order),
       order,

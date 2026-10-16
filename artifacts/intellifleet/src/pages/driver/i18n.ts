@@ -338,6 +338,17 @@ const en = {
   documentsProof: "Documents & Proof of Delivery",
   noProofYet: "No delivery photos yet",
   viewRouteNavigate: "View Route / Navigate",
+  // helper picks the next stop (any order)
+  chooseNextStop: "Choose your next stop",
+  chooseNextStopHint: "Deliver in any order. Tap the stop you are going to now.",
+  deliverThisNext: "Deliver this next",
+  chooseAnotherStop: "Choose another stop",
+  nStopsLeft: (n: number) => `${n} ${plural(n, "stop", "stops")} left`,
+  // next-day assignments
+  tomorrowSection: (date: string) => `Tomorrow · ${date} — acknowledge`,
+  todaySection: (date: string) => `Today · ${date} — deliver`,
+  startOnMorning: (date: string) => `Start on ${date} morning`,
+  overdue: "Overdue",
 };
 
 export type Dict = typeof en;
@@ -645,6 +656,15 @@ const tl: Dict = {
   documentsProof: "Dokumento at patunay ng delivery",
   noProofYet: "Wala pang litrato ng delivery",
   viewRouteNavigate: "Tingnan ang ruta / Navigate",
+  chooseNextStop: "Piliin ang susunod na stop",
+  chooseNextStopHint: "Kahit anong pagkakasunod. I-tap ang stop na pupuntahan mo ngayon.",
+  deliverThisNext: "Ito ang susunod",
+  chooseAnotherStop: "Pumili ng ibang stop",
+  nStopsLeft: (n) => `${n} stop pa`,
+  tomorrowSection: (date) => `Bukas · ${date} — i-acknowledge`,
+  todaySection: (date) => `Ngayon · ${date} — i-deliver`,
+  startOnMorning: (date) => `Simulan sa umaga ng ${date}`,
+  overdue: "Lampas na",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, tl };
