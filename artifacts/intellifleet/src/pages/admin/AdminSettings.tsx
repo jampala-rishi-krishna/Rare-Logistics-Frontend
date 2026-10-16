@@ -66,7 +66,7 @@ function SettingRow({ setting }: { setting: AdminSetting }) {
             id={inputId}
             value={draft}
             onChange={(e) => { setDraft(e.target.value); setError(null); setSaved(false); }}
-            inputMode={setting.type === "number" ? "numeric" : "tel"}
+            inputMode={setting.type === "number" ? "numeric" : setting.key.startsWith("PICKUP_") ? "text" : "tel"}
             autoComplete="off"
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${inputId}-error` : undefined}

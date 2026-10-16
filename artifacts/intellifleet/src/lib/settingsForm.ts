@@ -22,9 +22,14 @@ const PHONE = /^[0-9+()\-\s]{0,32}$/;
 
 export type SettingCheck = { ok: true; value: number | string } | { ok: false; message: string };
 
-export function validateSettingInput(setting: Pick<AdminSetting, "label" | "type" | "min" | "max">, raw: string): SettingCheck {
+export function validateSettingInput(setting: Pick<AdminSetting, "label" | "type" | "min" | "max"> & { key?: string }, raw: string): SettingCheck {
   if (setting.type === "text") {
     const text = raw.trim();
+    if (setting.key?.startsWith("PICKUP_")) {
+      if (setting.key === "PICKUP_EMAIL_TIME" && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(text)) return {ok:false,message:"Use HH:MM in Asia/Manila."};
+      if (setting.key !== "PICKUP_EMAIL_TIME" && text && text.split(",").some(v => !/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(v.trim()))) return {ok:false,message:"Enter comma-separated email addresses."};
+      return {ok:true,value:text};
+    }
     if (!PHONE.test(text)) return { ok: false, message: `${setting.label} may contain only digits, +, -, spaces and brackets (max 32 characters).` };
     return { ok: true, value: text };
   }

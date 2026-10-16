@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
+import { PickupControls, PickupSheetButton } from "./PickupControls";
+import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { OrderTypeBadge } from "./OrderTypeBadge";
 import { BranchBadge } from "./BranchControls";
@@ -9,7 +11,7 @@ import { ConnectionStatusBar, viewOfQuery } from "@/components/ui/ConnectionStat
 import { EmptyState, FilterField, ListError, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { lastRefreshedLabel } from "@/lib/orderMerge";
 import { ORDER_TYPE_STYLE } from "@/lib/orderType";
-import { poStatusLabel, poStatusOptions } from "@/lib/purchaseOrders";
+import { poStatusLabel } from "@/lib/purchaseOrders";
 
 export const PURCHASE_ORDERS_KEY = "inventory-purchase-orders";
 
@@ -47,6 +49,8 @@ const COLUMNS: [string, number][] = [
   ["Destination Warehouse", 190],
   ["Quantity", 90],
   ["Weight", 110],
+  ["Pickup shipping address / contact", 300],
+  ["Pickup sheet", 140],
 ];
 
 /** Inventory > PO: PO- purchase orders (never "SS PO-", never SariSuki). No Acknowledge for PO. */
@@ -58,7 +62,6 @@ export default function PurchaseOrdersTab() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [statuses, setStatuses] = useState<string[]>([]);
-  const [statusOpen, setStatusOpen] = useState(false);
   const [message, setMessage] = useState("");
 
   const orders = useQuery({
@@ -89,8 +92,7 @@ export default function PurchaseOrdersTab() {
   const weightText = `${total.toLocaleString("en-US", { maximumFractionDigits: 1 })} ${complete ? "kg" : "kg+"}`;
   const refreshedAt = lastRefreshedLabel(orders.data?.last_refreshed_at);
   const color = ORDER_TYPE_STYLE.PO.color;
-  const options = useMemo(() => poStatusOptions(orders.data?.status_counts, statuses), [orders.data?.status_counts, statuses]);
-  const statusText = statuses.length ? statuses.map(poStatusLabel).join(", ") : "All except Cancelled / Closed";
+
 
   const number = (order: inventoryApi.SalesOrderSummary) => order.purchaseorder_number ?? order.salesorder_number ?? order.id;
   const expected = (order: inventoryApi.SalesOrderSummary) =>
@@ -104,6 +106,7 @@ export default function PurchaseOrdersTab() {
 
   return (
     <div className="load-planning-panel min-w-0 border border-[#e4e3df] bg-white" data-testid="purchase-orders-tab">
+      <PickupControls />
       <Toolbar
         title="Purchase Orders"
         count={orders.data?.total ?? 0}
@@ -134,32 +137,7 @@ export default function PurchaseOrdersTab() {
             <FilterField label="To" className="@[1000px]:w-[150px]">
               <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className={`${inputClass} w-full`} />
             </FilterField>
-            <FilterField label="Status" className="@[1000px]:w-[230px]">
-              <div className="relative min-w-0">
-                <button type="button" onClick={() => setStatusOpen((open) => !open)} className={`${buttonClass} w-full !justify-between text-left font-medium text-black`} data-testid="po-status-filter" aria-expanded={statusOpen}>
-                  <span className="truncate">{statusText}</span>
-                  <span>▾</span>
-                </button>
-                {statusOpen && (
-                  <div className="absolute left-0 top-full z-20 mt-1 max-h-72 w-full min-w-56 overflow-y-auto border border-[#d8d7d2] bg-white p-2 shadow-lg">
-                    <button type="button" className="mb-2 text-xs font-semibold underline" onClick={() => setStatuses([])}>
-                      Default (hide Cancelled / Closed)
-                    </button>
-                    {options.map((option) => (
-                      <label key={option.value} className="flex cursor-pointer items-center gap-2 px-1 py-1 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={statuses.includes(option.value)}
-                          onChange={() => setStatuses((current) => (current.includes(option.value) ? current.filter((value) => value !== option.value) : [...current, option.value]))}
-                        />
-                        <span className="flex-1">{option.label}</span>
-                        <span className="mono text-xs text-[#77787b]">{option.count}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </FilterField>
+            <span className="self-end py-2 text-sm">Status: Issued</span>
           </>
         }
         headerActions={
@@ -208,14 +186,15 @@ export default function PurchaseOrdersTab() {
                   <div><div className="text-[10px] uppercase text-[#77787b]">Expected delivery</div>{expected(order)}</div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Amount</div>{money(order.total)}</div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Branch</div>{dash(order.branch_name)}</div>
+                  <div className="col-span-2"><div className="text-[10px] uppercase text-[#77787b]">Vendor shipping address / contact</div>{formatAddress(order.shipping_address)}<br/>{order.vendor_contact?.person} {order.vendor_contact?.phone}{order.vendor_address_missing && <strong className="block text-red-700">Vendor address missing</strong>}{order.changed_after_cutoff && <span className="block text-blue-700">Changed after 2 PM</span>}<PickupSheetButton id={order.id}/></div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Destination</div>{dash(order.destination_warehouse)}</div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Qty / Weight</div>{order.total_item_quantity ?? "-"} · {orderKg(order, pending)}</div>
                 </div>
               </article>
             ))}
           </div>
-          <HorizontalScrollTable contentWidth="1460px">
-            <table className="w-full min-w-[1460px] table-fixed text-left text-xs">
+          <HorizontalScrollTable contentWidth="1900px">
+            <table className="w-full min-w-[1900px] table-fixed text-left text-xs">
               <colgroup>
                 {COLUMNS.map(([name, width]) => (
                   <col key={name} style={{ width: `${width}px` }} />
@@ -240,12 +219,14 @@ export default function PurchaseOrdersTab() {
                       {number(order)}
                     </td>
                     <td className="whitespace-normal break-words px-3 py-4 align-top">{dash(order.vendor_name ?? order.customer_name)}</td>
-                    <td className="px-3 py-4 align-top">{order.status_label ?? poStatusLabel(order.order_status)}</td>
+                    <td className="px-3 py-4 align-top">{order.status_label ?? poStatusLabel(order.order_status)}{order.changed_after_cutoff && <span className="block text-xs text-blue-700">Changed after 2 PM</span>}</td>
                     <td className="px-3 py-4 text-right align-top">{money(order.total)}</td>
                     <td className="whitespace-normal px-3 py-4 align-top">{order.branch_name ? <>{order.branch_name}<BranchBadge code={order.branch_code} name={order.branch_name} /></> : "-"}</td>
                     <td className="whitespace-normal px-3 py-4 align-top">{dash(order.destination_warehouse)}</td>
                     <td className="px-3 py-4 align-top">{order.total_item_quantity ?? "-"}</td>
                     <td className="whitespace-nowrap px-3 py-4 align-top font-semibold">{orderKg(order, pending)}</td>
+                    <td className="px-3 py-4 text-sm">{formatAddress(order.shipping_address)}<br/>{order.vendor_contact?.person} {order.vendor_contact?.phone}{order.vendor_address_missing && <strong className="block text-red-700">Vendor address missing</strong>}</td>
+                    <td className="px-3 py-4"><PickupSheetButton id={order.id}/></td>
                   </tr>
                 ))}
               </tbody>
