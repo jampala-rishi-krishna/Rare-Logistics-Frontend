@@ -2140,7 +2140,6 @@ function Login() {
                     "Sales",
                     "Wet Market",
                     "Helper",
-                    "Logistics Officer",
                     "Admin",
                   ] as Role[]
                 ).map((item) => (
