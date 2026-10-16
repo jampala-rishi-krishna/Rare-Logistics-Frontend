@@ -32,7 +32,7 @@ function loginError(t: Dict, status: number | null, serverMessage: string | null
   return t.loginFailed;
 }
 
-// Driver / helper sign-in. Same POST /auth/login as every role (throttling and the generic 401 are server-side). The
+// Helper / driver sign-in (the app is labelled for helpers; driver accounts use the same page). Same POST /auth/login as every role (throttling and the generic 401 are server-side). The
 // backend accepts the phone number OR the email as the identifier, so the field says both and opens the full keyboard.
 export default function DriverLogin() {
   const t = useT();
@@ -48,6 +48,15 @@ export default function DriverLogin() {
   const error = errorKey ? String(t[errorKey]) : "";
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(() => Boolean(getStoredSessionId()));
+
+  // Helpers (and drivers) sign in here: the tab title says so.
+  useEffect(() => {
+    const previous = document.title;
+    document.title = `${t.appName} · ${t.helperSignIn}`;
+    return () => {
+      document.title = previous;
+    };
+  }, [t]);
 
   useEffect(() => {
     if (!getStoredSessionId()) return;
@@ -118,7 +127,10 @@ export default function DriverLogin() {
           <img src={rareLogo} alt={t.brandName} style={{ width: 80, height: 40, objectFit: "contain", borderRadius: 8 }} />
           <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em" }}>{t.appName}</div>
         </div>
-        <h1 style={{ margin: "clamp(14px, 4vh, 44px) 0 8px", fontSize: "clamp(26px, min(9vw, 5vh), 40px)", lineHeight: 1.05, fontWeight: 800, letterSpacing: "-0.035em" }}>
+        <p data-testid="driver-login-eyebrow" style={{ margin: "clamp(14px, 4vh, 44px) 0 0", fontSize: 14, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          {t.helperSignIn}
+        </p>
+        <h1 style={{ margin: "6px 0 8px", fontSize: "clamp(26px, min(9vw, 5vh), 40px)", lineHeight: 1.05, fontWeight: 800, letterSpacing: "-0.035em" }}>
           {t.welcomeBack}
           <br />
           {t.welcomeDriver}

@@ -56,3 +56,41 @@ export function validateNewUser(form: { full_name: string; email: string; phone:
   if ((form.password ?? "").trim() && (form.password ?? "").length < 8) errors.push("Password must be at least 8 characters.");
   return errors;
 }
+
+// ---- Staff record picker (GET /api/admin/staff-options?role=driver|helper) ----
+
+export interface StaffOption {
+  staff_id: number | string;
+  name: string;
+  role?: string | null;
+  phone?: string | null;
+  linked_user_id?: number | string | null;
+}
+
+export interface StaffPickerEntry {
+  value: string;
+  label: string;
+  disabled: boolean;
+}
+
+// Name + phone; a record that already has a login is shown but cannot be picked.
+export function staffPickerEntries(options: readonly StaffOption[]): StaffPickerEntry[] {
+  return options.map((o) => {
+    const linked = o.linked_user_id !== null && o.linked_user_id !== undefined && o.linked_user_id !== "";
+    return {
+      value: String(o.staff_id),
+      label: `${o.name} · ${o.phone || "No phone"}${linked ? " · already has a login" : ""}`,
+      disabled: linked,
+    };
+  });
+}
+
+// Driver and helper logins must be linked to a free staff record; null = OK.
+export function staffRecordError(role: string, staffId: string, options: readonly StaffOption[]): string | null {
+  if (!needsStaffLink(role)) return null;
+  if (!staffId) return "Choose a staff record.";
+  const chosen = options.find((o) => String(o.staff_id) === staffId);
+  if (!chosen) return "Choose a staff record.";
+  if (chosen.linked_user_id !== null && chosen.linked_user_id !== undefined && chosen.linked_user_id !== "") return "That staff record already has a login.";
+  return null;
+}

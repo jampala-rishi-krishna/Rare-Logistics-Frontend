@@ -1,6 +1,7 @@
 // Pure helpers for Driver Overview v2 (SPEC Part A sections 3 and 5): URL state, words, tiles, rail, sorting, captions.
 // No React, no fetch: unit-tested in overviewModel.test.ts.
 import { formatKgPartial } from "./kgDisplay.ts";
+import { crewList, type CrewRowLike } from "./overviewCrew.ts";
 
 export const MAX_RANGE_DAYS = 366;
 
@@ -394,15 +395,12 @@ export interface RowLike {
   partial?: number;
   failed?: number;
   invoices?: { total: number; received: number };
-  crew?: Array<{
-    id: number | string | null;
-    name: string | null;
-    role: string;
-    phone?: string | null;
-  }>;
+  // Array of {id, name, role, phone} or (contract 2026-10-16) {driver, helpers}.
+  crew?: CrewRowLike["crew"];
   driver_id?: number | null;
   driver_name?: string | null;
-  helpers?: Array<string | null>;
+  // Plain names (older servers) or {staff_id, name, phone}.
+  helpers?: CrewRowLike["helpers"];
 }
 
 /** The trip's step; servers without driver_step fall back to the legacy state. */
@@ -472,42 +470,14 @@ export function outcomesOf(row: RowLike): {
   );
 }
 
-export function crewOf(
-  row: RowLike,
-): Array<{
+/** Driver first, then helper(s); every server shape (see overviewCrew.ts). */
+export function crewOf(row: RowLike): Array<{
   id: number | string | null;
   name: string;
   role: string;
   phone: string | null;
 }> {
-  if (row.crew && row.crew.length) {
-    const list = row.crew.map((c) => ({
-      id: c.id,
-      name: c.name ?? "—",
-      role: c.role,
-      phone: c.phone ?? null,
-    }));
-    return [
-      ...list.filter((c) => c.role === "driver"),
-      ...list.filter((c) => c.role !== "driver"),
-    ];
-  }
-  const out: Array<{
-    id: number | string | null;
-    name: string;
-    role: string;
-    phone: string | null;
-  }> = [];
-  if (row.driver_name)
-    out.push({
-      id: row.driver_id ?? null,
-      name: row.driver_name,
-      role: "driver",
-      phone: null,
-    });
-  for (const h of row.helpers ?? [])
-    if (h) out.push({ id: null, name: h, role: "helper", phone: null });
-  return out;
+  return crewList(row);
 }
 
 export interface RailStep {

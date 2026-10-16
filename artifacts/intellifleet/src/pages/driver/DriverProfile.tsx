@@ -1,3 +1,4 @@
+import { viewerRoleOf } from "@/lib/crewCalls";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
@@ -78,7 +79,8 @@ export default function DriverProfile() {
   const [pwOpen, setPwOpen] = useState(false);
   const data = me.data;
   const dispatchTel = telHref(data?.dispatch_phone);
-  const isHelper = (data?.role ?? "driver") === "helper";
+  const viewerRole = viewerRoleOf(data);
+  const isHelper = viewerRole === "helper";
   const partners = (data?.crew_today ?? []).filter((p) => String(p.id) !== String(data?.staff_id ?? data?.driver_id) && (isHelper ? p.role === "driver" : p.role !== "driver"));
 
   const logout = async () => {
@@ -128,7 +130,7 @@ export default function DriverProfile() {
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", overflowWrap: "anywhere" }}>{data.name}</div>
               <div style={{ fontSize: 15, color: C.sub }} data-testid="profile-warehouse">
-                {t.role(data.role ?? "driver")}
+                {t.role(viewerRole)}
                 {data.warehouse ? ` · ${data.warehouse}` : ""}
               </div>
             </div>

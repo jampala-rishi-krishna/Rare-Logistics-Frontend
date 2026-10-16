@@ -29,7 +29,7 @@ import { ErrorState, MissingDriverNotice, OfflineNote, errorText, showToast, use
 import type { DriverScope } from "./shared";
 import { FieldLabel, PhotoTiles, TemplateField, fieldInput } from "./fields";
 import { ConfirmSheet, DispatchBanners, handoverKey, tripChip, useTripActions } from "./tripFlow";
-import { PersonRow, partnersOf } from "./DriverToday";
+import { PersonRow, crewCallsOf } from "./DriverToday";
 import { ActionBar, Banner, C, Chip, FieldError, Icon, NumberDot, OutlineButton, Pill, PrimaryButton, RoundButton, Sheet, SheetTitle, Skeleton, TextButton, TypeBadge } from "./ui";
 import type { IconName } from "./ui";
 
@@ -800,7 +800,7 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
   const route = useRouteQuery(scope, batch.batch_id, active);
   const routeInfo = route.data?.data as RouteInfo | undefined;
   const fullRouteUrl = active ? routeInfo?.maps_links?.[0]?.url ?? null : null;
-  const partners = partnersOf(batch, me.data);
+  const partners = crewCallsOf(batch, me.data);
   const handover = useQuery<AutoHandover | undefined>({ queryKey: handoverKey(batch.batch_id), queryFn: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)), enabled: false, initialData: () => queryClient.getQueryData<AutoHandover>(handoverKey(batch.batch_id)) });
   const [sheet, setSheet] = useState<SheetName>(null);
   const step = tripStep(state);
@@ -919,7 +919,7 @@ function TripBody({ batch, state, scope, readOnly, backHref, backLabel, offline,
       <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "18px 20px 20px" }}>
         <OrderSummary state={state} t={t} />
         {partners.map((p) => (
-          <PersonRow key={String(p.id)} person={p} t={t} boxed />
+          <PersonRow key={p.key} call={p} t={t} boxed />
         ))}
         {step !== "waiting" && step !== "closed" && step !== "acknowledge" && <Documents state={state} t={t} />}
       </div>

@@ -8,6 +8,8 @@ export interface DriverMe {
   name: string;
   title: string | null;
   role?: "driver" | "helper" | string;
+  // CONTRACT 2026-10-16: who is signed in (the app is labelled for helpers; drivers still use it).
+  viewer_role?: "driver" | "helper";
   warehouse: string | null;
   phone: string | null;
   dispatch_phone: string | null;
@@ -23,6 +25,17 @@ export interface Helper {
   id: number | string;
   name: string;
   phone: string | null;
+}
+
+// CONTRACT 2026-10-16: today list items and assignment detail carry {driver, helpers}.
+export interface CrewPersonRef {
+  staff_id: number | string;
+  name: string;
+  phone: string | null;
+}
+export interface CrewShape {
+  driver: CrewPersonRef | null;
+  helpers: CrewPersonRef[];
 }
 
 export interface CrewMember {
@@ -85,7 +98,7 @@ export interface Batch {
   stop_order_set: boolean;
   details_loading: boolean;
   trip?: TripInfo | null;
-  crew?: CrewMember[];
+  crew?: CrewMember[] | CrewShape | null;
   ended_at?: string | null;
   // CONTRACT 2026-10-15: same driver_step() as Driver Overview (absent on older servers -> derived on the phone).
   step?: DriverStep | null;
@@ -240,6 +253,7 @@ export interface DaySummary {
 
 export interface DriverToday extends DriverFlags {
   date: string;
+  viewer_role?: "driver" | "helper";
   driver: { id: number | string; name: string };
   summary?: DaySummary;
   batches: Batch[];
@@ -415,7 +429,8 @@ export interface ActionResponse {
   ok: boolean;
   already_done: boolean;
   replayed: boolean;
-  done_by: DoneBy | null;
+  // Older servers send {name, at}; the 2026-10-16 contract sends the name as a string.
+  done_by: DoneBy | string | null;
   batch: BatchDetail | null;
   // End trip: the handover created in the same transaction.
   handover?: AutoHandover | null;

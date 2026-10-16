@@ -161,7 +161,7 @@ export default function FilterBar({
           type="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Driver, truck, SO, invoice…"
+          placeholder="Driver, helper, truck, SO, invoice…"
           className={`${inputClass} w-full pl-8 pr-8 placeholder:text-muted-foreground`}
           data-testid="search"
         />

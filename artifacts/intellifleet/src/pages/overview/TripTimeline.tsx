@@ -20,7 +20,8 @@ import {
   stopPhotos,
   type UrlState,
 } from "@/lib/overviewModel";
-import { activityParts, activityText, displayValue } from "@/lib/overview";
+import { activityParts, activityText, displayValue, eventLabel } from "@/lib/overview";
+import { actorLine, personWithRole } from "@/lib/overviewCrew";
 import { useTripDetail } from "./queries";
 import {
   AttentionChip,
@@ -219,7 +220,7 @@ export default function TripDrawer({
                 <>
                   <p>
                     <Time at={ack.at} received={ack.received_at} /> · By{" "}
-                    {personName(ack.by) || "crew"}
+                    {personWithRole(ack.by) || "crew"}
                   </p>
                   <p>
                     GPS: <Gps value={ack.gps} />
@@ -239,7 +240,7 @@ export default function TripDrawer({
                 <h4 className="font-bold">Arrived</h4>
                 <p>
                   <Time at={checkin.at} received={checkin.received_at} /> · By{" "}
-                  {personName(checkin.by) || "crew"}
+                  {personWithRole(checkin.by) || "crew"}
                 </p>
                 <p>
                   GPS: <Gps value={checkin.gps} />
@@ -261,7 +262,7 @@ export default function TripDrawer({
                 <h4 className="font-bold">Left</h4>
                 <p>
                   <Time at={out.at} received={out.received_at} /> · By{" "}
-                  {personName(out.by) || "crew"}
+                  {personWithRole(out.by) || "crew"}
                 </p>
                 <p>
                   GPS: <Gps value={out.gps} />
@@ -445,7 +446,7 @@ export default function TripDrawer({
                       <dt className="text-muted-foreground">Started</dt>
                       <dd>
                         {manilaDateTime(t.trip.started_at)} ·{" "}
-                        {personName(t.trip.started_by)}
+                        {personWithRole(t.trip.started_by)}
                       </dd>
                       <dd>
                         GPS: <Gps value={t.trip.started_gps} />
@@ -455,7 +456,7 @@ export default function TripDrawer({
                       <dt className="text-muted-foreground">Ended</dt>
                       <dd>
                         {manilaDateTime(t.trip.ended_at)} ·{" "}
-                        {personName(t.trip.ended_by)}
+                        {personWithRole(t.trip.ended_by)}
                       </dd>
                       <dd>
                         GPS: <Gps value={t.trip.ended_gps} />
@@ -523,7 +524,7 @@ export default function TripDrawer({
                           "pending",
                       )}{" "}
                       · Submitted {manilaDateTime(t.handover.submitted_at)} by{" "}
-                      {personName(t.handover.submitted_by)} · Officer{" "}
+                      {personWithRole(t.handover.submitted_by)} · Officer{" "}
                       {personName(t.handover.officer)} · Acknowledged{" "}
                       {manilaDateTime(t.handover.officer_acknowledged_at)} ·{" "}
                       {t.handover.note}
@@ -612,11 +613,13 @@ export default function TripDrawer({
                                 activityParts(e, personName(e.by)),
                                 " · ",
                               )
-                            : sentence(e.type)}
+                            : (actorLine(eventLabel(e.type), e, manilaTime(e.at)) ??
+                              sentence(e.type))}
                         </strong>
                         <p>
                           {e.so_number} · {manilaDateTime(e.at)} ·{" "}
-                          {personName(e.by) || e.actor_name}
+                          {personWithRole(e.actor_name, e.actor_role) ||
+                            personWithRole(e.by)}
                         </p>
                         {e.received_at && (
                           <p>Received {manilaDateTime(e.received_at)}</p>

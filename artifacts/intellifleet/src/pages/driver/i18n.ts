@@ -13,7 +13,7 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 const en = {
   // sign in
-  appName: "RareChain Driver",
+  appName: "RareChain Helper",
   brandName: "Rare Global Food",
   greetMorning: "Good morning.",
   greetAfternoon: "Good afternoon.",
@@ -111,6 +111,10 @@ const en = {
   helper: "Helper",
   driver: "Driver",
   callPerson: (name: string) => `Call ${name}`,
+  callDriver: "Call driver",
+  driverNamed: (name: string) => `Driver: ${name}`,
+  helperNamed: (name: string) => `Helper: ${name}`,
+  helperSignIn: "Helper sign in",
   contact: "Contact",
   callCustomer: "Call customer",
   nOfMDone: (k: number, n: number) => `${k} of ${n} done`,
@@ -256,7 +260,7 @@ const en = {
   sendNow: "Send now",
   close: "Close",
   discardQ: "Throw away this action? It was not accepted.",
-  alreadyDone: (who: string, at: string) => `Done by ${who || "your crew"}${at ? ` at ${at}` : ""}`,
+  alreadyDone: (who: string, at: string) => `Already done by ${who || "your crew"}${at ? ` at ${at}` : ""}`,
   queueKinds: {
     acknowledge: "Acknowledge",
     acknowledge_all: "I have all orders",
@@ -278,7 +282,7 @@ const en = {
   loadMore: "Load more",
   loading: "Loading...",
   // profile
-  role: (role: string) => (role === "helper" ? "Helper" : "Delivery driver"),
+  role: (role: string) => (role === "driver" ? "Driver" : "Helper"),
   phone: "Phone",
   truckToday: "Truck today",
   helperToday: "Helper today",
@@ -312,7 +316,7 @@ const en = {
   orderGone: "This order is no longer on your trip.",
   // 2026-10-15 premium layout
   welcomeBack: "Welcome back,",
-  welcomeDriver: "Driver.",
+  welcomeDriver: "Helper.",
   signInSub: "Sign in to manage your deliveries, routes and daily assignments.",
   phoneOrEmail: "Phone number or email",
   phoneOrEmailPlaceholder: "09xx xxx xxxx or email",
@@ -340,7 +344,7 @@ export type Dict = typeof en;
 
 // reviewed-by: pending (Logistics)
 const tl: Dict = {
-  appName: "RareChain Driver",
+  appName: "RareChain Helper",
   brandName: "Rare Global Food",
   greetMorning: "Magandang umaga.",
   greetAfternoon: "Magandang hapon.",
@@ -429,6 +433,10 @@ const tl: Dict = {
   helper: "Helper",
   driver: "Driver",
   callPerson: (name) => `Tawagan si ${name}`,
+  callDriver: "Tawagan ang driver",
+  driverNamed: (name) => `Driver: ${name}`,
+  helperNamed: (name) => `Helper: ${name}`,
+  helperSignIn: "Helper sign in",
   contact: "Contact",
   callCustomer: "Tawagan ang customer",
   nOfMDone: (k, n) => `${k} sa ${n} tapos`,
@@ -583,7 +591,7 @@ const tl: Dict = {
   noHistory: "Walang biyahe sa panahong ito.",
   loadMore: "Ipakita pa",
   loading: "Naglo-load...",
-  role: (role) => (role === "helper" ? "Helper" : "Delivery driver"),
+  role: (role) => (role === "driver" ? "Driver" : "Helper"),
   phone: "Phone",
   truckToday: "Truck ngayon",
   helperToday: "Helper ngayon",
@@ -615,7 +623,7 @@ const tl: Dict = {
   tripGone: "Hindi na sa iyo ang biyaheng ito.",
   orderGone: "Wala na sa biyahe mo ang order na ito.",
   welcomeBack: "Maligayang pagbabalik,",
-  welcomeDriver: "Driver.",
+  welcomeDriver: "Helper.",
   signInSub: "Mag-sign in para makita ang deliveries, ruta at biyahe mo ngayon.",
   phoneOrEmail: "Phone number o email",
   phoneOrEmailPlaceholder: "09xx xxx xxxx o email",

@@ -8,7 +8,9 @@ import { firstName, formatQty, telHref, withDriverParams } from "@/lib/driver";
 import { acknowledgePath, alertTarget } from "@/lib/tripNav";
 import { tripPath } from "@/lib/tripNav";
 import type { TripInfo } from "@/lib/tripTypes";
-import type { AlertItem, Batch, CrewMember, DriverMe } from "@/lib/tripTypes";
+import type { AlertItem, Batch, DriverMe } from "@/lib/tripTypes";
+import { crewCalls, normalizeCrew, viewerRoleOf } from "@/lib/crewCalls";
+import type { CrewCall } from "@/lib/crewCalls";
 import DriverLayout from "./DriverLayout";
 import { dayLabel, useLang, useT } from "./i18n";
 import type { Dict } from "./i18n";
@@ -26,29 +28,39 @@ export function isFinished(batch: Pick<Batch, "trip">): boolean {
   return Boolean(batch.trip && FINISHED.has(batch.trip.status));
 }
 
-// The other crew member(s) of a trip, from the point of view of the signed-in person (driver sees helpers, helper sees driver).
-export function partnersOf(batch: Pick<Batch, "crew" | "helpers">, me: Pick<DriverMe, "driver_id" | "staff_id" | "role"> | null | undefined): CrewMember[] {
-  const crew: CrewMember[] = batch.crew && batch.crew.length > 0 ? batch.crew : (batch.helpers ?? []).map((h) => ({ id: h.id, name: h.name, role: "helper", phone: h.phone }));
-  const myIds = new Set([me?.driver_id, me?.staff_id].filter((x) => x !== undefined && x !== null).map(String));
-  const others = crew.filter((p) => !myIds.has(String(p.id)));
-  return others.length > 0 ? others : crew.filter((p) => p.role !== (me?.role ?? "driver"));
+// The crew members the signed-in person can call (helper sees "Call driver" + any other helper; driver sees the helper).
+export function crewCallsOf(batch: Pick<Batch, "crew" | "helpers">, me: Pick<DriverMe, "driver_id" | "staff_id" | "role" | "viewer_role"> | null | undefined): CrewCall[] {
+  return crewCalls(normalizeCrew(batch.crew, batch.helpers), viewerRoleOf(me), [me?.staff_id, me?.driver_id]);
 }
 
-// Crew contact: role label over the name, call button only when there is a dialable number.
-export function PersonRow({ person, t, boxed = false }: { person: CrewMember; t: Dict; boxed?: boolean }) {
-  const tel = telHref(person.phone);
+// Crew contact: "Driver: <name>" / "Helper: <name>" with the number, and a labelled call button when it is dialable.
+export function PersonRow({ call, t, boxed = false }: { call: CrewCall; t: Dict; boxed?: boolean }) {
+  const tel = telHref(call.phone);
+  const label = call.kind === "call_driver" ? t.callDriver : t.callPerson(call.name);
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, ...(boxed ? { padding: "12px 14px", borderRadius: 16, border: `1px solid ${C.line}`, background: C.card } : {}) }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+    <div data-testid={`driver-crew-${call.role}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", ...(boxed ? { padding: "12px 14px", borderRadius: 16, border: `1px solid ${C.line}`, background: C.card } : {}) }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: "1 1 160px" }}>
         <span aria-hidden="true" style={{ width: boxed ? 44 : 36, height: boxed ? 44 : 36, borderRadius: 22, background: C.soft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icon name="user" size={boxed ? 22 : 18} color={C.body} />
         </span>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, color: C.sub }}>{person.role === "driver" ? t.driver : t.helper}</div>
-          <div style={{ fontSize: boxed ? 17 : 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{person.name}</div>
+          <div style={{ fontSize: boxed ? 17 : 15, fontWeight: 700, overflowWrap: "anywhere" }}>{call.role === "driver" ? t.driverNamed(call.name) : t.helperNamed(call.name)}</div>
+          {call.phone && <div style={{ fontSize: 13, color: C.sub }}>{call.phone}</div>}
         </div>
       </div>
-      {tel && <RoundButton icon="phone" label={t.callPerson(person.name)} href={tel} testId="driver-call-crew" />}
+      {tel && (
+        <a
+          href={tel}
+          aria-label={call.phone ? `${label} ${call.phone}` : label}
+          data-testid="driver-call-crew"
+          data-kind={call.kind}
+          onClick={(e) => e.stopPropagation()}
+          style={{ height: 44, padding: "0 16px", borderRadius: 22, border: `1px solid ${C.field}`, background: C.card, color: C.ink, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 700, flexShrink: 0, textDecoration: "none" }}
+        >
+          <Icon name="phone" size={18} />
+          {label}
+        </a>
+      )}
     </div>
   );
 }
@@ -119,7 +131,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
   const left = batch.trip ? Math.max(batch.trip.total - batch.trip.acknowledged, 0) : 0;
   const finished = isFinished(batch);
   const crew = !scope.isAdmin && Boolean(batch.trip);
-  const partners = partnersOf(batch, me);
+  const partners = crewCallsOf(batch, me);
   const tripNo = batch.trip_number ?? index + 1;
 
   // Acknowledging happens only in the Acknowledge tab: the card just takes the driver there (to this trip).
@@ -162,7 +174,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
       {partners.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.line}` }} onClick={(e) => e.stopPropagation()}>
           {partners.map((p) => (
-            <PersonRow key={String(p.id)} person={p} t={t} />
+            <PersonRow key={p.key} call={p} t={t} />
           ))}
         </div>
       )}

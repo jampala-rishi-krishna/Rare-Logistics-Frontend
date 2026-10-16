@@ -74,7 +74,7 @@ export default function DriverOverview() {
             (isRange(state) && Boolean(rangeError(state.from, state.to)))
           }
           data-testid="export-csv"
-          title="Exports current date/range, warehouse, search and status. CSV columns: date, batch, driver, helpers, vehicle, so_number, customer, acknowledged_at, acknowledged_by, arrived_at, distance_m, departed_at, invoice_dr_number, outcome, reason, minutes_at_stop, trip_started, trip_ended, handover_status, invoice_status, officer, validated_at. Times are Manila time."
+          title="Exports current date/range, warehouse, search and status. CSV columns: date, batch, driver, helpers, vehicle, so_number, customer, acknowledged_at, acknowledged_by, arrived_at, distance_m, departed_at, invoice_dr_number, outcome, reason, minutes_at_stop, trip_started, trip_ended, handover_status, invoice_status, officer, validated_at, done_by, role. Times are Manila time."
         >
           <Download size={14} />
           {exporting ? "Preparing…" : "Export CSV"}

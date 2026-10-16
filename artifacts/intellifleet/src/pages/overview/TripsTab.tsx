@@ -1,4 +1,6 @@
-﻿import type { UseQueryResult } from "@tanstack/react-query";
+﻿import { useState } from "react";
+import type { UseQueryResult } from "@tanstack/react-query";
+import { groupByCrew, rowCrew, type BoardMode } from "@/lib/overviewCrew";
 import type { TripRow, TripsResponse } from "@/services/api/overview";
 import {
   crewOf,
@@ -78,9 +80,72 @@ export default function TripsTab({
     return `✓ ${o.delivered} delivered · ◐ ${o.partial} partial · ✕ ${o.failed} not delivered`;
   };
   const groups = isRange(state) ? groupByDate(rows) : [{ date: "", rows }];
+  // Driver / Helper toggle: "By helper" lists the board under each helper (a trip with no helper under "No helper").
+  const [board, setBoard] = useState<BoardMode>("driver");
+  const renderTrip = (r: TripRow, keyPrefix = "") => {
+    const a = lastActivity(r, now, query.data?.stale_minutes ?? 30);
+    const kg = formatKg([r]);
+    return (
+      <article
+        key={`${keyPrefix}${r.batch_id}`}
+        className="relative grid gap-2 rounded-lg border border-border bg-card p-4"
+        data-testid="trip-row"
+      >
+        <button
+          onClick={() => open(r)}
+          className={`absolute inset-0 z-0 rounded-lg ${focusRing}`}
+          aria-label={`Open ${r.vehicle ?? "truck"}, Trip ${r.trip_number}`}
+        />
+        <div className="pointer-events-none relative flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <strong className="text-base">{r.vehicle ?? "No vehicle"}</strong>
+          <span className="text-sm">
+            Trip {r.trip_number}
+            {r.trips_on_date > 1 ? ` of ${r.trips_on_date}` : ""}
+          </span>
+          <span className="text-xs text-muted-foreground">{r.warehouse}</span>
+          <div className="pointer-events-auto relative z-[1] flex flex-wrap gap-2 text-sm" data-testid="trip-row-crew">
+            {crewOf(r).map((c, i) => (
+              <CallLink key={i} name={c.name} role={c.role} phone={c.phone} />
+            ))}
+          </div>
+        </div>
+        <div className="pointer-events-none relative">
+          <Rail row={r} />
+        </div>
+        <p className="pointer-events-none relative text-xs">
+          {outcome(r)} · Invoices {r.invoices?.received ?? 0}/
+          {r.invoices?.total ?? r.so_count} received
+        </p>
+        <p
+          className={`pointer-events-none relative text-xs ${a.stale ? "font-semibold text-destructive" : "text-muted-foreground"}`}
+        >
+          {a.text} · {kg?.text} {kg?.note ? `(${kg.note})` : ""} ·{" "}
+          {r.packs ?? "—"} packs
+        </p>
+        <div className="pointer-events-none relative flex flex-wrap gap-1">
+          {r.attention?.map((f, i) => (
+            <AttentionChip key={i} flag={f} />
+          ))}
+        </div>
+      </article>
+    );
+  };
   return (
     <section className="grid min-w-0 gap-3" data-testid="trips-tab">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <div role="group" aria-label="List the board by" className="flex gap-1" data-testid="board-mode">
+          {(["driver", "helper"] as const).map((m) => (
+            <button
+              key={m}
+              className={buttonClass}
+              aria-pressed={board === m}
+              data-testid={`board-mode-${m}`}
+              onClick={() => setBoard(m)}
+            >
+              {m === "driver" ? "By driver" : "By helper"}
+            </button>
+          ))}
+        </div>
         <button
           className={buttonClass}
           aria-pressed={state.view === "table"}
@@ -119,6 +184,7 @@ export default function TripsTab({
                 {[
                   "Date",
                   "Driver",
+                  "Helper",
                   "Vehicle",
                   "Status",
                   "SOs",
@@ -152,9 +218,10 @@ export default function TripsTab({
                 >
                   {[
                     r.date,
-                    crewOf(r)
-                      .map((c) => c.name)
-                      .join(" + "),
+                    rowCrew(r).driver?.name ?? "—",
+                    rowCrew(r)
+                      .helpers.map((h) => h.name)
+                      .join(", ") || "—",
                     `${r.vehicle} · Trip ${r.trip_number} of ${r.trips_on_date}`,
                     tileLabel(tileOf(r)),
                     r.so_count,
@@ -174,67 +241,27 @@ export default function TripsTab({
             </tbody>
           </table>
         </div>
+      ) : board === "helper" ? (
+        groupByCrew(rows, "helper").map((g) => (
+          <div key={g.key} className="grid gap-2" data-testid="helper-group">
+            <h2 className="flex flex-wrap items-baseline gap-2 font-semibold">
+              {g.person ? (
+                <CallLink name={g.person.name} role="helper" phone={g.person.phone} />
+              ) : (
+                g.label
+              )}
+              <span className="text-xs font-normal text-muted-foreground">
+                {g.rows.length} trip{g.rows.length === 1 ? "" : "s"}
+              </span>
+            </h2>
+            {g.rows.map((r) => renderTrip(r, `${g.key}-`))}
+          </div>
+        ))
       ) : (
         groups.map((g) => (
           <div key={g.date} className="grid gap-2">
             {g.date && <h2 className="font-semibold">{dayLabel(g.date)}</h2>}
-            {g.rows.map((r) => {
-              const a = lastActivity(r, now, query.data?.stale_minutes ?? 30);
-              const kg = formatKg([r]);
-              return (
-                <article
-                  key={r.batch_id}
-                  className="relative grid gap-2 rounded-lg border border-border bg-card p-4"
-                  data-testid="trip-row"
-                >
-                  <button
-                    onClick={() => open(r)}
-                    className={`absolute inset-0 z-0 rounded-lg ${focusRing}`}
-                    aria-label={`Open ${r.vehicle ?? "truck"}, Trip ${r.trip_number}`}
-                  />
-                  <div className="pointer-events-none relative flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <strong className="text-base">
-                      {r.vehicle ?? "No vehicle"}
-                    </strong>
-                    <span className="text-sm">
-                      Trip {r.trip_number}
-                      {r.trips_on_date > 1 ? ` of ${r.trips_on_date}` : ""}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {r.warehouse}
-                    </span>
-                    <div className="pointer-events-auto relative z-[1] flex flex-wrap gap-2 text-sm">
-                      {crewOf(r).map((c, i) => (
-                        <CallLink
-                          key={i}
-                          name={c.name}
-                          role={c.role}
-                          phone={c.phone}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="pointer-events-none relative">
-                    <Rail row={r} />
-                  </div>
-                  <p className="pointer-events-none relative text-xs">
-                    {outcome(r)} · Invoices {r.invoices?.received ?? 0}/
-                    {r.invoices?.total ?? r.so_count} received
-                  </p>
-                  <p
-                    className={`pointer-events-none relative text-xs ${a.stale ? "font-semibold text-destructive" : "text-muted-foreground"}`}
-                  >
-                    {a.text} · {kg?.text} {kg?.note ? `(${kg.note})` : ""} ·{" "}
-                    {r.packs ?? "—"} packs
-                  </p>
-                  <div className="pointer-events-none relative flex flex-wrap gap-1">
-                    {r.attention?.map((f, i) => (
-                      <AttentionChip key={i} flag={f} />
-                    ))}
-                  </div>
-                </article>
-              );
-            })}
+            {g.rows.map((r) => renderTrip(r))}
           </div>
         ))
       )}

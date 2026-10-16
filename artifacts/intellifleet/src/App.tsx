@@ -79,6 +79,7 @@ import { ViewModeToggle } from "@/components/load-planning/SalesOrderCardGrid";
 import { readViewMode, writeViewMode, type ViewMode } from "@/lib/loadPlanningView";
 import { OrderTypeSwitch, type InventoryOrderKind } from "@/components/load-planning/OrderTypeControls";
 import LoadPlanningAssignmentTab from "@/components/load-planning/LoadPlanningAssignmentTab";
+import { toggleSingleHelper } from "@/lib/crewCalls";
 import { OrderTypeBadge } from "@/components/load-planning/OrderTypeBadge";
 import { orderTypeColor, orderTypeOfRow, normalizeOrderType } from "@/lib/orderType";
 import { countByType, describeCounts, groupOrdersByTruck } from "@/lib/orderMerge";
@@ -5837,11 +5838,8 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     assignmentBatchId?: string | null;
   } | null>(null);
   const toggleHelper = (helperId: number) => {
-    setHelperIds((current) =>
-      current.includes(helperId)
-        ? current.filter((existing) => existing !== helperId)
-        : [...current, helperId],
-    );
+    // One truck = one driver + one helper: picking a helper replaces the previous one.
+    setHelperIds((current) => toggleSingleHelper(current, helperId));
   };
   if (!id) return null;
   if (options.isLoading)
@@ -5984,7 +5982,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
           options.refetch();
         }
         if (/helper/i.test(driver.title || newDriver.title)) {
-          assignedHelperIds = [...helperIds.filter((h) => h !== driver!.id), driver.id];
+          assignedHelperIds = [driver.id];
         } else {
           assignedDriver = driver.id;
           assignedHelperIds = helperIds.filter((h) => h !== driver!.id);
@@ -6269,7 +6267,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
             <div className="mt-1 text-xs text-[#77787b]">No active drivers available.</div>
           )}
           <div className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-[#55565a]">
-            Helper(s) — optional
+            Helper — optional (one per truck)
           </div>
           <div className="grid gap-1 border border-[#d8d7d2] bg-white p-2 text-sm md:grid-cols-2">
             {helperOptions.length === 0 && (
@@ -6282,6 +6280,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
               >
                 <input
                   type="checkbox"
+                  data-testid={`assignment-helper-${d.id}`}
                   checked={helperIds.includes(d.id)}
                   onChange={() => toggleHelper(d.id)}
                 />

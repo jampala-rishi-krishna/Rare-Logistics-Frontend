@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import * as driverApi from "@/services/api/driver";
 import { formatClock } from "@/lib/driver";
+import { doneByParts } from "@/lib/crewCalls";
 import { capturePosition } from "@/lib/geo";
 import { fetchWithCache, saveToCache, useRuntime, photoUploader } from "@/lib/offlineRuntime";
 import { isRemovedByDispatch } from "@/lib/offlineQueue";
@@ -120,7 +121,7 @@ export function useCrewAction(scope: DriverScope, batchId: string) {
             queryClient.setQueryData(["driver-assignment", batchId, scope.adminDriverId], { data: batch, offline: false, saved_at: Date.now() });
             void saveToCache("batch", batchId, scope.adminDriverId, batch);
           }
-          if (outcome.response.already_done) showToast(t.alreadyDone(outcome.response.done_by?.name ?? "", formatClock(outcome.response.done_by?.at)), "warn");
+          if (outcome.response.already_done) showToast(t.alreadyDone(doneByParts(outcome.response.done_by).name, formatClock(doneByParts(outcome.response.done_by).at)), "warn");
           else if (opts.doneMessage) showToast(opts.doneMessage);
         } else if (outcome.status === "queued") {
           showToast(t.savedOffline, "warn");

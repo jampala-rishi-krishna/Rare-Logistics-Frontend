@@ -157,7 +157,7 @@ export function CallLink({
   role?: string;
 }) {
   const tel = telHref(phone ?? null);
-  const who = role === "helper" ? `${name} (helper)` : name;
+  const who = role === "helper" ? `${name} (Helper)` : role === "driver" ? `${name} (Driver)` : name;
   if (!tel) return <span className="whitespace-nowrap">{who}</span>;
   return (
     <a

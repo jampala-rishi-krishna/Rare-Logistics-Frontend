@@ -74,6 +74,17 @@ export interface CrewMember {
   phone?: string | null;
 }
 
+// Contract 2026-10-16: helpers on board rows, crew {driver, helpers} on trip detail.
+export interface CrewRef {
+  staff_id: number | string;
+  name: string;
+  phone: string | null;
+}
+export interface CrewShape {
+  driver: CrewRef | null;
+  helpers: CrewRef[];
+}
+
 export interface TripRow {
   batch_id: string;
   date: string | null;
@@ -83,7 +94,7 @@ export interface TripRow {
   trips_on_date: number;
   step?: DriverStep | null;
   tile?: Exclude<TileId, "attention"> | null;
-  crew?: CrewMember[];
+  crew?: CrewMember[] | CrewShape | null;
   so_count: number;
   kg: number | null;
   kg_complete?: boolean;
@@ -104,7 +115,8 @@ export interface TripRow {
   // keys the pre-v2 /trips rows already had (kept by the server)
   driver_id?: number | null;
   driver_name?: string | null;
-  helpers?: Array<string | null>;
+  // Plain names (older servers) or, from 2026-10-16, {staff_id, name, phone}.
+  helpers?: Array<string | CrewRef | null>;
   state?: string;
   state_label?: string;
   delivered?: number;
@@ -194,6 +206,8 @@ export interface TimelineEvent {
   gps?: Gps | null;
   id?: string | number;
   actor_name?: string | null;
+  // Who did it: "driver" | "helper" | "officer" | "dispatcher" | "admin" (contract 2026-10-16).
+  actor_role?: string | null;
   previous_state?: string | null;
   order_type?: string | null;
   [k: string]: unknown;
@@ -240,7 +254,7 @@ export interface Timeline {
     handover_status?: string | null;
     [k: string]: unknown;
   };
-  crew: CrewMember[];
+  crew: CrewMember[] | CrewShape;
   orders: TimelineOrder[];
   handover?: { status?: string; submitted_at?: string | null; submitted_by?: unknown; officer?: unknown; officer_acknowledged_at?: string | null; note?: string | null } | null;
   events: TimelineEvent[];

@@ -124,6 +124,13 @@ export async function createUser(body: CreateUserBody): Promise<ApiUser> {
   return "user" in (res as object) ? (res as { user: ApiUser }).user : (res as ApiUser);
 }
 
+// Staff records a driver / helper login can be linked to (n8n Staff Directory via the backend cache).
+export async function getStaffOptions(role: "driver" | "helper"): Promise<import("@/lib/userForm").StaffOption[]> {
+  const res = await api.get<import("@/lib/userForm").StaffOption[] | { options?: import("@/lib/userForm").StaffOption[]; staff?: import("@/lib/userForm").StaffOption[] }>("/api/admin/staff-options", { role });
+  if (Array.isArray(res)) return res;
+  return res?.options ?? res?.staff ?? [];
+}
+
 // Admin > Settings: whitelisted non-secret settings (Neon table app_settings; env stays the fallback).
 export type { AdminSetting } from "@/lib/settingsForm";
 

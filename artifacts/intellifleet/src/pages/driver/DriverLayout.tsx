@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatClock } from "@/lib/driver";
+import { doneByParts } from "@/lib/crewCalls";
 import { subscribeDropped, subscribeResults, useOfflineQueue } from "@/lib/offlineRuntime";
 import type { QueueEntry } from "@/lib/offlineQueue";
 import { syncBadge } from "@/lib/syncStatus";
@@ -112,7 +113,7 @@ export default function DriverLayout({ scope, tab, children, testId }: { scope: 
         void queryClient.invalidateQueries({ queryKey: ["driver-alerts"] });
         setConfirmedAt(Date.now());
         const t = DICTS[getLang()];
-        if (response.already_done) showToast(t.alreadyDone(response.done_by?.name ?? "", formatClock(response.done_by?.at)), "warn");
+        if (response.already_done) showToast(t.alreadyDone(doneByParts(response.done_by).name, formatClock(doneByParts(response.done_by).at)), "warn");
       }),
     [queryClient],
   );
