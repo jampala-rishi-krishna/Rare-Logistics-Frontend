@@ -1,10 +1,10 @@
 # IntelliFleet Neon database
 
-Updated 2026-10-13. Alembic head: `r8d9e0f1a2b3` (proof of delivery required: a new version of the Delivery time log template, data only). Earlier heads: `q7c8d9e0f1a2` (driver app rebuild: `driver_issues`, `driver_alert_reads`, 2 columns, time-log template), `p6b7c8d9e0f1` (`app_settings`), `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
+Updated 2026-10-16. Application schema head: `t0f1a2b3c4d5` (apply via the Render pre-deploy migration before starting this version), following `s9e0f1a2b3c4` (transfer orders). Earlier documented head: `r8d9e0f1a2b3` (proof of delivery required: a new version of the Delivery time log template, data only). Earlier heads: `q7c8d9e0f1a2` (driver app rebuild: `driver_issues`, `driver_alert_reads`, 2 columns, time-log template), `p6b7c8d9e0f1` (`app_settings`), `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
 
 Neon stores durable business history and configuration only. Current/future Sales
 Orders, Fleet telemetry, staff directory data, alerts, routes, optimization runs,
-conversations, and delivery proofs are live or process-memory data. Current/future
+conversations, and delivery proofs are live or process-memory data. The approved unassign-request and pickup-decision workflows described below persist decisions and read markers, never a live-order mirror. Current/future
 Sales Order views must not read or write Neon on every request; history views are
 the only date-filtered Neon reads.
 
@@ -34,7 +34,7 @@ the only date-filtered Neon reads.
 | `pretrip_checklists` | Pre-trip checklist per truck per working day | Explicit user entry only |
 | `fuel_logs` | Fuel fill-ups (litres, amount, odometer, full tank) | Explicit user entry only |
 | `zoho_api_usage` | Per-day Zoho API call counters, PK (usage_day, category, source), ~20 rows/day | Additive UPSERT every 60s from `services/zoho_usage.py`, only when there is an unflushed delta; also on shutdown/SIGTERM. Read once at startup to restore today's total. Admin > Users usage tile |
-| `app_settings` | Admin-editable NON-SECRET settings: `key` (PK), `value`, `updated_by`, `updated_at` (migration `p6b7c8d9e0f1`, approved 2026-10-12). Fixed whitelist of 5 keys; see "App settings" below | One UPSERT per Save in Admin > Settings (one DELETE per "Reset to default"). Read ONCE at startup into memory; never read per request |
+| `app_settings` | Admin-editable NON-SECRET settings: `key` (PK), `value`, `updated_by`, `updated_at` (migration `p6b7c8d9e0f1`, approved 2026-10-12). Fixed whitelist of 11 keys (including six pickup email settings); see "App settings" below | One UPSERT per Save in Admin > Settings (one DELETE per "Reset to default"). Read ONCE at startup into memory; never read per request |
 | `form_templates` | Versioned forms: the delivery **acknowledge checklist** and the delivery **check-out** form (`kind`, `version`, `is_draft`, `active`) (migration `o5a6b7c8d9e0`). Seeded v1 of each as DRAFT placeholders | One INSERT per version when an admin saves a template in Driver Overview > Checklist settings (the previous version is flagged inactive in the same transaction). Read by the driver app's templates call and by validation of every acknowledge / check-out |
 | `form_template_items` | The fields of a template version (`key`, `label`, `item_type`, `required`, `options`, `prefill`, `show_when`, `position`) | Inserted together with their `form_templates` row only; never edited in place |
 | `trips` | One row per assignment batch (`batch_id` unique): status `pending/on_trip/returned/handover_submitted/closed`, start/end times + GPS, end distance | Created lazily by the first crew action on a batch; updated by start, end, and when the handover is closed. One write per crew action |
@@ -302,3 +302,18 @@ Staff/drivers live only in the n8n "Logistics Staff Directory" DataTable
   mobile as an existing cached record) before calling n8n.
 - Edits/deletes of existing staff are still done in n8n directly
   (`POST/PATCH/DELETE /api/dispatch/staff` stay 501).
+
+
+## Role, manager and pickup workflows (2026-10-16, task pre-approved)
+
+Migration `t0f1a2b3c4d5` follows `s9e0f1a2b3c4`. Run through the configured Render pre-deploy migration step; verify `/health.schema_revision` before releasing the frontend.
+- `users.phone` becomes nullable; the existing PostgreSQL UNIQUE constraint allows multiple NULLs and still enforces uniqueness of real phone numbers. No invented phone values.
+- `users.is_manager` is a non-null boolean (default false). Existing admins and `pau@rareglobalfood.com` / `jed@rareglobalfood.com` are enabled; new matching accounts receive the same default. Only admin user-management updates it; user cache is invalidated immediately.
+- Existing `dispatcher` users become `planner`; migration prints changed emails. Warehouse/client users are preserved. No other users are rewritten.
+- `sales_orders.assigned_by_name` is nullable, copied with the existing assigning ID/time in the assignment transaction for SO/WM/PO/TO. Legacy names remain NULL. Assignment state is restored once at startup; live views continue to use memory. Attribution is removed at the JSON response boundary for non-managers and from all export/email payloads.
+- `unassign_requests`: one row per order per request, requester ID/name, reason, pending/approved/rejected status, resolution actor/time/note, manager read IDs and requester-result read flag. A partial UNIQUE index on order_id WHERE status='pending' blocks duplicates across concurrent requests. INSERT only on Request unassign; UPDATE only on read/resolve. Approval uses the existing unassign warning/blocked rules and commits the request result with unassign history/events. Alert reads query pending requests for managers and own outcomes for requesters; they never query live orders from Neon.
+- `pickup_decisions`: unique decision_key = Zoho PO ID + delivery_date + created_time, order_id, delivery_date, status, deciding user ID/name, created_at. One INSERT per manager approve/reject. Loaded once at startup into memory, then updated after a decision; no DB reads in live PO listing or assignment.
+- `pickup_email_logs`: delivery_date, recipient To/CC JSON, PO count, sending/sent/failed/skipped_empty status, error, nullable unique schedule_key. Scheduler claims its Manila day before delivery, then updates outcome; an ambiguous interrupted send remains 'sending' and is not automatically retried. Manual sends use NULL schedule_key. Admin/manager history reads latest 100 only.
+- Six extra non-secret `app_settings` whitelist keys: PICKUP_PROCUREMENT_TO/CC, PICKUP_LOGISTICS_TO/CC, PICKUP_EMAIL_TIME (14:05 Manila), PICKUP_EMAIL_ENABLED (0, disabled). Existing startup-only cache and explicit Save writes apply. No recipient means no scheduled send.
+- Exact Zoho field verified from list and PO detail: `cf_shipment_method` (label Shipment Method), exact value `For Pickup`; only Delivery Date tomorrow in Asia/Manila, status Issued. Missing date/time fails closed. Cutoff is 14:00:59 the day before delivery; 14:01:00 is Pahabol. Vendor shipping address/contact comes from cached Zoho contacts (1 hour, bounded 500), fetched by detail workers, never per render. No PO content mirror or staff/contact table.
+- Migration is forward-only to prevent deleting workflow history accidentally.
