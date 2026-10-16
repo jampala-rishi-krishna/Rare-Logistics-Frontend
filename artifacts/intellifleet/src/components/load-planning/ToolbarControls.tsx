@@ -94,18 +94,35 @@ export function isBudgetGuardMessage(message: string) {
   return /budget guard/i.test(message);
 }
 
-/** Compact inline error / notice above the list: neutral for the budget guard, red only for real errors. */
-export function ListError({ message }: { message: string }) {
-  if (isBudgetGuardMessage(message)) {
+/** User-facing text for a failed query, with the server's request id when the message doesn't carry it yet. */
+export function errorText(error: unknown): string {
+  const e = error as { message?: string; requestId?: string | null } | null;
+  const message = e?.message || "Something went wrong.";
+  return e?.requestId && !message.includes(e.requestId) ? `${message} (Ref: ${e.requestId})` : message;
+}
+
+/**
+ * Compact inline error / notice in place of the list - only when there is NO data to show (a failed
+ * refetch over loaded rows shows ConnectionStatusBar instead). Neutral for the budget guard, red for real errors.
+ */
+export function ListError({ message, error, onRetry, retrying = false }: { message?: string; error?: unknown; onRetry?: () => void; retrying?: boolean }) {
+  const text = message ?? errorText(error);
+  const retry = onRetry && (
+    <button type="button" onClick={onRetry} disabled={retrying} className="ml-3 inline-flex items-center gap-1 rounded-[4px] border border-current px-2 py-0.5 font-semibold disabled:opacity-60" data-testid="list-error-retry">
+      {retrying ? "Retrying…" : "Retry"}
+    </button>
+  );
+  if (isBudgetGuardMessage(text)) {
     return (
       <div role="status" data-testid="list-notice" className="m-3 border border-[#e4e3df] bg-[#f7f7f4] px-3 py-2 text-xs text-[#55565a] sm:mx-4">
-        {message}
+        {text}
       </div>
     );
   }
   return (
-    <div role="alert" data-testid="list-error" className="m-3 border border-[#86000B]/30 bg-[#fff4f4] px-3 py-2 text-xs text-[#86000B] sm:mx-4">
-      {message}
+    <div role="alert" data-testid="list-error" className="m-3 flex flex-wrap items-center justify-between gap-2 border border-[#86000B]/30 bg-[#fff4f4] px-3 py-2 text-xs text-[#86000B] sm:mx-4">
+      <span className="min-w-0">{text}</span>
+      {retry}
     </div>
   );
 }

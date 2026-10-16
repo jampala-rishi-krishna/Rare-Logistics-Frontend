@@ -4,6 +4,7 @@ import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { OrderTypeBadge } from "./OrderTypeBadge";
+import { ConnectionStatusBar, viewOfQuery } from "@/components/ui/ConnectionStatusBar";
 import { EmptyState, FilterField, ListError, Toolbar, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { lastRefreshedLabel } from "@/lib/orderMerge";
 import { ORDER_TYPE_STYLE } from "@/lib/orderType";
@@ -54,6 +55,8 @@ export default function TransferOrdersTab() {
     // Line details / weights fill in on the backend after the list returns: poll until they are all in.
     refetchInterval: (q) => (q.state.data?.details_pending ? 4000 : false),
   });
+  // A failed refetch keeps the loaded rows on screen (amber bar); red error only when there is nothing to show.
+  const ordersView = viewOfQuery(orders);
   useEffect(() => setPage(1), [from, to, query]);
 
   const hardRefresh = useMutation({
@@ -124,8 +127,9 @@ export default function TransferOrdersTab() {
         actions={null}
       />
       {message && <div className="border-b border-[#cddfd2] bg-[#edf6f0] px-4 py-2 text-xs text-[#1e7b44]">{message}</div>}
-      {orders.isError ? (
-        <ListError message={(orders.error as Error).message} />
+      <ConnectionStatusBar view={ordersView} isFetching={orders.isFetching} onRetry={() => void orders.refetch()} />
+      {ordersView.mode === "error" ? (
+        <ListError error={orders.error} onRetry={() => void orders.refetch()} retrying={orders.isFetching} />
       ) : orders.isLoading ? (
         <div className="grid gap-2 p-4" aria-label="Loading transfer orders">
           {[1, 2, 3, 4, 5].map((row) => (

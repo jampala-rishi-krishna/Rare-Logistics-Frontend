@@ -1,7 +1,7 @@
 // Driver Overview client (docs/TRIP_WORKFLOW.md section 8). Prefix /api/driver-overview.
 // Overview v2 (one filter bar, tiles, trip list, trip drawer): GET /trips, /trips/{batch_id}, /hardcopies, /issues, /export.csv.
 // The legacy /summary, /board, /drivers/{id}, /map and /live endpoints still exist on the server but the page no longer calls them.
-import { api, getStoredSessionId, ApiError } from "./client";
+import { api, ensureOk, getStoredSessionId, sessionExpiry, toApiError } from "./client";
 
 const BASE = "/api/driver-overview";
 
@@ -352,8 +352,17 @@ export async function fetchMediaObjectUrl(photoId: number | string, size: "thumb
   const token = getStoredSessionId();
   const url = new URL(`/api/media/${encodeURIComponent(String(photoId))}`, base);
   url.searchParams.set("size", size);
-  const res = await fetch(url.toString(), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-  if (!res.ok) throw new ApiError(res.status, `Could not load photo (HTTP ${res.status})`);
+  const path = `/api/media/${encodeURIComponent(String(photoId))}`;
+  if (sessionExpiry.redirecting) throw toApiError("GET", path, { status: 401, ok: false, body: null });
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  } catch (error) {
+    if (error instanceof TypeError) throw toApiError("GET", path, { status: 0, ok: false, body: null, networkError: error });
+    throw error;
+  }
+  // Same 401 single-flight redirect and error shape as api.* calls.
+  await ensureOk(res, "GET", path);
   return URL.createObjectURL(await res.blob());
 }
 

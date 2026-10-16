@@ -1,3 +1,4 @@
+import { queryRetryDelayMs, queryShouldRetry } from "@/lib/apiErrors";
 import {
   Children,
   useEffect,
@@ -7168,16 +7169,14 @@ function RouteWorkspace({ onNotice }: { onNotice: (s: string) => void }) {
   );
 }
 
-// A 503 {code: "warming"} means the server is filling its Zoho cache in the background: keep retrying quietly (every 3 s, up to ~1 minute).
-function isWarming(error: unknown): boolean {
-  const body = (error as { status?: number; body?: { code?: string } } | null) ?? null;
-  return body?.status === 503 && body?.body?.code === "warming";
-}
+// Retry policy (src/lib/apiErrors.ts): a 503 {code: "warming"} keeps retrying quietly (every 3 s, up to ~1 minute);
+// 4xx (401/403/validation) and the Zoho budget guard never retry; network/5xx get at most one extra pass,
+// because the HTTP client already retries GETs with backoff - retries must not multiply.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: (failureCount, error) => (isWarming(error) ? failureCount < 20 : failureCount < 3),
-      retryDelay: (failureCount, error) => (isWarming(error) ? 3000 : Math.min(1000 * 2 ** failureCount, 30000)),
+      retry: queryShouldRetry,
+      retryDelay: queryRetryDelayMs,
     },
   },
 });

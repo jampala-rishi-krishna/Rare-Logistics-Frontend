@@ -105,6 +105,10 @@ export interface SalesOrdersPage {
   total_weight_kg?: number;
   /** False when some line has no known weight yet (or Zoho has no package weight for it). */
   weight_complete?: boolean;
+  /** True when the server answered from cache because Zoho was unavailable; see stale_since. */
+  stale?: boolean;
+  /** ISO time the served data was last live (only with stale: true). */
+  stale_since?: string | null;
 }
 
 export interface TransferOrdersPage {
@@ -120,6 +124,10 @@ export interface TransferOrdersPage {
   details_pending?: boolean;
   last_refreshed_at?: string | null;
   source?: string;
+  /** True when the server answered from cache because Zoho was unavailable; see stale_since. */
+  stale?: boolean;
+  /** ISO time the served data was last live (only with stale: true). */
+  stale_since?: string | null;
 }
 
 export interface PurchaseOrdersPage extends TransferOrdersPage {

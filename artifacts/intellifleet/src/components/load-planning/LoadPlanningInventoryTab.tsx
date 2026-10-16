@@ -20,6 +20,7 @@ import { lineProduct, lineProductName, lineStock } from "@/lib/loadPlanningLines
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { SalesOrderCardGrid } from "./SalesOrderCardGrid";
 import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
+import { ConnectionStatusBar, viewOfQuery } from "@/components/ui/ConnectionStatusBar";
 import { EmptyState, FilterField, ListError, Toolbar, buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFromPage, sessionAcknowledgedIds, settleAcknowledgements, summarizeAcknowledgements } from "@/lib/acknowledgeCache";
 import { uniqueOrders, type ViewMode } from "@/lib/loadPlanningView";
@@ -422,6 +423,8 @@ function SalesOrdersView({
     // poll lightly until they're all in.
     refetchInterval: (query) => (query.state.data?.stock_pending ? 4000 : false),
   });
+  // A failed refetch keeps the loaded rows on screen (amber bar); red error only when there is nothing to show.
+  const ordersView = viewOfQuery(orders);
   const branchOptions = useBranchOptions(orders.data?.branches);
   const guardedAcknowledged = useMemo(() => sessionAcknowledgedIds(), [orders.data, ackGuardVersion]);
   const rows = useMemo<FlatRow[]>(
@@ -799,8 +802,9 @@ function SalesOrdersView({
           {syncMessage}
         </div>
       )}
-      {orders.isError ? (
-        <ListError message={(orders.error as Error).message} />
+      <ConnectionStatusBar view={ordersView} isFetching={orders.isFetching} onRetry={() => void orders.refetch()} />
+      {ordersView.mode === "error" ? (
+        <ListError error={orders.error} onRetry={() => void orders.refetch()} retrying={orders.isFetching} />
       ) : orders.isLoading || syncing ? (
         <div
           className="overflow-hidden p-4"

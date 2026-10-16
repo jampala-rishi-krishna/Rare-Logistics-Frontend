@@ -8,7 +8,9 @@ import { BranchBadge, BranchFilter, useBranchOptions } from "./BranchControls";
 import { formatAddress } from "@/lib/address";
 import { lineStock } from "@/lib/loadPlanningLines";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
-import { FilterField, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
+import { FilterField, ListError, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
+import { ConnectionStatusBar, viewOfQuery } from "@/components/ui/ConnectionStatusBar";
+import { combineViews } from "@/lib/queryStatus";
 import { sessionAcknowledgedOrders } from "@/lib/acknowledgeCache";
 import { formatKgPartial } from "@/lib/kgDisplay";
 import { OrderTypeBadge } from "./OrderTypeBadge";
@@ -143,6 +145,17 @@ export default function LoadPlanningAssignmentTab() {
     refetchInterval: (query) => (query.state.data?.stock_pending ? 4000 : false),
   });
   const branchOptions = useBranchOptions(orders.data?.branches);
+  // A failed refetch keeps the loaded rows on screen (one amber bar for SO/TO/PO); red error only when there is nothing to show.
+  const ordersView = viewOfQuery(orders);
+  const transferView = viewOfQuery(transferOrders);
+  const purchaseView = viewOfQuery(purchaseOrders);
+  const statusBarView = combineViews([ordersView, transferView, purchaseView].filter((view) => view.mode !== "error"));
+  const anyListFetching = orders.isFetching || transferOrders.isFetching || purchaseOrders.isFetching;
+  const retryLists = () => {
+    void orders.refetch();
+    void transferOrders.refetch();
+    void purchaseOrders.refetch();
+  };
   // Both city choices and table rows use the same acknowledged, unassigned list.
   const citySource = orders;
   const cityOptions = useMemo(() => {
@@ -337,24 +350,19 @@ export default function LoadPlanningAssignmentTab() {
           Assign Selected ({selected.length})
         </button>
       </div>
+      <ConnectionStatusBar view={statusBarView} isFetching={anyListFetching} onRetry={retryLists} />
       {orders.isLoading ? (
         <div className="grid gap-2 p-4" aria-label="Loading acknowledged orders">
           {[1, 2, 3, 4, 5, 6].map((x) => (
             <div className="h-10 animate-pulse bg-[#f2f2ef]" key={x} />
           ))}
         </div>
-      ) : orders.isError ? (
-        <div className="p-10 text-center text-sm text-[#a32720]">
-          {(orders.error as Error).message}
-        </div>
-      ) : transferOrders.isError && typeFilter === "TO" ? (
-        <div className="p-10 text-center text-sm text-[#a32720]">
-          {(transferOrders.error as Error).message}
-        </div>
-      ) : purchaseOrders.isError && typeFilter === "PO" ? (
-        <div className="p-10 text-center text-sm text-[#a32720]">
-          {(purchaseOrders.error as Error).message}
-        </div>
+      ) : ordersView.mode === "error" ? (
+        <ListError error={orders.error} onRetry={() => void orders.refetch()} retrying={orders.isFetching} />
+      ) : transferView.mode === "error" && typeFilter === "TO" ? (
+        <ListError error={transferOrders.error} onRetry={() => void transferOrders.refetch()} retrying={transferOrders.isFetching} />
+      ) : purchaseView.mode === "error" && typeFilter === "PO" ? (
+        <ListError error={purchaseOrders.error} onRetry={() => void purchaseOrders.refetch()} retrying={purchaseOrders.isFetching} />
       ) : visibleOrders.length ? (
         <>
           <div className="grid gap-3 p-3 md:hidden">
