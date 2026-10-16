@@ -9,10 +9,10 @@ before(async () => {await startServer(); browser=await launch();});
 after(async () => {await browser?.close(); stopServer();});
 const order={id:"one",salesorder_number:"SO26-18449",customer_name:"Fresh Foods",order_status:"confirmed",expected_shipment_date:"2026-10-17",shipping_address:{address:"1 Farm Road",city:"Lipa"},assignment_status:"assigned",vehicle_id:"TRK1",driver_name:"Juan",assigned_by:1,assigned_by_name:"Paulo Guevarra",assigned_at:"2026-10-16T06:00:00Z",products:[{name:"Pork",sku:"P1",quantity:12,unit:"kg",total_weight_kg:12}],total:1200};
 
-async function open(role: string, manager=false) {
+async function open(role: string, manager=false, identity={fullName:"Test User",email:"test@example.test"}) {
   const context=await browser.newContext({viewport:{width:1440,height:950},timezoneId:"Asia/Manila"});
   const page=await context.newPage();
-  const recorder=await installMocks(page,{session:{user:{id:1,fullName:"Test User",email:"test@example.test",role,status:"active",is_manager:manager}},confirmedOrders:{items:[manager ? order : {...order,assigned_by:undefined,assigned_by_name:undefined,assigned_at:undefined}],total:1,page:1,per_page:25,has_more:false,stock_pending:false}});
+  const recorder=await installMocks(page,{session:{user:{id:1,...identity,role,status:"active",is_manager:manager}},confirmedOrders:{items:[manager ? order : {...order,assigned_by:undefined,assigned_by_name:undefined,assigned_at:undefined}],total:1,page:1,per_page:25,has_more:false,stock_pending:false}});
   const errors: string[]=[]; page.on("pageerror",e=>errors.push(String(e)));
   let requested: unknown;
   await page.route("http://mock-api.test/api/access/**", async route => {
@@ -91,4 +91,35 @@ test("manager reviews Pahabol and previews pickup email before sending",async()=
   await dialog.getByRole("button",{name:"Send email",exact:true}).click();
   await page.getByText("Pickup email: sent",{exact:true}).waitFor();
   assert.ok(sent); assert.deepEqual(errors,[]); await context.close();
+});
+
+
+test("admin profiles use each account identity and reserve the personal photo for the owner",async()=>{
+  for(const identity of [
+    {fullName:"Jed",email:"jed@rareglobalfood.com",initial:"J",owner:false},
+    {fullName:"Paulo Guevarra",email:"pau@rareglobalfood.com",initial:"P",owner:false},
+    {fullName:"Admin",email:"admin@rgf.com",initial:"R",owner:true},
+  ]) {
+    const {context,page,errors}=await open("admin",true,identity);
+    const name=identity.owner ? "Rishi" : identity.fullName;
+    const sidebar=page.getByTestId("sidebar-profile");
+    const header=page.getByRole("button",{name:"Open profile",exact:true});
+    assert.ok((await sidebar.innerText()).includes(name));
+    assert.equal(await sidebar.getByRole("img",{name:"Rishi"}).count(),identity.owner ? 1 : 0);
+    assert.equal(await header.getByRole("img",{name:"Rishi"}).count(),identity.owner ? 1 : 0);
+    if(!identity.owner) {
+      assert.equal(await header.locator("span").first().innerText(),identity.initial);
+      assert.ok((await header.innerText()).includes(name));
+    }
+    await header.click();
+    const dialog=page.getByRole("dialog",{name:"Profile",exact:true});
+    await dialog.getByText(name,{exact:true}).waitFor();
+    assert.ok((await dialog.innerText()).includes(identity.email));
+    assert.equal(await dialog.getByRole("img",{name:"Rishi"}).count(),identity.owner ? 1 : 0);
+    assert.equal((await dialog.innerText()).includes("Software Architect"),identity.owner);
+    if(!identity.owner) assert.equal(await dialog.locator("span").first().innerText(),identity.initial);
+    assert.equal(await dialog.getByText("Role: Admin",{exact:true}).count(),1);
+    await shot(page,`access-workflow/profile-${identity.initial.toLowerCase()}`);
+    assert.deepEqual(errors,[]); await context.close();
+  }
 });

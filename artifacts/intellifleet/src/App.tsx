@@ -2226,7 +2226,9 @@ function AppShell({
   const currentRole = currentUser?.role?.toLowerCase() || "dispatcher";
   const isAdmin = currentRole === "admin";
   const roleLabel = isAdmin ? "Admin" : currentRole === "wet_market" ? "Wet Market" : currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
-  const roleInitial = roleLabel.charAt(0);
+  const isPersonalProfile = currentUser?.email?.trim().toLowerCase() === "admin@rgf.com";
+  const profileName = isPersonalProfile ? "Rishi" : currentUser?.fullName?.trim() || currentUser?.email?.split("@")[0] || "User";
+  const profileInitial = Array.from(profileName)[0]?.toUpperCase() || "U";
   const doLogout = async () => {
     if (getStoredSessionId()) {
       try {
@@ -2393,15 +2395,16 @@ function AppShell({
           <div className="border-t border-[#e4e3df] p-3">
             <div
               role="button"
+              data-testid="sidebar-profile"
               tabIndex={0}
               onClick={() => { setProfileOpen(true); setPasswordMessage(""); }}
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setProfileOpen(true); }}
               className="sidebar-link flex w-full items-center gap-3 rounded-[4px] p-2.5 text-left"
             >
-              {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-black text-sm font-bold text-white">{roleInitial}</span>}
+              {isPersonalProfile ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-black text-sm font-bold text-white">{profileInitial}</span>}
               <div className="sidebar-copy min-w-0">
                 <div className="truncate text-xs font-semibold">
-                  {isAdmin ? "Rishi" : roleLabel}
+                  {profileName}
                 </div>
                 <div className="truncate text-[11px] text-[#77787b]">
                   {isAdmin ? "Operations admin" : "Operations access"}
@@ -2418,45 +2421,16 @@ function AppShell({
             </div>
           </div>
         </div>
-        {false && profileOpen && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4" onMouseDown={() => setProfileOpen(false)}>
-            <section className="w-full max-w-md bg-[#fafaf8] p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-              <div className="flex items-start justify-between gap-4 border-b border-[#e4e3df] pb-4">
-                <div className="flex items-center gap-3">
-                  <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 rounded-full object-cover" />
-                  <div>
-                    <div className="text-lg font-semibold">Rishi</div>
-                    <div className="text-xs text-[#77787b]">Software Architect · Rare Global Food Trading Corp.</div>
-                    <div className="mt-1 text-xs font-semibold text-[#1e7b44]">Administrator · Full operational access</div>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setProfileOpen(false)} className="text-xl text-[#77787b]" aria-label="Close profile">×</button>
-              </div>
-              <div className="mt-5 grid gap-2 text-sm">
-                <div><span className="text-[#77787b]">Email:</span> rishi@rareglobalfood.com</div>
-                <div><span className="text-[#77787b]">Role:</span> Admin</div>
-              </div>
-              <form onSubmit={submitPasswordChange} className="mt-6 grid gap-3 border-t border-[#e4e3df] pt-5">
-                <div className="micro text-[#77787b]">Change password</div>
-                <input required type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" className="border border-[#d8d7d2] bg-white px-3 py-2.5 outline-none focus:border-black" />
-                <input required minLength={8} type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="New password (8+ characters)" className="border border-[#d8d7d2] bg-white px-3 py-2.5 outline-none focus:border-black" />
-                <input required minLength={8} type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm new password" className="border border-[#d8d7d2] bg-white px-3 py-2.5 outline-none focus:border-black" />
-                {passwordMessage && <p className={cx("text-xs", passwordMessage.includes("successfully") ? "text-[#1e7b44]" : "text-[#c4291f]")}>{passwordMessage}</p>}
-                <Button type="submit" disabled={passwordSaving} className="w-full">{passwordSaving ? "Updating…" : "Update password"}</Button>
-              </form>
-            </section>
-          </div>
-        )}
       </aside>
       {profileOpen && (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 p-4" onMouseDown={() => setProfileOpen(false)}>
-          <section className="w-full max-w-md bg-[#fafaf8] p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+          <section role="dialog" aria-modal="true" aria-label="Profile" className="w-full max-w-md bg-[#fafaf8] p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4 border-b border-[#e4e3df] pb-4">
               <div className="flex items-center gap-3">
-                {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 rounded-full object-cover" /> : <span className="grid h-12 w-12 place-items-center rounded-full bg-black text-sm font-bold text-white">{roleInitial}</span>}
+                {isPersonalProfile ? <img src={rishiProfilePhoto} alt="Rishi" className="h-12 w-12 rounded-full object-cover" /> : <span className="grid h-12 w-12 place-items-center rounded-full bg-black text-sm font-bold text-white">{profileInitial}</span>}
                 <div>
-                  <div className="text-lg font-semibold">{currentUser?.fullName || roleLabel}</div>
-                  <div className="text-xs text-[#77787b]">Software Architect · Rare Global Food Trading Corp.</div>
+                  <div className="text-lg font-semibold">{profileName}</div>
+                  <div className="text-xs text-[#77787b]">{isPersonalProfile ? "Software Architect · Rare Global Food Trading Corp." : "Rare Global Food Trading Corp."}</div>
                   <div className="mt-1 text-xs font-semibold text-[#1e7b44]">{isAdmin ? "Administrator · Full operational access" : `${roleLabel} · Operations access`}</div>
                 </div>
               </div>
@@ -2527,14 +2501,15 @@ function AppShell({
               type="button"
               onClick={() => { setProfileOpen(true); setPasswordMessage(""); }}
               title="Open profile"
+              aria-label="Open profile"
               className={cx(
                 "shrink-0 overflow-hidden border border-[#d8d7d2] bg-white",
-                isAdmin
+                isPersonalProfile
                   ? "h-12 w-12 rounded-full"
                   : "flex h-10 items-center gap-2 rounded-[4px] px-2.5 text-xs font-semibold",
               )}
             >
-              {isAdmin ? <img src={rishiProfilePhoto} alt="Rishi" className="h-full w-full object-cover" /> : <><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-black text-xs font-bold text-white">{roleInitial}</span><span>{roleLabel}</span></>}
+              {isPersonalProfile ? <img src={rishiProfilePhoto} alt="Rishi" className="h-full w-full object-cover" /> : <><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-black text-xs font-bold text-white">{profileInitial}</span><span>{profileName}</span></>}
             </button>
           </div>
         </header>
