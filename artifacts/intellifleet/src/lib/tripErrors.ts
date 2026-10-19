@@ -31,7 +31,7 @@ export function errorInfo(err: unknown): ErrorInfo {
     } else if (typeof detail === "string" && detail) {
       message = detail;
     }
-    return { message: message || `Request failed (HTTP ${e.status})`, status: e.status, code, errors, network: false };
+    return { message: message || `Request failed (HTTP ${e.status})`, status: e.status, code, errors, network: e.status === 0 };
   }
   const message = e && typeof e.message === "string" && e.message ? e.message : "Could not reach the server. Check your connection.";
   return { message, status: null, code: null, errors: [], network: true };

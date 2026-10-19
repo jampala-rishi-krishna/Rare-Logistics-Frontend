@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NAV_ROLES, SECTION_ROLES, canSeeNavItem, filterNavGroups, isOfficerReadOnly, postLoginRoute, redirectForDisallowedRole, routeForRole } from "./roles.ts";
 
+test("Order Tracker navigation is limited to operations, Sales and Wet Market", () => {
+  for (const role of ["admin", "planner", "dispatcher", "sales", "wet_market"]) assert.equal(canSeeNavItem("/app/order-tracker", role), true);
+  for (const role of ["warehouse", "driver", "helper", "logistics_officer", "client"]) assert.equal(canSeeNavItem("/app/order-tracker", role), false);
+});
+
 test("role home routes", () => {
   assert.equal(routeForRole("driver"), "/driver/today");
   assert.equal(routeForRole("Admin"), "/admin/users");

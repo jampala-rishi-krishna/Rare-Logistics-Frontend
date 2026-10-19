@@ -32,7 +32,7 @@ async function snap(page: Page, name: string, fullPage = true) {
 }
 
 describe("driver tap count (SPEC 6.9)", () => {
-  it(`Today loaded -> Closed, 3 stops with photos, takes <= ${TAPS_BEFORE} taps`, async () => {
+  it(`Today loaded -> Closed, 3 stops with photos, takes ${TAPS_BEFORE + 3} taps including explicit stop choices`, async () => {
     const flow = newFlow();
     const context = await newContext(browser, 360, 780);
     const page = await context.newPage();
@@ -72,6 +72,7 @@ describe("driver tap count (SPEC 6.9)", () => {
 
     const stops = ["SO-TEST-1001", "SO-TEST-1002", "TO-TEST-0003"];
     for (const [i, no] of stops.entries()) {
+      await tap(`[data-testid="driver-choose-${no}"] [data-testid=driver-deliver-this-next]`, `Choose next stop (${i + 1})`);
       await page.waitForSelector(`[data-testid=driver-current-stop][data-so="${no}"]`);
       await page.waitForSelector("[data-testid=driver-im-here]:not([disabled])");
       if (i === 0) await snap(page, "04-on-trip");
@@ -103,7 +104,7 @@ describe("driver tap count (SPEC 6.9)", () => {
 
     assert.equal(flow.uploads, 3, "a photo on every stop (2 SO + 1 TO)");
     console.log(`\n[driver taps] Today loaded -> Closed: ${taps.length} (before: ${TAPS_BEFORE})\n  ${taps.map((t, i) => `${i + 1}. ${t}`).join("\n  ")}\n`);
-    assert.ok(taps.length <= TAPS_BEFORE, `tap count ${taps.length} must not exceed ${TAPS_BEFORE}`);
+    assert.equal(taps.length, TAPS_BEFORE + 3, "three user-chosen stops add three taps to the historical automatic-stop baseline");
     assert.deepEqual(errors, []);
     assert.deepEqual(recorder.unexpected, []);
     await context.close();

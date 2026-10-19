@@ -80,6 +80,9 @@ async function open(screen: Screen, width: number, lang: "en" | "tl" = "en"): Pr
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.addInitScript((lang) => localStorage.setItem("rgf.driver.lang", lang), lang);
   await page.goto(`${BASE}${screen.path}`);
+  if (screen.name === "trip-3-arrive") {
+    await page.locator("[data-testid=driver-deliver-this-next]").first().click();
+  }
   await page.waitForSelector(screen.ready, { timeout: 20_000 });
   await page.waitForTimeout(300);
   return {

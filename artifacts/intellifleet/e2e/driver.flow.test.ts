@@ -142,7 +142,7 @@ describe("simplified driver flow at 360 px", () => {
     await snap(page, "04-start-sheet", false);
     await tap("[data-testid=driver-start-sheet-confirm]", "Start (sheet)");
     await page.waitForURL(`**/driver/trip/${BATCH}`);
-    await page.waitForSelector("[data-testid=driver-im-here]");
+    await page.waitForSelector("[data-testid=driver-deliver-this-next]");
 
     // Every stop: Reached -> Delivered -> photo -> Delivered (submit)
     const stops = [
@@ -151,6 +151,7 @@ describe("simplified driver flow at 360 px", () => {
       { no: "TO-TEST-0003", invoice: "TO-TEST-0003", type: "TO" },
     ];
     for (const [i, stop] of stops.entries()) {
+      await tap(`[data-testid="driver-choose-${stop.no}"] [data-testid=driver-deliver-this-next]`, `Choose next stop (${i + 1})`);
       await page.waitForSelector(`[data-testid=driver-current-stop][data-so="${stop.no}"]`);
       await page.waitForSelector("[data-testid=driver-im-here]:not([disabled])");
       assert.match((await page.getAttribute("[data-testid=driver-navigate]", "href")) ?? "", /google\.com\/maps\/dir/, "Navigate opens Google Maps directions");
@@ -207,7 +208,7 @@ describe("simplified driver flow at 360 px", () => {
     assert.deepEqual(flow.log.filter((l) => l !== "upload"), ["acknowledge-all", "start", "check-in", "check-out", "check-in", "check-out", "check-in", "check-out", "end"]);
     assert.equal(flow.uploads, 3);
     console.log(`\n[driver flow] taps from sign-in to End trip confirm (typing and Navigate excluded): ${taps.length}\n  ${taps.map((t, i) => `${i + 1}. ${t}`).join("\n  ")}\n`);
-    assert.equal(taps.length, 20);
+    assert.equal(taps.length, 23, "includes the three explicit next-stop choices in the current workflow");
     await s.done();
   });
 
@@ -329,6 +330,7 @@ describe("simplified driver flow at 360 px", () => {
     const s = await session(flow);
     const { page } = s;
     await page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await page.click('[data-testid="driver-choose-SO-TEST-1002"] [data-testid=driver-deliver-this-next]');
     await page.waitForSelector('[data-testid=driver-current-stop][data-so="SO-TEST-1002"]');
     removeOrder(flow, "so-2"); // the phone still shows SO-TEST-1002
     await page.click("[data-testid=driver-im-here]");
@@ -336,7 +338,7 @@ describe("simplified driver flow at 360 px", () => {
     await page.waitForSelector("[data-testid=driver-dispatch-order_removed]");
     assert.match((await page.textContent("[data-testid=driver-dispatch-order_removed]")) ?? "", /Dispatch removed SO-TEST-1002 from your trip/);
     await page.waitForSelector("[data-testid=driver-order-SO-TEST-1002]", { state: "detached" });
-    await page.waitForSelector('[data-testid=driver-current-stop][data-so="TO-TEST-0003"]');
+    await page.waitForSelector('[data-testid="driver-choose-TO-TEST-0003"] [data-testid=driver-deliver-this-next]');
     await snap(page, "15-dispatch-removed-banner");
     // Today shows it too
     await page.click("[data-testid=driver-trip-back]");
@@ -349,6 +351,7 @@ describe("simplified driver flow at 360 px", () => {
     const s = await session(flow);
     const { page } = s;
     await page.goto(`${BASE}/driver/trip/${BATCH}`);
+    await page.click('[data-testid="driver-choose-SO-TEST-1002"] [data-testid=driver-deliver-this-next]');
     await page.waitForSelector('[data-testid=driver-current-stop][data-so="SO-TEST-1002"]');
     flow.apiDown = true;
     await page.click("[data-testid=driver-im-here]");

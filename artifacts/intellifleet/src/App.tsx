@@ -2540,39 +2540,18 @@ function AppShell({
           <GmailDisconnectedBanner className="mb-4" />
           {children}
         </main>
-        <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 z-20 h-[64px] items-center justify-around border-t border-[#e4e3df] bg-white">
-          <Link
-            data-testid="mobile-bottom-tower"
-            href="/app/tower"
-            className="grid justify-items-center gap-1 text-[10px]"
-          >
-            <LayoutDashboard size={18} />
-            <span>Tower</span>
-          </Link>
-          <Link
-            data-testid="mobile-bottom-orders"
-            href="/app/orders"
-            className="grid justify-items-center gap-1 text-[10px]"
-          >
-            <ClipboardCheck size={18} />
-            <span>Orders</span>
-          </Link>
-          <Link
-            data-testid="mobile-bottom-fleet"
-            href="/app/fleet"
-            className="grid justify-items-center gap-1 text-[10px]"
-          >
-            <Truck size={18} />
-            <span>Fleet</span>
-          </Link>
-          <Link
-            data-testid="mobile-bottom-reports"
-            href="/app/reports"
-            className="grid justify-items-center gap-1 text-[10px]"
-          >
-            <BarChart3 size={18} />
-            <span>Reports</span>
-          </Link>
+        <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 z-20 h-[64px] items-center justify-around border-t border-border bg-card">
+          {([
+            ["/app/tower", "Tower", LayoutDashboard, "tower"],
+            ["/app/orders", "Orders", ClipboardCheck, "orders"],
+            ["/app/order-tracker", "Order Tracker", Search, "order-tracker"],
+            ["/app/fleet", "Fleet", Truck, "fleet"],
+            ["/app/reports", "Reports", BarChart3, "reports"],
+          ] as const).filter(([href]) => canSeeNavItem(href, currentRole)).map(([href, label, Icon, id]) => (
+            <Link key={href} data-testid={`mobile-bottom-${id}`} href={href} className="grid min-h-11 items-center justify-items-center gap-1 text-[10px]" aria-current={location === href ? "page" : undefined}>
+              <Icon size={18} /><span>{label}</span>
+            </Link>
+          ))}
         </nav>
       </div>
     </div>
