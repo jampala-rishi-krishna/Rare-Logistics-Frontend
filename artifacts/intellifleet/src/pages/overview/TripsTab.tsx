@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { groupByCrew, rowCrew, type BoardMode } from "@/lib/overviewCrew";
 import type { TripRow, TripsResponse } from "@/services/api/overview";

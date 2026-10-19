@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/services/api/overview";
 import { agoText, isRange, sentence, type UrlState } from "@/lib/overviewModel";
