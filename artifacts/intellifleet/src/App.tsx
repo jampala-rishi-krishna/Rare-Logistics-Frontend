@@ -162,6 +162,7 @@ import OfficerHandover from "@/pages/officer/OfficerHandover";
 import OfficerOutstanding from "@/pages/officer/OfficerOutstanding";
 import OfficerHistory from "@/pages/officer/OfficerHistory";
 import DriverOverview from "@/pages/overview/DriverOverview";
+import OrderTracker from "@/pages/OrderTracker";
 import SetPassword from "@/pages/SetPassword";
 import DriverLogin from "@/pages/driver/DriverLogin";
 import DriverForgot from "@/pages/driver/DriverForgot";
@@ -573,6 +574,7 @@ const navGroups = [
     label: "Execution",
     items: [
       ["/app/orders", "Orders", ClipboardCheck],
+      ["/app/order-tracker", "Order Tracker", Search],
       ["/app/driver-overview", "Driver Overview", Activity],
       ["/app/comms", "Communications", MessageSquare],
       ["/app/reports", "Reports", BarChart3],
@@ -7223,6 +7225,11 @@ function App() {
                       </Route>
                       <Route path="/app/orders">
                         <DataTablePage kind="orders" />
+                      </Route>
+                      <Route path="/app/order-tracker">
+                        <RoleGate allowed={["admin", "planner", "dispatcher", "sales", "wet_market"]}>
+                          <AppShell title="Order Tracker"><OrderTracker /></AppShell>
+                        </RoleGate>
                       </Route>
                       <Route path="/app/driver-overview">
                         <RoleGate allowed={SECTION_ROLES.driverOverview}>

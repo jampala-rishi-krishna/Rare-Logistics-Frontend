@@ -6,7 +6,7 @@ import { MarkerAnimator, formatGpsAge, gpsAgeSeconds, parseGpsTime } from "@/lib
 import type * as routesApi from "@/services/api/routes";
 const truckIconUrl = "/truck-RARE-red-container-white-text.svg?v=1";
 const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-function useMaps() {
+export function useMaps() {
   const [api, setApi] = useState<typeof google | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {

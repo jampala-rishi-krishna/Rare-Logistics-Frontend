@@ -17,13 +17,14 @@ export const SECTION_ROLES = {
 export const NAV_ROLES: Record<string, readonly string[]> = {
   "/app/driver-overview": SECTION_ROLES.driverOverview,
   "/app/fleet-health": SECTION_ROLES.fleetHealth,
+  "/app/order-tracker": ["admin", "planner", "dispatcher", "sales", "wet_market"],
 };
 
 // Roles that may open the officer screens but not act on them.
 export const OFFICER_READ_ONLY_ROLES: readonly string[] = ["dispatcher"];
 
 export function canSeeNavItem(href: string, role: string | null | undefined): boolean {
-  if (["sales", "wet_market"].includes((role ?? "").toLowerCase())) return ["/app/orders", "/app/loads"].includes(href);
+  if (["sales", "wet_market"].includes((role ?? "").toLowerCase())) return ["/app/orders", "/app/loads", "/app/order-tracker"].includes(href);
   const allowed = NAV_ROLES[href];
   if (!allowed) return true;
   return allowed.includes((role ?? "").toLowerCase());
