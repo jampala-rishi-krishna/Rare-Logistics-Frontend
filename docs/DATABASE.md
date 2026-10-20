@@ -1,5 +1,7 @@
 # IntelliFleet Neon database
 
+2026-10-20 explicitly approved account correction: admin-only PATCH `/api/admin/users/{id}` updates existing users name/email/phone/status, preserving ID, role, staff link and history. Existing uniqueness checks protect email/phone; email changes invalidate the old password and expire unused existing invites in the same transaction. Authentication cache is invalidated after commit. No new table, column or migration.
+
 2026-10-20 collected-invoice fix: existing Overview hardcopies read now exposes `collected=true` from received handover items, joins existing stop outcomes for display, and reads receiver/time from existing receipt fields; latest 500 collected rows per filtered query, with truncation disclosed. Collected rows and counts follow the top calendar's delivery date or inclusive `from`/`to` range, filtered before the limit, independently of receipt time. Received handovers suppress legacy driver-held fallback rows. No tables, columns, business-data repairs or new writes.
 
 2026-10-20 approved invoice-receipt update: Planner/Dispatcher/Admin Overview receipt reuses the existing `handover.resolve` transaction and invoice/trip event tables (no new schema or SQL path), records the actual actor role, requires a crew handover, invalidates Tracker history, and emits a data-free live refresh signal after commit; drawer history is reduced to same-day trip numbering.

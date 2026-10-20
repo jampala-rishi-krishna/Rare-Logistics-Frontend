@@ -154,6 +154,7 @@ import NotFound from "@/pages/not-found";
 import { formatAddress } from "@/lib/address";
 import { SECTION_ROLES, canSeeNavItem, filterNavGroups, postLoginRoute, redirectForDisallowedRole } from "@/lib/roles";
 import AddUserForm from "@/components/admin/AddUserForm";
+import EditUserForm from "@/components/admin/EditUserForm";
 import AccessAlerts from "@/components/AccessAlerts";
 import { useAccess } from "@/hooks/use-access";
 import { showInviteActions } from "@/lib/userForm";
@@ -4488,6 +4489,7 @@ function UsersTable() {
   const [linkFallback, setLinkFallback] = useState<{ userId: string; link: string } | null>(null);
   const userKey = (u: adminApi.ApiUser) => String(u.id);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<adminApi.ApiUser | null>(null);
   const [created, setCreated] = useState<adminApi.ApiUser | null>(null);
 
   const runAction = async (action: UserAction) => {
@@ -4553,7 +4555,13 @@ function UsersTable() {
 
   return (
     <div className="grid gap-3">
-      {!adding && (
+      {editing && <EditUserForm key={editing.id} user={editing} onCancel={() => setEditing(null)} onSaved={(user, reset) => {
+        setEditing(null);
+        setMessage({ tone: "good", text: `${user.full_name}'s account was updated.${reset ? " Set a new password using Copy invite link or Reset password." : ""}` });
+        void queryClient.invalidateQueries({queryKey: ["users"]});
+        void queryClient.invalidateQueries({queryKey: ["access-session"]});
+      }} />}
+      {!adding && !editing && (
         <div>
           <button
             type="button"
@@ -4574,6 +4582,7 @@ function UsersTable() {
         <AddUserForm
           existingUsers={users}
           onCancel={() => setAdding(false)}
+          onExisting={(user) => { setAdding(false); setEditing(user); }}
           onCreated={(user) => {
             setAdding(false);
             setCreated(user);
@@ -4667,6 +4676,8 @@ function UsersTable() {
                 <td className="mono text-xs">{u.staff_id ?? "-"}</td>
                 <td className="text-xs text-[#55565a]">{INVITE_STATE_LABEL[u.invite_state] ?? u.invite_state}</td>
                 <td className="py-3 pr-4">
+                  <button type="button" className={actionButton} disabled={busy} onClick={() => {setAdding(false); setEditing(u); setMessage(null);}}>Edit account</button>
+                  <button type="button" className={actionButton} disabled={busy} onClick={() => void copyLink(u)}>Copy invite link</button>
                   {isDriver ? (
                     <div className="flex flex-wrap gap-1.5">
                       <button type="button" className={actionButton} disabled={busy || !u.email} title={u.email ? undefined : "No email on file"} onClick={() => setPending({ user: u, kind: "invite" })}>
@@ -4674,9 +4685,6 @@ function UsersTable() {
                       </button>
                       <button type="button" className={actionButton} disabled={busy || !u.email} title={u.email ? undefined : "No email on file"} onClick={() => setPending({ user: u, kind: "reset" })}>
                         Reset password
-                      </button>
-                      <button type="button" className={actionButton} disabled={busy} onClick={() => void copyLink(u)}>
-                        Copy invite link
                       </button>
                       <button type="button" className={actionButton} disabled={busy} onClick={() => setPending({ user: u, kind: disabled ? "enable" : "disable" })}>
                         {disabled ? "Enable" : "Disable"}

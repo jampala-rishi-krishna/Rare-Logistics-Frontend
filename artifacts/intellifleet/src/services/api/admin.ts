@@ -59,6 +59,10 @@ export function listUsers(): Promise<ApiUser[]> {
   return api.get<ApiUser[]>("/users");
 }
 
+export function editUser(userId: string | number, body: { full_name: string; email: string; phone: string | null; status: string }): Promise<ApiUser & { password_reset_required: boolean }> {
+  return api.patch(`/api/admin/users/${encodeURIComponent(String(userId))}`, body);
+}
+
 export type InvitePurpose = "invite" | "reset";
 
 export function createInviteLink(userId: number | string, purpose: InvitePurpose): Promise<{ link: string; expires_at: string }> {

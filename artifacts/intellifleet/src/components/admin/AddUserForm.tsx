@@ -8,10 +8,13 @@ const field = "w-full border border-[#d8d7d2] bg-white px-3 py-2 text-sm outline
 
 export default function AddUserForm({
   onCreated,
+  existingUsers = [],
+  onExisting,
   onCancel,
 }: {
   /** Kept for callers; linked-login state now comes from staff-options. */
   existingUsers?: adminApi.ApiUser[];
+  onExisting?: (user: adminApi.ApiUser) => void;
   onCreated: (user: adminApi.ApiUser) => void;
   onCancel: () => void;
 }) {
@@ -56,6 +59,8 @@ export default function AddUserForm({
   return (
     <form onSubmit={submit} className="grid gap-3 border border-[#d8d7d2] bg-white p-4" data-testid="add-user-form">
       <div className="text-sm font-semibold">Add user</div>
+      {needsStaffLink(role) && <div className="text-sm">A driver or helper can have one login per staff record. To replace a test login, edit the existing account below.</div>}
+      {onExisting && existingUsers.filter(u => u.role === role && (u.full_name.toLowerCase().replace(/[^a-z0-9]/g, "").includes(fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, "")) || u.email?.toLowerCase() === email.trim().toLowerCase()) && fullName.trim().length > 1).map(u => <div key={u.id} className="border p-3 text-sm">Existing account: {u.full_name} ({u.email}, {u.status}). <button type="button" className="underline" onClick={() => onExisting(u)}>Edit existing account</button></div>)}
       <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-xs font-semibold">
           Full name
