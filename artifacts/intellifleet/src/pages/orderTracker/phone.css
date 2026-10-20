@@ -1,0 +1,88 @@
+/* Phone one-order screen. Colours: index.css tokens only (no hex). Prefix otp-.
+   --otp-bleed: the horizontal padding of the page container around this screen (AppShell <main> is p-4 = 16px on
+   phones), so the black header can run edge to edge. Set it to 0 if the page renders this without padding. */
+.otp { --otp-bleed: 16px; --otp-nav: 0px; font-family: var(--app-font-sans); font-variant-numeric: tabular-nums; color: hsl(var(--foreground)); padding-bottom: 96px; }
+.otp p { margin: 0; }
+.otp-muted { color: hsl(var(--muted-foreground)) !important; }
+
+.otp-head { background: hsl(var(--foreground)); color: hsl(var(--primary-foreground)); padding: 18px 18px 22px; margin: calc(-1 * var(--otp-bleed)) calc(-1 * var(--otp-bleed)) 0; }
+.otp-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.otp-back { width: 44px; height: 44px; flex: none; border-radius: 12px; border: 0; background: hsl(var(--ink-raised)); color: hsl(var(--primary-foreground)); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.otp-back:focus-visible, .otp-head .ot-btn:focus-visible { outline: 2px solid hsl(var(--primary-foreground)); outline-offset: 3px; }
+.otp-bar-title { font-size: 14px; font-weight: 700; color: hsl(var(--on-ink-muted)); }
+.otp-number { margin: 18px 0 0; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; overflow-wrap: anywhere; }
+.otp-customer { margin-top: 2px; font-size: 17px; font-weight: 600; }
+.otp-chip { margin-top: 12px; }
+.otp-chip .otc { gap: 8px; }
+
+.otp-body { padding: 16px 0 0; display: flex; flex-direction: column; gap: 14px; }
+.otp-card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 20px; overflow: hidden; min-width: 0; }
+.otp-pad { padding: 18px; }
+.otp-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.otp-h3 { margin: 0; font-size: 17px; font-weight: 800; }
+.otp-label { font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.otp-small { margin-top: 10px !important; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.otp-missing { margin-top: 10px !important; font-size: 15px; color: hsl(var(--muted-foreground)); line-height: 1.45; }
+
+.otp-where-foot { padding: 16px 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.otp-where-main { min-width: 0; }
+.otp-big { font-size: 40px; font-weight: 800; line-height: 1.05; }
+.otp-where-side { text-align: right; flex: none; }
+.otp-stop { font-size: 18px; font-weight: 800; }
+
+.otp-steps { margin: 14px 0 0; padding: 0; list-style: none; }
+.otp-step { display: flex; gap: 14px; }
+.otp-rail { display: flex; flex-direction: column; align-items: center; flex: none; }
+.otp-dot { width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; }
+.otp-dot-done { background: hsl(var(--foreground)); color: hsl(var(--primary-foreground)); }
+.otp-dot-problem { background: hsl(var(--warning-solid)); color: hsl(var(--foreground)); font-size: 14px; font-weight: 900; }
+.otp-dot-current { background: hsl(var(--info)); border: 4px solid hsl(var(--info-bg)); }
+.otp-dot-todo { border: 2px solid hsl(var(--line-strong)); }
+.otp-line { width: 3px; flex: 1; min-height: 30px; background: hsl(var(--border)); }
+.otp-line-ink { background: hsl(var(--foreground)); }
+.otp-step-text { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 10px; padding-bottom: 12px; }
+.otp-step:last-child .otp-step-text { padding-bottom: 0; }
+.otp-step-text b { font-size: 15px; }
+.otp-step-sub { font-size: 13px; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+.otp-step-time { font-size: 17px !important; flex: none; }
+.otp-now { color: hsl(var(--info)); }
+
+.otp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.otp-tile { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 18px; padding: 16px; min-width: 0; }
+.otp-tile-dashed { border: 1.5px dashed hsl(var(--line-strong)); }
+.otp-tile-head { display: flex; align-items: center; gap: 8px; }
+.otp-tile-head b { font-size: 14px; color: hsl(var(--foreground)); }
+.otp-tile-head svg { flex: none; }
+.otp-tone-positive svg { color: hsl(var(--status-success)); }
+.otp-tone-warning svg { color: hsl(var(--status-warning)); }
+.otp-tone-unknown svg { color: hsl(var(--muted-foreground)); }
+.otp-tile-word { margin-top: 8px; font-size: 22px; font-weight: 800; line-height: 1.2; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.otp-word-positive { color: hsl(var(--status-success)); }
+.otp-word-warning { color: hsl(var(--status-warning)); }
+.otp-word-unknown { color: hsl(var(--muted-foreground)); }
+.otp-tile-sub { margin-top: 2px; font-size: 13px; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+
+.otp-rules { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+.otp-rules li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.35; }
+.otp-rules svg { flex: none; margin-top: 1px; }
+.otp-unverified { margin-top: 10px !important; display: inline-block; font-size: 12px; font-weight: 700; color: hsl(var(--status-warning)); background: hsl(var(--warning-bg)); border-radius: 8px; padding: 3px 8px; }
+.otp-proof-grid { margin-top: 12px; }
+
+/* Sticky Ask bar. On phones (<768px) AppShell shows a 64px fixed bottom nav (z-20): sit directly above it. */
+.otp-ask { position: fixed; left: 0; right: 0; bottom: var(--otp-nav); z-index: 25; display: flex; gap: 8px; background: hsl(var(--card)); border-top: 1px solid hsl(var(--border)); padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+.otp-ask input { flex: 1; min-width: 0; height: 52px; box-sizing: border-box; border-radius: 14px; border: 1px solid hsl(var(--border)); background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0 14px; font-family: inherit; font-size: 16px; font-weight: 500; }
+.otp-ask input::placeholder { color: hsl(var(--muted-foreground)); }
+.otp-ask input:focus-visible { outline: 2px solid hsl(var(--foreground)); outline-offset: 1px; }
+.otp-ask button { width: 52px; height: 52px; flex: none; border-radius: 14px; border: 0; background: hsl(var(--foreground)); color: hsl(var(--primary-foreground)); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.otp-ask button:disabled { opacity: .55; cursor: default; }
+.otp-ask button:focus-visible { outline: 2px solid hsl(var(--foreground)); outline-offset: 3px; }
+@media (max-width: 767px) {
+  .otp { --otp-nav: 64px; }
+  .otp-ask { padding-bottom: 12px; }
+}
+
+.otp-skel-stack { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.otp-head .ot-skel { background: hsl(var(--ink-raised)); }
+
+/* The shell's floating chat button would sit over the sticky Ask send button; hide it only while this phone view is open. */
+body:has(.otp) .chatbot-float { display: none; }
