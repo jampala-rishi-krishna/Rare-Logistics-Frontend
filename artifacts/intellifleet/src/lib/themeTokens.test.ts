@@ -30,7 +30,7 @@ test("shared theme resolves to valid CSS colors without legacy variable collisio
 });
 
 test("shared small-text status and surface combinations meet WCAG 4.5:1", () => {
-  for (const [fg, bg] of [["ink", "canvas"], ["muted", "canvas"], ["muted", "surface"], ["onInk", "ink"], ["positive", "positiveBg"], ["warning", "warningBg"], ["negative", "negativeBg"], ["accent", "accentBg"], ["orderSO", "canvas"], ["orderTO", "canvas"], ["orderPO", "canvas"], ["orderWM", "canvas"]] as const) {
+  for (const [fg, bg] of [["ink", "canvas"], ["muted", "canvas"], ["muted", "surface"], ["onInk", "ink"], ["positive", "positiveBg"], ["warning", "warningBg"], ["negative", "negativeBg"], ["accent", "accentBg"], ["onAccent", "accent"], ["ink", "warningSolid"], ["onInkMuted", "ink"], ["onInk", "inkRaised"], ["orderSO", "canvas"], ["orderTO", "canvas"], ["orderPO", "canvas"], ["orderWM", "canvas"]] as const) {
     const [lighter, darker] = [luminance(rgb(T[fg])), luminance(rgb(T[bg]))].sort((a, b) => b - a);
     const ratio = (lighter + 0.05) / (darker + 0.05);
     assert.ok(ratio >= 4.5, `${fg} on ${bg}: ${ratio.toFixed(2)}:1`);

@@ -1,0 +1,39 @@
+/* Shared Order Tracker primitives. Colours: index.css tokens only. */
+.otc { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; font-size: 12px; line-height: 1.35; padding: 3px 9px; border-radius: 10px; border: 1px solid transparent; }
+.otc-md { font-size: 13px; padding: 4px 10px; }
+.otc-lg { font-size: 14px; padding: 5px 12px; border-radius: 12px; }
+.otc-neutral { color: hsl(var(--foreground)); background: hsl(var(--muted)); border-color: hsl(var(--border)); }
+.otc-info { color: hsl(var(--info)); background: hsl(var(--info-bg)); }
+.otc-positive { color: hsl(var(--status-success)); background: hsl(var(--success-bg)); }
+.otc-warning { color: hsl(var(--status-warning)); background: hsl(var(--warning-bg)); }
+.otc-negative { color: hsl(var(--destructive)); background: hsl(var(--destructive-bg)); }
+.otc-pending, .otc-unknown { color: hsl(var(--muted-foreground)); background: hsl(var(--card)); border: 1px dashed hsl(var(--line-strong)); }
+.otc-solid { font-size: 14px; font-weight: 800; padding: 6px 12px; border-radius: 12px; border: 0; }
+.otc-solid.otc-info { background: hsl(var(--info)); color: hsl(var(--primary-foreground)); }
+.otc-solid.otc-positive { background: hsl(var(--status-success)); color: hsl(var(--primary-foreground)); }
+.otc-solid.otc-warning { background: hsl(var(--warning-solid)); color: hsl(var(--foreground)); }
+.otc-solid.otc-negative { background: hsl(var(--destructive)); color: hsl(var(--primary-foreground)); }
+.otc-solid.otc-neutral, .otc-solid.otc-pending, .otc-solid.otc-unknown { background: hsl(var(--ink-raised)); color: hsl(var(--primary-foreground)); border: 0; }
+
+.ot-tile { display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 12px; background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.ot-tile-positive { background: hsl(var(--success-bg)); color: hsl(var(--status-success)); }
+.ot-tile-warning { background: hsl(var(--warning-bg)); color: hsl(var(--status-warning)); }
+.ot-tile-negative { background: hsl(var(--destructive-bg)); color: hsl(var(--destructive)); }
+.ot-tile-info { background: hsl(var(--info-bg)); color: hsl(var(--info)); }
+
+.ot-src { margin: 0; font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); line-height: 1.45; overflow-wrap: anywhere; }
+
+.ot-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px; border-radius: 12px; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.ot-btn-solid { background: hsl(var(--foreground)); color: hsl(var(--primary-foreground)); border: 0; }
+.ot-btn-outline { background: hsl(var(--card)); color: hsl(var(--foreground)); border: 1.5px solid hsl(var(--foreground)); }
+.ot-btn-light { background: hsl(var(--card)); color: hsl(var(--foreground)); border: 0; }
+.ot-btn-sm { min-height: 44px; padding: 0 14px; font-size: 14px; }
+.ot-btn-icon { width: 44px; min-height: 44px; height: 44px; padding: 0; }
+.ot-btn:disabled { opacity: .6; cursor: default; }
+.ot-btn:focus-visible { outline: 2px solid hsl(var(--foreground)); outline-offset: 3px; }
+
+.ot-skel { display: block; background: linear-gradient(90deg, hsl(var(--muted)) 0%, hsl(var(--accent)) 50%, hsl(var(--muted)) 100%); background-size: 200% 100%; animation: ot-skel 1.4s ease-in-out infinite; }
+@keyframes ot-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ot-skel { animation: none; } }
+
+.ot-err { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: hsl(var(--destructive-bg)); color: hsl(var(--destructive)); font-size: 14px; font-weight: 600; }

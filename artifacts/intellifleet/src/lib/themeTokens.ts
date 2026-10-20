@@ -19,6 +19,11 @@ export const T = {
   negativeBg: v("destructive-bg"),
   accent: v("info"), // "here / in progress" only
   accentBg: v("info-bg"),
+  onAccent: v("primary-foreground"), // text on a solid accent chip (phone "Out for delivery")
+  warningSolid: v("warning-solid"), // amber "problem" step dot (with ink text)
+  lineStrong: v("line-strong"), // dashed outlines for "Not recorded" / placeholders
+  inkRaised: v("ink-raised"), // tiles and badges sitting on an ink (black) panel
+  onInkMuted: v("on-ink-muted"), // secondary text on ink
   orderSO: v("order-so"),
   orderWM: v("order-wm"),
   orderPO: v("order-po"),

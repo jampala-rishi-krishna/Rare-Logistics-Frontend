@@ -77,6 +77,12 @@
   --order-wm: 262 83% 58%;
   --order-po: 219 67% 37%;
   --order-to: 123 46% 34%;
+  /* Added 2026-10-20 for the Order Tracker design (Uber Base): amber step dot, dashed "not recorded" outlines, raised
+     surfaces on black panels and secondary text on black. Use via src/lib/themeTokens.ts. */
+  --warning-solid: 40 100% 63%;
+  --line-strong: 0 0% 69%;
+  --ink-raised: 0 0% 20%;
+  --on-ink-muted: 0 0% 80%;
   --app-font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   --app-font-display: 'Space Grotesk', 'DM Sans', sans-serif;
   --app-font-hero: 'Manrope', 'DM Sans', ui-sans-serif, sans-serif;

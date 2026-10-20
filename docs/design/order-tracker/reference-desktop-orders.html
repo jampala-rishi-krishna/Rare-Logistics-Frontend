@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Order Tracker — orders and order details</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F6}
+a{color:#000}a:hover{color:#333}
+</style>
+</helmet>
+<div style="font-family: Figtree, system-ui, sans-serif; color: #000; background: #F6F6F6; font-variant-numeric: tabular-nums; min-height: 100vh">
+
+<header style="background: #000; color: #fff">
+<div style="max-width: 1440px; margin: 0 auto; padding: 0 32px; height: 64px; display: flex; align-items: center; gap: 28px; flex-wrap: wrap">
+<div style="display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px">
+<span style="width: 30px; height: 30px; border-radius: 8px; background: #fff; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg></span>
+IntelliFleet
+</div>
+<nav aria-label="Main" style="display: flex; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 600">
+<a href="#" style="color: #CBCBCB; text-decoration: none; padding: 8px 12px; border-radius: 8px">Orders</a>
+<a href="#" style="color: #CBCBCB; text-decoration: none; padding: 8px 12px; border-radius: 8px">Communications</a>
+<a href="#" style="color: #CBCBCB; text-decoration: none; padding: 8px 12px; border-radius: 8px">Reports</a>
+<a href="#" aria-current="page" style="color: #000; background: #fff; text-decoration: none; padding: 8px 14px; border-radius: 8px">Order Tracker</a>
+</nav>
+<div style="margin-left: auto; display: flex; align-items: center; gap: 14px">
+<button aria-label="Notifications" style="background: transparent; border: 0; color: #fff; width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg></button>
+<div style="display: flex; align-items: center; gap: 10px; font-size: 14px"><span style="width: 34px; height: 34px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-weight: 700">MR</span><span><b style="display: block; font-weight: 700">Maria Reyes</b><span style="color: #AFAFAF; font-size: 12px">Sales · Wet Market</span></span></div>
+</div>
+</div>
+</header>
+
+<main style="max-width: 1440px; margin: 0 auto; padding: 32px 32px 48px; box-sizing: border-box">
+
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap">
+<div>
+<h1 style="margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.02em">Order Tracker</h1>
+<p style="margin: 6px 0 0; font-size: 17px; color: #545454; font-weight: 500">Where your order is, what happened, and the proof — without calling Logistics.</p>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #545454; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 50%; background: #05944F"></span>Live · updated 13:42</div>
+</div>
+
+<section aria-label="Ask" style="margin-top: 24px; background: #000; border-radius: 20px; padding: 24px; color: #fff">
+<label for="ask" style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #CBCBCB"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>Ask about any order — English or Tagalog</label>
+<div style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap">
+<input id="ask" type="text" placeholder="e.g. Was SO26-18447 paid in full?  ·  Nasaan na ang truck ng Puregold?" style="flex: 1 1 520px; min-width: 0; height: 60px; border-radius: 14px; border: 0; padding: 0 20px; font-family: inherit; font-size: 18px; font-weight: 500; color: #000; background: #fff">
+<button style="height: 60px; padding: 0 28px; border-radius: 14px; border: 0; background: #fff; color: #000; font-family: inherit; font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 10px; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>Ask</button>
+</div>
+<div style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap">
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #545454; background: transparent; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Where is my truck now?</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #545454; background: transparent; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Which orders were rejected today?</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #545454; background: transparent; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Show proof of delivery</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #545454; background: transparent; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Buyers per SKU tomorrow</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #545454; background: transparent; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Unpaid orders this week</button>
+</div>
+</section>
+
+<section aria-label="Filters" style="margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center">
+<div style="flex: 1 1 360px; min-width: 0; height: 52px; background: #fff; border: 1px solid #E2E2E2; border-radius: 12px; display: flex; align-items: center; gap: 10px; padding: 0 16px; box-sizing: border-box">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#545454" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+<label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden">Search orders</label>
+<input id="q" type="text" placeholder="SO number, customer, invoice, PO or truck plate" style="flex: 1; min-width: 0; border: 0; outline: 0; font-family: inherit; font-size: 16px; font-weight: 500; background: transparent">
+</div>
+<div style="height: 52px; background: #fff; border: 1px solid #E2E2E2; border-radius: 12px; display: flex; align-items: center; box-sizing: border-box">
+<button aria-label="Previous day" style="width: 48px; height: 50px; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></button>
+<span style="font-size: 16px; font-weight: 700; padding: 0 6px; display: flex; align-items: center; gap: 8px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3"></path><path d="M16 2v3"></path><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18"></path></svg>Today, Thu 15 Oct</span>
+<button aria-label="Next day" style="width: 48px; height: 50px; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></button>
+</div>
+<div role="group" aria-label="Quick filters" style="display: flex; gap: 8px; flex-wrap: wrap">
+<button aria-pressed="true" style="height: 52px; padding: 0 18px; border-radius: 12px; border: 0; background: #000; color: #fff; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">My orders <span style="margin-left: 6px; background: #333; border-radius: 8px; padding: 2px 8px">12</span></button>
+<button aria-pressed="false" style="height: 52px; padding: 0 18px; border-radius: 12px; border: 1px solid #E2E2E2; background: #fff; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">Out for delivery <span style="margin-left: 6px; background: #EEF3FE; color: #1E54B7; border-radius: 8px; padding: 2px 8px">4</span></button>
+<button aria-pressed="false" style="height: 52px; padding: 0 18px; border-radius: 12px; border: 1px solid #E2E2E2; background: #fff; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">Delivered <span style="margin-left: 6px; background: #E6F2ED; color: #03703C; border-radius: 8px; padding: 2px 8px">6</span></button>
+<button aria-pressed="false" style="height: 52px; padding: 0 18px; border-radius: 12px; border: 1px solid #E2E2E2; background: #fff; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">Problems <span style="margin-left: 6px; background: #FFEFED; color: #AB1300; border-radius: 8px; padding: 2px 8px">2</span></button>
+</div>
+</section>
+
+<div style="margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start">
+
+<section aria-label="Orders" style="flex: 1 1 400px; min-width: 0; background: #fff; border: 1px solid #E2E2E2; border-radius: 20px; overflow: hidden">
+<div style="padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E2E2E2"><b style="font-size: 17px">12 orders today</b><span style="font-size: 13px; color: #545454; font-weight: 600">Newest update first</span></div>
+
+<a href="#" style="display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #E2E2E2; text-decoration: none; color: #000; background: #F6F6F6; box-shadow: inset 4px 0 0 #000">
+<div style="flex: 1; min-width: 0"><div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><b style="font-size: 16px">SO26-18447</b><span style="font-size: 12px; font-weight: 700; color: #674D1B; background: #FFF2D9; padding: 3px 9px; border-radius: 10px">Partly delivered</span></div><div style="font-size: 15px; font-weight: 600; margin-top: 3px">Puregold Guiguinto</div><div style="font-size: 13px; color: #545454; margin-top: 3px">NAJ 6018 · delivered 10:31</div></div>
+<div style="text-align: right"><div style="font-size: 12px; font-weight: 700; color: #674D1B; background: #FFF2D9; padding: 3px 9px; border-radius: 10px">Partly paid</div><div style="font-size: 12px; color: #545454; margin-top: 8px">2 min ago</div></div>
+</a>
+
+<a href="#" style="display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #E2E2E2; text-decoration: none; color: #000">
+<div style="flex: 1; min-width: 0"><div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><b style="font-size: 16px">SO26-18452</b><span style="font-size: 12px; font-weight: 700; color: #1E54B7; background: #EEF3FE; padding: 3px 9px; border-radius: 10px">Out for delivery</span></div><div style="font-size: 15px; font-weight: 600; margin-top: 3px">SM Hypermarket Malolos</div><div style="font-size: 13px; color: #545454; margin-top: 3px">NAJ 6018 · stop 4 of 5 · ETA ~11:20</div></div>
+<div style="text-align: right"><div style="font-size: 12px; font-weight: 700; color: #03703C; background: #E6F2ED; padding: 3px 9px; border-radius: 10px">Paid</div><div style="font-size: 12px; color: #545454; margin-top: 8px">4 min ago</div></div>
+</a>
+
+<a href="#" style="display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #E2E2E2; text-decoration: none; color: #000">
+<div style="flex: 1; min-width: 0"><div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><b style="font-size: 16px">SO26-18439</b><span style="font-size: 12px; font-weight: 700; color: #AB1300; background: #FFEFED; padding: 3px 9px; border-radius: 10px">Not delivered</span></div><div style="font-size: 15px; font-weight: 600; margin-top: 3px">Mang Rudy Meat Shop</div><div style="font-size: 13px; color: #545454; margin-top: 3px">DCD 8953 · store closed · 09:48</div></div>
+<div style="text-align: right"><div style="font-size: 12px; font-weight: 700; color: #545454; background: #F6F6F6; padding: 3px 9px; border-radius: 10px">Unpaid</div><div style="font-size: 12px; color: #545454; margin-top: 8px">48 min ago</div></div>
+</a>
+
+<a href="#" style="display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #E2E2E2; text-decoration: none; color: #000">
+<div style="flex: 1; min-width: 0"><div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><b style="font-size: 16px">SO26-18441</b><span style="font-size: 12px; font-weight: 700; color: #03703C; background: #E6F2ED; padding: 3px 9px; border-radius: 10px">Delivered</span></div><div style="font-size: 15px; font-weight: 600; margin-top: 3px">Robinsons Pulilan</div><div style="font-size: 13px; color: #545454; margin-top: 3px">NAJ 6018 · delivered 09:12</div></div>
+<div style="text-align: right"><div style="font-size: 12px; font-weight: 700; color: #03703C; background: #E6F2ED; padding: 3px 9px; border-radius: 10px">Paid</div><div style="font-size: 12px; color: #545454; margin-top: 8px">1 h ago</div></div>
+</a>
+
+<a href="#" style="display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #E2E2E2; text-decoration: none; color: #000">
+<div style="flex: 1; min-width: 0"><div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><b style="font-size: 16px">SO26-18460</b><span style="font-size: 12px; font-weight: 700; color: #000; background: #F6F6F6; border: 1px solid #E2E2E2; padding: 2px 9px; border-radius: 10px">Loaded</span></div><div style="font-size: 15px; font-weight: 600; margin-top: 3px">Savemore Calumpit</div><div style="font-size: 13px; color: #545454; margin-top: 3px">DCD 8953 · trip 2 · leaves after trip 1</div></div>
+<div style="text-align: right"><div style="font-size: 12px; font-weight: 700; color: #545454; background: #F6F6F6; padding: 3px 9px; border-radius: 10px">Unpaid</div><div style="font-size: 12px; color: #545454; margin-top: 8px">2 h ago</div></div>
+</a>
+
+<a href="#" style="display: flex; gap: 14px; padding: 16px 20px; text-decoration: none; color: #000">
+<div style="flex: 1; min-width: 0"><div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><b style="font-size: 16px">SO26-18466</b><span style="font-size: 12px; font-weight: 700; color: #545454; background: #fff; border: 1px dashed #AFAFAF; padding: 2px 9px; border-radius: 10px">Not yet loaded</span></div><div style="font-size: 15px; font-weight: 600; margin-top: 3px">Hapag Kainan Restaurant</div><div style="font-size: 13px; color: #545454; margin-top: 3px">Not assigned to a truck yet</div></div>
+<div style="text-align: right"><div style="font-size: 12px; color: #545454; margin-top: 30px">3 h ago</div></div>
+</a>
+<div style="padding: 14px 20px; border-top: 1px solid #E2E2E2; text-align: center"><a href="#" style="font-size: 15px; font-weight: 700">Show all 12 orders</a></div>
+</section>
+
+<section aria-label="Order SO26-18447" style="flex: 999 1 640px; min-width: 0; background: #fff; border: 1px solid #E2E2E2; border-radius: 20px; overflow: hidden">
+
+<div style="padding: 24px 28px; border-bottom: 1px solid #E2E2E2; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; justify-content: space-between">
+<div>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"><h2 style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.01em">SO26-18447</h2><span style="font-size: 14px; font-weight: 700; color: #674D1B; background: #FFF2D9; padding: 5px 12px; border-radius: 12px">Partly delivered</span></div>
+<div style="font-size: 18px; font-weight: 600; margin-top: 6px">Puregold Guiguinto</div>
+<div style="font-size: 14px; color: #545454; margin-top: 4px">McArthur Hwy, Tabe, Guiguinto, Bulacan · Invoice/DR 0012345 · Client PO PO-88213</div>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap">
+<button style="height: 48px; padding: 0 18px; border-radius: 12px; border: 1.5px solid #000; background: #fff; font-family: inherit; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>Ask about this order</button>
+<button style="height: 48px; padding: 0 18px; border-radius: 12px; border: 0; background: #000; color: #fff; font-family: inherit; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"></path></svg>Call Logistics</button>
+</div>
+</div>
+
+<div style="padding: 24px 28px; border-bottom: 1px solid #E2E2E2">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap"><h3 style="margin: 0; font-size: 18px; font-weight: 800">Journey</h3><span style="font-size: 13px; color: #545454; font-weight: 600">Source: helper app · Cartrack GPS · as of 13:42</span></div>
+<div style="margin-top: 18px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0">
+<div><div style="display: flex; align-items: center"><span style="width: 32px; height: 32px; border-radius: 50%; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; flex: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span><span style="flex: 1; height: 3px; background: #000"></span></div><b style="display: block; font-size: 15px; margin-top: 10px">Loaded</b><div style="font-size: 20px; font-weight: 800; margin-top: 2px">06:42</div><div style="font-size: 13px; color: #545454">by Raymond (helper)</div></div>
+<div><div style="display: flex; align-items: center"><span style="width: 32px; height: 32px; border-radius: 50%; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; flex: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span><span style="flex: 1; height: 3px; background: #000"></span></div><b style="display: block; font-size: 15px; margin-top: 10px">Left warehouse</b><div style="font-size: 20px; font-weight: 800; margin-top: 2px">07:15</div><div style="font-size: 13px; color: #545454">METS · NAJ 6018</div></div>
+<div><div style="display: flex; align-items: center"><span style="width: 32px; height: 32px; border-radius: 50%; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; flex: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span><span style="flex: 1; height: 3px; background: #000"></span></div><b style="display: block; font-size: 15px; margin-top: 10px">Arrived</b><div style="font-size: 20px; font-weight: 800; margin-top: 2px">10:02</div><div style="font-size: 13px; color: #545454">GPS 40 m from store</div></div>
+<div><div style="display: flex; align-items: center"><span style="width: 32px; height: 32px; border-radius: 50%; background: #FFC043; color: #000; display: flex; align-items: center; justify-content: center; flex: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span><span style="flex: 1; height: 3px; background: #E2E2E2"></span></div><b style="display: block; font-size: 15px; margin-top: 10px">Partly delivered</b><div style="font-size: 20px; font-weight: 800; margin-top: 2px">10:31</div><div style="font-size: 13px; color: #545454">2 boxes rejected</div></div>
+<div><div style="display: flex; align-items: center"><span style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #AFAFAF; box-sizing: border-box; flex: none"></span></div><b style="display: block; font-size: 15px; margin-top: 10px">Invoice back</b><div style="font-size: 20px; font-weight: 800; margin-top: 2px; color: #545454">—</div><div style="font-size: 13px; color: #545454">truck still on trip</div></div>
+</div>
+
+<div style="margin-top: 22px; display: flex; gap: 18px; flex-wrap: wrap">
+<div style="flex: 2 1 340px; min-width: 0; height: 200px; border-radius: 16px; background: #EEEEEE; position: relative; overflow: hidden">
+<svg aria-hidden="true" width="100%" height="100%" viewBox="0 0 600 200" preserveAspectRatio="none" style="position: absolute; inset: 0"><path d="M-10 150 C 120 120, 180 170, 300 110 S 480 60, 620 80" stroke="#fff" stroke-width="16" fill="none"></path><path d="M120 -10 L 170 210" stroke="#fff" stroke-width="10"></path><path d="M420 -10 L 380 210" stroke="#fff" stroke-width="10"></path><path d="M-10 60 L 610 30" stroke="#fff" stroke-width="7"></path><path d="M60 150 C 140 128, 190 160, 300 110" stroke="#000" stroke-width="5" fill="none" stroke-dasharray="2 9" stroke-linecap="round"></path></svg>
+<div style="position: absolute; left: 47%; top: 34%; display: flex; flex-direction: column; align-items: center"><span style="background: #000; color: #fff; border-radius: 12px; padding: 6px 10px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; white-space: nowrap"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>NAJ 6018</span><span style="width: 14px; height: 14px; border-radius: 50%; background: #276EF1; border: 3px solid #fff; margin-top: 4px; box-shadow: 0 0 0 6px rgba(39,110,241,.25)"></span></div>
+<div style="position: absolute; left: 12px; bottom: 12px; background: #fff; border-radius: 10px; padding: 6px 10px; font-size: 13px; font-weight: 700">Truck now · updated 1 min ago</div>
+</div>
+<div style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<div style="border: 1px solid #E2E2E2; border-radius: 16px; padding: 16px"><div style="font-size: 13px; color: #545454; font-weight: 600">Truck is now at</div><div style="font-size: 18px; font-weight: 800; margin-top: 4px">Stop 4 of 5</div><div style="font-size: 14px; color: #545454; margin-top: 2px">SM Hypermarket Malolos</div></div>
+<div style="border: 1px solid #E2E2E2; border-radius: 16px; padding: 16px"><div style="font-size: 13px; color: #545454; font-weight: 600">Your order</div><div style="font-size: 18px; font-weight: 800; margin-top: 4px">Done at 10:31</div><div style="font-size: 14px; color: #545454; margin-top: 2px">Truck back ~14:30 (estimate)</div></div>
+</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0">
+
+<div style="padding: 24px 28px; border-bottom: 1px solid #E2E2E2; border-right: 1px solid #E2E2E2">
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 40px; height: 40px; border-radius: 12px; background: #FFF2D9; display: flex; align-items: center; justify-content: center"><!-- lucide Package, stroke #674D1B --></span><h3 style="margin: 0; font-size: 18px; font-weight: 800">Delivery result</h3></div>
+<div style="margin-top: 14px; font-size: 16px; font-weight: 700">Partly delivered — damaged boxes</div>
+<div style="margin-top: 12px; border: 1px solid #E2E2E2; border-radius: 12px; overflow: hidden">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 14px; background: #F6F6F6; font-size: 12px; font-weight: 700; color: #545454"><span>Item</span><span style="text-align: right">Accepted</span><span style="text-align: right">Rejected</span></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 14px; font-size: 14px; border-top: 1px solid #E2E2E2"><span style="font-weight: 600">Pork belly 5 kg</span><span style="text-align: right">8 boxes</span><span style="text-align: right; color: #AB1300; font-weight: 700">2 boxes</span></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 14px; font-size: 14px; border-top: 1px solid #E2E2E2"><span style="font-weight: 600">Chicken wings 2 kg</span><span style="text-align: right">12 packs</span><span style="text-align: right; color: #545454">0</span></div>
+</div>
+<div style="margin-top: 14px; display: flex; align-items: center; gap: 10px; font-size: 15px"><!-- lucide User 18px --><span>Received by <b>Ana Cruz</b>, Receiving Clerk</span></div>
+<div style="margin-top: 10px; font-size: 13px; color: #545454; font-weight: 600">Source: helper app delivery form · 10:31</div>
+</div>
+
+<div style="padding: 24px 28px; border-bottom: 1px solid #E2E2E2">
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 40px; height: 40px; border-radius: 12px; background: #F6F6F6; display: flex; align-items: center; justify-content: center"><!-- lucide Camera --></span><h3 style="margin: 0; font-size: 18px; font-weight: 800">Proof of delivery</h3><span style="margin-left: auto; font-size: 13px; font-weight: 700">3 photos</span></div>
+<div style="margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<button aria-label="Open photo: signed invoice" style="border: 0; padding: 0; background: transparent; cursor: pointer; text-align: left; font-family: inherit"><span style="display: flex; height: 104px; border-radius: 12px; background: #E2E2E2; align-items: center; justify-content: center"><!-- lucide FileText 30px #545454 --></span><span style="display: block; font-size: 12px; font-weight: 700; margin-top: 6px">Signed invoice</span><span style="display: block; font-size: 11px; color: #545454">15 Oct · 10:29</span></button>
+<button aria-label="Open photo: goods at store" style="border: 0; padding: 0; background: transparent; cursor: pointer; text-align: left; font-family: inherit"><span style="display: flex; height: 104px; border-radius: 12px; background: #E2E2E2; align-items: center; justify-content: center"><!-- lucide Package 30px --></span><span style="display: block; font-size: 12px; font-weight: 700; margin-top: 6px">Goods at store</span><span style="display: block; font-size: 11px; color: #545454">15 Oct · 10:30</span></button>
+<button aria-label="Open photo: damaged boxes" style="border: 0; padding: 0; background: transparent; cursor: pointer; text-align: left; font-family: inherit"><span style="display: flex; height: 104px; border-radius: 12px; background: #FFEFED; align-items: center; justify-content: center"><!-- lucide TriangleAlert 30px #AB1300 --></span><span style="display: block; font-size: 12px; font-weight: 700; margin-top: 6px">Damaged boxes</span><span style="display: block; font-size: 11px; color: #545454">15 Oct · 10:31</span></button>
+</div>
+<div style="margin-top: 12px; font-size: 13px; color: #545454; font-weight: 600">Source: POD photos (Drive, shown here) · captions SO, date, time</div>
+</div>
+
+<div style="padding: 24px 28px; border-bottom: 1px solid #E2E2E2; border-right: 1px solid #E2E2E2">
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 40px; height: 40px; border-radius: 12px; background: #FFF2D9; display: flex; align-items: center; justify-content: center"><!-- lucide CreditCard #674D1B --></span><h3 style="margin: 0; font-size: 18px; font-weight: 800">Payment</h3><span style="margin-left: auto; font-size: 13px; font-weight: 700; color: #674D1B; background: #FFF2D9; padding: 4px 10px; border-radius: 10px">Partly paid</span></div>
+<div style="margin-top: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<div><div style="font-size: 13px; color: #545454; font-weight: 600">Invoice total</div><div style="font-size: 22px; font-weight: 800; margin-top: 2px">₱48,250</div></div>
+<div><div style="font-size: 13px; color: #545454; font-weight: 600">Paid</div><div style="font-size: 22px; font-weight: 800; margin-top: 2px; color: #03703C">₱38,600</div></div>
+<div><div style="font-size: 13px; color: #545454; font-weight: 600">Balance</div><div style="font-size: 22px; font-weight: 800; margin-top: 2px; color: #AB1300">₱9,650</div></div>
+</div>
+<div style="margin-top: 14px; background: #FFF2D9; color: #674D1B; border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 600">Doesn't match the invoice yet — the 2 rejected boxes may need a credit note. Last payment 14 Oct, ref OR-55102.</div>
+<div style="margin-top: 10px; font-size: 13px; color: #545454; font-weight: 600">Source: Zoho Books · as of 13:40</div>
+</div>
+
+<div style="padding: 24px 28px; border-bottom: 1px solid #E2E2E2">
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 40px; height: 40px; border-radius: 12px; background: #F6F6F6; display: flex; align-items: center; justify-content: center"><!-- lucide FileCheck --></span><h3 style="margin: 0; font-size: 18px; font-weight: 800">Documents</h3></div>
+<div style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 12px; border: 1px solid #E2E2E2; border-radius: 12px; padding: 12px 14px"><!-- lucide CircleCheck 20px #03703C --><div style="flex: 1"><b style="font-size: 15px">Client PO copy</b><div style="font-size: 13px; color: #545454">PO-88213 · attached to the SO</div></div><a href="#" style="font-size: 14px; font-weight: 700">View</a></div>
+<div style="display: flex; align-items: center; gap: 12px; border: 1px solid #E2E2E2; border-radius: 12px; padding: 12px 14px"><!-- lucide CircleCheck 20px #03703C --><div style="flex: 1"><b style="font-size: 15px">Signed invoice / DR</b><div style="font-size: 13px; color: #545454">0012345 · with the truck, comes back today</div></div></div>
+<div style="display: flex; align-items: center; gap: 12px; border: 1.5px dashed #AFAFAF; border-radius: 12px; padding: 12px 14px"><!-- lucide CircleHelp 20px #545454 --><div style="flex: 1"><b style="font-size: 15px">Delivery permits</b><div style="font-size: 13px; color: #545454">Not recorded yet — Logistics can add them</div></div></div>
+</div>
+</div>
+
+<div style="padding: 24px 28px; border-right: 1px solid #E2E2E2">
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 40px; height: 40px; border-radius: 12px; background: #F6F6F6; display: flex; align-items: center; justify-content: center"><!-- lucide ListChecks --></span><h3 style="margin: 0; font-size: 18px; font-weight: 800">Customer delivery rules</h3></div>
+<ul style="margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 15px">
+<li style="display: flex; gap: 10px"><!-- lucide Clock 18px -->Receiving 6:00–11:00 AM only</li>
+<li style="display: flex; gap: 10px"><!-- lucide MapPin 18px -->Use the back gate, Receiving Bay 2</li>
+<li style="display: flex; gap: 10px"><!-- lucide File 18px -->Bring 2 copies of DR + PO copy</li>
+</ul>
+<div style="margin-top: 12px; font-size: 13px; color: #545454; font-weight: 600">Source: customer notes · updated 02 Oct</div>
+</div>
+
+<div style="padding: 24px 28px">
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 40px; height: 40px; border-radius: 12px; background: #E6F2ED; display: flex; align-items: center; justify-content: center"><!-- lucide ShieldCheck #03703C --></span><h3 style="margin: 0; font-size: 18px; font-weight: 800">Loading check</h3><span style="margin-left: auto; font-size: 13px; font-weight: 700; color: #03703C; background: #E6F2ED; padding: 4px 10px; border-radius: 10px">Loaded OK</span></div>
+<div style="margin-top: 14px; font-size: 15px; line-height: 1.5">Helper <b>Raymond Roblo</b> confirmed all 5 orders on the truck at <b>06:42</b>, at the METS warehouse (GPS).</div>
+<div style="margin-top: 12px; background: #F6F6F6; border-radius: 12px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start"><!-- lucide TriangleAlert 18px --><div style="font-size: 14px"><b>Problem reported 10:24 — Damaged goods.</b><div style="color: #545454; margin-top: 2px">Logistics: "Approved partial. Credit note for 2 boxes." — Leo, 10:40</div></div></div>
+<div style="margin-top: 10px; font-size: 13px; color: #545454; font-weight: 600">Source: helper acknowledgement · issues</div>
+</div>
+
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<!-- Note: in this copy, lucide icon SVGs inside the detail-grid sections are replaced by comments naming the lucide icon,
+     size and stroke colour (the original attachment had inline lucide SVG paths). Everything else is verbatim. -->
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1760}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
