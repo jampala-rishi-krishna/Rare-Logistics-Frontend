@@ -1,5 +1,34 @@
 # Order Tracker delivery report
 
+## 2026-10-20 design rebuild
+
+Approved design: [docs/design/order-tracker/](design/order-tracker/) (three PNGs + reference HTML). Data rules, scope checks, the five-condition location safeguard, read-only AI limits and photo safeguards are unchanged.
+
+**Built:** desktop main screen (black Ask panel with chips, filter row with counts for every quick filter, order list), desktop order card (journey stepper, location row, detail grid), phone one-order view (sticky Ask bar above the shell nav; the shell chat bubble is hidden on that view only), and the Ask thread with structured answer cards. Shared tokens added to `index.css`: `--warning-solid`, `--line-strong`, `--ink-raised`, `--on-ink-muted`. Font: the dashboard's DM Sans (not Figtree).
+
+**Backend:** Ask returns `blocks` (order table, tiles, not recorded, bars, actions) and `language`, built in `services/order_tracker_blocks.py` only from tool results fetched for that answer. A builder fault returns the sourced answer without blocks. List rows gained `stop`, `total_stops` and `event`; the card gained `area`; the list gained `counts`. All are derived from data already loaded (see DATABASE.md). No new Zoho calls, Neon reads, tables or caches.
+
+**Not filled from data (designed empty states instead):** ETA, the truck's current stop (`stop` is this order's position), accepted quantities, photo labels, GPS distance at check-in, verified PO copy, permits.
+
+**Visual difference** (pixels differing by more than 40 in any colour channel; shell, map, photo tiles and phone Ask bar masked):
+
+| Screen | Before polish | Final | Mockup's own HTML vs its PNG |
+| --- | --- | --- | --- |
+| Desktop main | 8.00% (with card) | 8.16% | 13.45% |
+| Desktop order card | - | 7.40% | 8.89% |
+| Ask thread | 16.72% | 6.91% | 11.94% |
+| Phone order | 8.81% | 5.97% | 8.44% |
+
+None of the four is under 3%. The mockup's own reference HTML, rendered in the same browser, scores 8.4–13.5% against its own PNG (font fallback shifts every line), so 3% is below this method's noise floor. Remaining real differences come from DM Sans vs Figtree, the app's sidebar narrowing the content, and the data-driven states above. Images: `artifacts/intellifleet/e2e/screenshots/order-tracker/compare/` and `visual/`.
+
+**Fixed after review:** POD thumbnails rendered blank because the test image decoded to one white pixel (component unchanged; it now shows "Photo unavailable" + Retry for empty or undecodable bodies); "back gate" rules use a map pin; the payment note is amber only when amounts don't add up; long URLs and emails wrap inside cards.
+
+**Tests:** backend 1,331 passed (Tracker 122), mocked AI eval 46/46; frontend unit 385/385; Tracker browser spec 24/24; full browser suite 99/99 (last full run before the final counts edit, which was then re-checked by the Tracker spec); tsc and production build pass on a clean tree.
+
+**Memory:** the 2026-10-20 sample of the new instance rose from 215 MB at boot to 419 MB after 40 minutes. Tracker-owned caches total about 5 MB worst case (facts 2 MiB, history 1 MiB, AI rate/feedback maps about 1.5 MB), all hard-capped. Tracker photo views share the existing 64 MiB photo byte cache. A read-only code audit points to the live Zoho SO caches holding each hydrated SO in two to four copies (`live_sales_order_cache` windows, `_details`, `_assigned_zoho`, `routers/pipeline.py` detail cache) as the likely main growth; those figures are estimates, not measurements.
+
+**Production check (read-only, Admin, 1440 and 390):** `SO26-18569`, `SO26-18564`, `SO26-18563` opened with no page errors, no sideways scroll and no Ask, feedback or write requests; the live list returned `counts` and the new row fields. All three showed "Status unavailable" because trip memory was cold after the backend restart (it fills when the existing Driver / Driver Overview workflow reads the trip). Screenshots: `artifacts/intellifleet/e2e/screenshots/order-tracker/production/` (gitignored, real customer data). No AI call was made with production data. Call Logistics is disabled because the `DISPATCH_PHONE` setting is empty.
+
 Date: 2026-10-19, Asia/Manila. Full pre-build source audit and approval proposals: [ORDER_TRACKER_COVERAGE.md](ORDER_TRACKER_COVERAGE.md). Database contract: [DATABASE.md](DATABASE.md).
 
 ## 1. Coverage and sources
