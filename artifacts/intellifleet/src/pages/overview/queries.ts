@@ -5,9 +5,15 @@ import * as overviewApi from "@/services/api/overview";
 import { isRange, rangeError } from "@/lib/overviewModel";
 import type { UrlState } from "@/lib/overviewModel";
 
-export const POLL = { refetchInterval: 15_000, refetchIntervalInBackground: false } as const;
+export const POLL = {
+  refetchInterval: 15_000,
+  refetchIntervalInBackground: false,
+} as const;
 
-export function tripsFilter(s: UrlState, withTile = true): overviewApi.TripsFilter {
+export function tripsFilter(
+  s: UrlState,
+  withTile = true,
+): overviewApi.TripsFilter {
   return {
     ...(isRange(s) ? { from: s.from, to: s.to } : { date: s.date }),
     warehouse: s.wh || undefined,
@@ -38,12 +44,32 @@ export function useTripDetail(batchId: string) {
 }
 
 /** Outstanding invoices: all dates unless "Only this date" is ticked; search + warehouse always apply. */
-export function useHardCopies(s: UrlState) {
-  const f = { warehouse: s.wh || undefined, q: s.q.trim() || undefined, date: s.only && !isRange(s) ? s.date : undefined };
-  return useQuery({ queryKey: ["driver-overview", "hardcopies", f], queryFn: () => overviewApi.getHardCopies(f), placeholderData: keepPreviousData, ...POLL });
+export function useHardCopies(s: UrlState, collected = false) {
+  const f = {
+    warehouse: s.wh || undefined,
+    q: s.q.trim() || undefined,
+    date: s.only && !isRange(s) ? s.date : undefined,
+    collected,
+  };
+  return useQuery({
+    queryKey: ["driver-overview", "hardcopies", f],
+    queryFn: () => overviewApi.getHardCopies(f),
+    placeholderData: keepPreviousData,
+    ...POLL,
+  });
 }
 
 export function useIssues(s: UrlState, status: string, onlyDate = s.only) {
-  const f = { status, warehouse: s.wh || undefined, q: s.q.trim() || undefined, date: onlyDate && !isRange(s) ? s.date : undefined };
-  return useQuery({ queryKey: ["driver-overview", "issues", f], queryFn: () => overviewApi.getIssues(f), placeholderData: keepPreviousData, ...POLL });
+  const f = {
+    status,
+    warehouse: s.wh || undefined,
+    q: s.q.trim() || undefined,
+    date: onlyDate && !isRange(s) ? s.date : undefined,
+  };
+  return useQuery({
+    queryKey: ["driver-overview", "issues", f],
+    queryFn: () => overviewApi.getIssues(f),
+    placeholderData: keepPreviousData,
+    ...POLL,
+  });
 }

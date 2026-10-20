@@ -64,6 +64,7 @@ export function v2Issues(p = new URLSearchParams(), issues: IssueRow[] = structu
 }
 
 export function v2Hardcopies(p: URLSearchParams) {
+  if (p.get("collected") === "true") return { generated_at: new Date().toISOString(), total: 0, counts: {}, rows: [] };
   const rows = ov.hardcopies.rows.map((r) => ({ ...r, so_id: r.batch_id === "b-3" ? "so-1" : "so-2", batch_id: r.state === "with_driver" ? "b-3" : "h-1", delivery_date: r.state === "with_driver" ? today : shift(-1), warehouse: r.state === "with_driver" ? "METS" : "GLACIER", vehicle: r.state === "with_driver" ? "TRK-2002" : "TRK-3003", driver_name: r.state === "with_driver" ? "Casey Runner" : "Dana Hauler", helpers: ["Sam Helper"] }))
     .filter((r) => (!p.get("warehouse") || r.warehouse === p.get("warehouse")) && (!p.get("date") || r.delivery_date === p.get("date")) && (!p.get("q") || matches(p.get("q")!, [r.so_number, r.invoice_no, r.customer_name, r.driver_name, r.vehicle, ...r.helpers])));
   const counts: Record<string, number> = {};

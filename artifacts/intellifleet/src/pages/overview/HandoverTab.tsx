@@ -26,24 +26,48 @@ export default function HandoverTab({
   set: (p: Partial<UrlState>) => void;
 }) {
   const [show, filter] = useState("");
-  const query = useHardCopies(state);
+  const collected = state.tab === "collected";
+  const query = useHardCopies(state, collected);
   const now = useNow(15000);
+  const outcome = (value?: string | null) =>
+    /^partial/i.test(value ?? "")
+      ? "partial"
+      : /^deliver/i.test(value ?? "")
+        ? "delivered"
+        : /fail|return/i.test(value ?? "")
+          ? "failed"
+          : "unknown";
+  const chips: ReadonlyArray<[string, string]> = collected
+    ? [
+        ["", "All collected"],
+        ["delivered", "Delivered"],
+        ["partial", "Partly delivered"],
+        ["failed", "Not delivered"],
+      ]
+    : INVOICE_CHIPS;
   const rows = (query.data?.rows ?? []).filter(
-    (r) => !show || r.state === show,
+    (r) =>
+      (!collected || r.state === "received") &&
+      (!show ||
+        (collected ? outcome(r.delivery_outcome) === show : r.state === show)),
   );
   return (
     <section className="grid min-w-0 gap-3" data-testid="invoices-tab">
       <DateScope
         state={state}
         set={set}
-        label="All dates — anything not yet received"
+        label={
+          collected
+            ? "All delivery dates - collected invoices"
+            : "All dates — anything not yet received"
+        }
       />
       <div
         role="group"
         aria-label="Invoice status"
         className="flex flex-wrap gap-1"
       >
-        {INVOICE_CHIPS.map(([s, label]) => (
+        {chips.map(([s, label]) => (
           <button
             key={s}
             className={buttonClass}
@@ -51,17 +75,32 @@ export default function HandoverTab({
             onClick={() => filter(s)}
           >
             {label} (
-            {s ? (query.data?.counts[s] ?? 0) : (query.data?.total ?? 0)})
+            {s
+              ? collected
+                ? (query.data?.rows ?? []).filter(
+                    (r) => outcome(r.delivery_outcome) === s,
+                  ).length
+                : (query.data?.counts[s] ?? 0)
+              : (query.data?.total ?? 0)}
+            )
           </button>
         ))}
       </div>
+      {query.data?.truncated && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Showing the latest 500 collected invoices. Narrow the date or search
+          to find older receipts.
+        </p>
+      )}
       {query.isLoading ? (
         <Skeleton className="h-48" />
       ) : query.isError ? (
         <ErrorLine error={query.error} onRetry={() => void query.refetch()} />
       ) : !rows.length ? (
         <p className="rounded-lg border border-border p-6 text-center text-sm">
-          No invoices to collect in this view.
+          {collected
+            ? "No collected invoices match these filters."
+            : "No invoices to collect in this view."}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -73,10 +112,12 @@ export default function HandoverTab({
                   "Invoice/DR",
                   "Customer",
                   "Truck/driver",
-                  "Status",
-                  "Since",
-                  "Note",
-                  "Action",
+                  "Delivery date",
+                  "Delivery result",
+                  "Invoice status",
+                  collected ? "Collected at" : "Since",
+                  collected ? "Collected by" : "Note",
+                  ...(collected ? [] : ["Action"]),
                 ].map((h) => (
                   <th className="p-3" key={h}>
                     {h}
@@ -110,11 +151,15 @@ export default function HandoverTab({
                   <td className="p-3">{r.invoice_no ?? "—"}</td>
                   <td className="p-3">{r.customer_name}</td>
                   <td className="p-3">
-                    {r.vehicle} {r.holder}
+                    {r.vehicle} {r.driver_name ?? r.holder}
+                  </td>
+                  <td className="p-3">{r.delivery_date}</td>
+                  <td className="p-3">
+                    {r.delivery_outcome ?? "Not recorded"}
                   </td>
                   <td className="p-3">
                     <Chip tone={INVOICE_TONE[r.state] ?? "neutral"}>
-                      {invoiceWord(r.state)}
+                      {collected ? "Collected" : invoiceWord(r.state)}
                     </Chip>
                   </td>
                   <td className="p-3" title={manilaDateTime(r.since)}>
@@ -123,8 +168,18 @@ export default function HandoverTab({
                       {manilaDateTime(r.since)}
                     </span>
                   </td>
-                  <td className="max-w-48 break-words p-3">{r.note}</td>
-                  <td className="p-3"><ReceiveInvoiceButton itemId={r.item_id} handedOver={r.handed_over} status={r.state} /></td>
+                  <td className="max-w-48 break-words p-3">
+                    {collected ? (r.received_by ?? r.holder) : r.note}
+                  </td>
+                  {!collected && (
+                    <td className="p-3">
+                      <ReceiveInvoiceButton
+                        itemId={r.item_id}
+                        handedOver={r.handed_over}
+                        status={r.state}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

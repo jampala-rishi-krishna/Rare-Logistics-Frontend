@@ -1,5 +1,7 @@
 # IntelliFleet Neon database
 
+2026-10-20 collected-invoice fix: existing Overview hardcopies read now exposes `collected=true` from received handover items, joins existing stop outcomes for display, and reads receiver/time from existing receipt fields; latest 500 collected rows per filtered query, with truncation disclosed. Received handovers suppress legacy driver-held fallback rows. No tables, columns, business-data repairs or new writes.
+
 2026-10-20 approved invoice-receipt update: Planner/Dispatcher/Admin Overview receipt reuses the existing `handover.resolve` transaction and invoice/trip event tables (no new schema or SQL path), records the actual actor role, requires a crew handover, invalidates Tracker history, and emits a data-free live refresh signal after commit; drawer history is reduced to same-day trip numbering.
 
 ## Order Tracker read model (2026-10-19)

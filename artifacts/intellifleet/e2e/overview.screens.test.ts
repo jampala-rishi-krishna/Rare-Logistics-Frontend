@@ -45,6 +45,11 @@ describe("Driver Overview v2 manager workflows", () => {
     let push: ((message: string) => void) | null = null;
     const { page, context, errors } = await open(1440, "", async page => {
       await page.routeWebSocket("**/never**", ws => { push = message => ws.send(message); });
+      await page.route("http://mock-api.test/api/driver-overview/hardcopies**", route => {
+        const collected = new URL(route.request().url()).searchParams.get("collected") === "true";
+        const rows = collected === received ? [{ item_id: 99, handed_over: true, so_id: "so-1", so_number: "SO-COLLECT-1", invoice_no: "31879", customer_name: "Test Customer", vehicle: "TRK-2002", driver_name: "Test Driver", batch_id: "b-3", delivery_date: today, delivery_outcome: "Delivered", state: collected ? "received" : "with_officer", state_label: collected ? "Collected" : "With officer", received_by: collected ? "Test Planner" : null, holder: "Test Planner", since: new Date().toISOString(), note: null }] : [];
+        return route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ total: rows.length, counts: rows.length ? { [collected ? "received" : "with_officer"]: rows.length } : {}, rows }) });
+      });
       await page.route("http://mock-api.test/api/driver-overview/trips/b-3", route => {
         const timeline = v2Timeline("b-3");
         const invoice = { ...timeline.invoices[0], item_id: 99, handed_over: true, status: received ? "received" : "with_officer" };
@@ -78,13 +83,24 @@ describe("Driver Overview v2 manager workflows", () => {
       page.waitForResponse(r => r.url().includes("/api/driver-overview/trips/b-3")),
       Promise.resolve().then(() => push!(JSON.stringify({ type: "TRIP_STATE_CHANGED" }))),
     ]);
+    await page.getByRole("tab", { name: "Collected invoices (1)", exact: true }).waitFor();
+    await page.getByRole("tab", { name: "Invoices to collect (0)", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Close trip", exact: true }).click();
+    await page.getByTestId("tab-collected").click();
+    await page.getByRole("cell", { name: "SO-COLLECT-1", exact: true }).waitFor();
+    assert.equal(await page.getByRole("cell", { name: "Collected", exact: true }).count(), 1);
+    assert.equal(await page.getByRole("cell", { name: "Test Planner", exact: true }).count(), 1);
+    await page.getByRole("button", { name: "Partly delivered (0)", exact: true }).click();
+    await page.getByText("No collected invoices match these filters.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Delivered (1)", exact: true }).click();
+    await page.getByRole("cell", { name: "SO-COLLECT-1", exact: true }).waitFor();
     assert.deepEqual(errors, []);
     await context.close();
   });
-  it("one trip row per batch, exactly three tabs, tile counts equal matching rows and clear", async () => {
+  it("one trip row per batch, four tabs including collected invoices, tile counts equal matching rows and clear", async () => {
     const { page, context, errors } = await open();
     assert.equal(await count(page), 3);
-    assert.equal(await page.getByRole("tab").count(), 3);
+    assert.equal(await page.getByRole("tab").count(), 4);
     await shot(page, "overview-after/today");
     for (const tile of ["loading", "on_road", "attention"]) {
       const n = Number(

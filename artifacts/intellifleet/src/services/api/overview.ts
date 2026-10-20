@@ -384,6 +384,9 @@ export async function fetchMediaObjectUrl(photoId: number | string, size: "thumb
 }
 
 export interface HardCopyRow {
+  driver_name?: string | null;
+  delivery_outcome?: string | null;
+  received_by?: string | null;
   item_id?: number | null;
   handed_over?: boolean | null;
   so_id?: string | null;
@@ -402,13 +405,14 @@ export interface HardCopyRow {
 }
 
 export interface HardCopiesFilter {
+  collected?: boolean;
   warehouse?: string;
   q?: string;
   date?: string;
 }
 
-export function getHardCopies(f: HardCopiesFilter): Promise<{ generated_at: string; total: number; counts: Record<string, number>; rows: HardCopyRow[] }> {
-  return api.get(`${BASE}/hardcopies`, q({ warehouse: f.warehouse || undefined, q: f.q?.trim() || undefined, date: f.date || undefined }));
+export function getHardCopies(f: HardCopiesFilter): Promise<{ generated_at: string; total: number; counts: Record<string, number>; rows: HardCopyRow[]; truncated?: boolean }> {
+  return api.get(`${BASE}/hardcopies`, q({ warehouse: f.warehouse || undefined, q: f.q?.trim() || undefined, date: f.date || undefined, collected: f.collected ? "true" : undefined }));
 }
 
 export interface IssueRow {

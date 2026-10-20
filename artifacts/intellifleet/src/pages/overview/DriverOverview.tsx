@@ -22,6 +22,7 @@ export default function DriverOverview() {
   const { state, set, today } = useOverviewUrl();
   const trips = useTrips(state);
   const invoices = useHardCopies({ ...state, only: false });
+  const collected = useHardCopies({ ...state, only: false }, true);
   const issues = useIssues(state, "open", false);
   const now = useNow();
   const [exporting, busy] = useState(false);
@@ -51,6 +52,7 @@ export default function DriverOverview() {
   const tabs = [
     ["trips", `Trips (${trips.data?.total ?? 0})`],
     ["invoices", `Invoices to collect (${invoices.data?.total ?? 0})`],
+    ["collected", `Collected invoices (${collected.data?.total ?? 0})`],
     ["issues", `Issues (${issues.data?.issues.length ?? 0} open)`],
   ] as const;
   return (
@@ -120,7 +122,9 @@ export default function DriverOverview() {
           filters={activeFilters(state, today)}
         />
       )}
-      {state.tab === "invoices" && <HandoverTab state={state} set={set} />}
+      {(state.tab === "invoices" || state.tab === "collected") && (
+        <HandoverTab key={state.tab} state={state} set={set} />
+      )}
       {state.tab === "issues" && <IssuesTab state={state} set={set} />}
       {state.trip && (
         <TripDrawer

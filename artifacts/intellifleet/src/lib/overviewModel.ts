@@ -6,7 +6,7 @@ import { crewList, type CrewRowLike } from "./overviewCrew.ts";
 export const MAX_RANGE_DAYS = 366;
 
 export type TileId = "loading" | "on_road" | "back" | "closed" | "attention";
-export type TabId = "trips" | "invoices" | "issues";
+export type TabId = "trips" | "invoices" | "collected" | "issues";
 
 // ---- URL state (?date&from&to&wh&q&tile&trip&tab&stop&view) ----------------------------------------------------------
 
@@ -31,7 +31,7 @@ const TILE_IDS: readonly TileId[] = [
   "closed",
   "attention",
 ];
-const TAB_IDS: readonly TabId[] = ["trips", "invoices", "issues"];
+const TAB_IDS: readonly TabId[] = ["trips", "invoices", "collected", "issues"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const validDay = (value: string): boolean => {
   if (!DAY.test(value)) return false;
