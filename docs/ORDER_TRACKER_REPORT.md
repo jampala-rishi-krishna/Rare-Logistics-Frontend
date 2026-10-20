@@ -31,6 +31,7 @@ The full audit includes exact model/service references, proposed field changes, 
 - Read endpoints: `GET /api/order-tracker/orders`, `/orders/{number}`, `/buyers-per-sku`.
 - AI and feedback: `POST /api/order-tracker/ask`, `/feedback`. Feedback is application-log-only, scoped to the answer's user and 10-minute lifetime.
 - Twelve read-only tools: `find_orders`, `get_order`, `truck_location`, `order_times`, `delivery_result`, `proof_of_delivery`, `payment_status`, `order_documents`, `customer_rules`, `loading_check`, `buyers_per_sku`, `order_issues`.
+- Tracker's authenticated photo reads explicitly disable the legacy Drive metadata-retry side effect and use private/no-store responses varying by Authorization. Sales/Wet Market photo reads always get these safeguards.
 - Existing OpenAI client/model/env key, strict tool schemas, no write tools or provider SQL. Per request: 6 tool calls, 1,200 output tokens per response, 30 seconds total, no retries, provider storage disabled. Limit: 20 questions / user / 10 minutes; two AI questions and two Tracker reads at once.
 - Questions, tool names, missing flags and latency log without tool payloads. Phone-like PH numbers are withheld; credential-like questions are redacted from logs. The model receives user-bound server authorization and treats provider notes as untrusted data.
 
@@ -90,10 +91,16 @@ No schema migrations or live template edits were made. The audit contains action
 
 ## 7. Tests and deployment
 
-- Full backend: **1,305 passed**, plus 10 subtests; latest Tracker-specific checks: **97 passed** (one added after full-suite collection).
+- Full backend after the photo safeguards: **1,309 passed**, plus 10 subtests. The affected Tracker, Drive/media and driver-portal group also passed **160 tests**.
 - Full frontend browser suite: **72 passed**; includes 390 / 1440 Tracker screenshots and axe checks, English/Tagalog driver layouts, and existing Overview accessibility. No Tracker axe/contrast violations.
 - Frontend unit suite: **361 passed**.
 - TypeScript: workspace typecheck and frontend `tsc --noEmit` passed. Production Vite build passed, exit 0. Existing bundle-size / sourcemap warnings remain.
 - Regression repairs required by full checks: existing driver tests now choose pending stops explicitly; tap counts include those three choices. An existing status-zero offline error is now classified as network/queued. Time-dependent test assignments use their fixture date. Seven existing UTF-8 BOMs were removed without behavior changes.
-- Backend push: `f17208d` on `main`. Frontend is held until the deployed backend exposes Tracker and `/health` is OK, as requested.
-- The new backend API is visible in deployed OpenAPI and `/health` is OK on a new instance (post-deploy RSS sample 210.7 MB, one worker). Three today's SOs were opened read-only as Admin and their Overview trips were read: `SO26-18536`, `SO26-18520`, `SO26-18513`. All were Not yet loaded, with no departure, arrival, checkout or outcome in the comparison records. These do not validate a live delivered/partial/POD case; those states are tested with mocks. No live AI was called. Final frontend publish and browser smoke status will be recorded below.
+- Backend `main` includes photo safeguards at `3d96d42`; deployed OpenAPI confirms both Tracker and the media read-only flag, and `/health` is OK (207.7 MB RSS sample, one worker). This is a cold post-deploy sample, not a peak-memory measurement. Backend health and API availability were verified before publishing the frontend.
+- The main frontend is deployed at [Order Tracker](https://rare-logistics-frontend.rishi-315.workers.dev/app/order-tracker). The final frontend follow-up makes the photo read-only flag explicit for every Tracker role and includes an opt-in production smoke runner.
+
+Production checks on **2026-10-19** opened three real SO cards as Admin: `SO26-18536`, `SO26-18520`, `SO26-18513`. The browser confirmed **10 sections each**, no page errors, no sideways scroll and no unexpected POSTs. The latest API comparison found the first order Not yet loaded and the latter two Out for delivery; their recorded departure times matched Overview. Arrival, checkout and outcome were absent in both sources, with no comparison mismatches. GPS was unavailable in these records. These checks do not validate a live delivered/partial/POD case; those states are covered with synthetic fixtures.
+
+Payment totals, permits, PO-copy contents and customer rules are not independently exposed by Driver Overview, so this smoke check does not claim independent verification of those facts. Production screenshots remain local under `tmp/order-tracker-live-ui/`; all linked report screenshots are synthetic. No production records were sent to AI for validation.
+
+Read-only browser smoke runner: `node --experimental-strip-types artifacts/intellifleet/e2e/order-tracker.production.ts` (explicit opt-in; uses existing local admin credentials without printing them). It never submits Ask or business writes. The final targeted browser rerun passed **13/13 tests**, including authenticated proof-photo reads with `read_only=true`, mobile/desktop accessibility and Ask states. A search-test response-wait race was corrected by registering the response waiter before clicking Search.

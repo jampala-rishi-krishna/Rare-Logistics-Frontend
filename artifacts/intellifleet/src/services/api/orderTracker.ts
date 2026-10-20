@@ -22,4 +22,4 @@ export const findOrders = (filter: Filter) => api.get<{ orders: OrderRow[]; tota
 export const getOrder = (number: string, filter: Filter) => api.get<Card>(`${BASE}/orders/${encodeURIComponent(number)}`, { date_from: filter.date_from, date_to: filter.date_to });
 export const ask = (question: string, filter: Filter, order?: string) => api.post<Answer>(`${BASE}/ask`, { question, date_from: filter.date_from, date_to: filter.date_to, order }, undefined, 35000);
 export const feedback = (answer_id: string, helpful: boolean) => api.post(`${BASE}/feedback`, { answer_id, helpful });
-export const photo = (id: number) => api.download(`/api/media/${id}`).then(({ blob }) => blob);
+export const photo = (id: number) => api.download(`/api/media/${id}`, { read_only: "true" }).then(({ blob }) => blob);

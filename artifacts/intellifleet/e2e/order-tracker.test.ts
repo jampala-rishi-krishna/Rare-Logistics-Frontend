@@ -26,10 +26,18 @@ async function open(width = 390, mode = "list", role = "sales") {
       if (String(route.request().postDataJSON().question).includes("leave")) return send({ answer_id: "b".repeat(32), answer: "SO-100 left the warehouse at 8:30 AM Manila time, according to the recorded trip start.", not_recorded: false, tools: ["order_times"], sources: [{ source: "Trip start record", as_of: `${day}T08:30:00+08:00`, link: `/app/order-tracker?order=SO-100&from=${day}&to=${day}`, not_recorded: false }] });
       return send({ answer_id: "a".repeat(32), answer: "Not recorded — the receiver name was not captured. Ask Logistics to add it to the delivery form.", not_recorded: true, tools: ["delivery_result"], sources: [{ source: "Recorded stop / checkout answers", as_of: `${day}T08:30:00+08:00`, link: `/app/order-tracker?order=SO-100&from=${day}&to=${day}`, not_recorded: true }] });
     }
-    if (/\/orders\/[^/]+$/.test(url.pathname)) return send(card(mode === "list" ? "delivered" : mode));
+    if (/\/orders\/[^/]+$/.test(url.pathname)) {
+      const detail = card(mode === "list" ? "delivered" : mode);
+      if (mode === "proof") detail.sections.proof = { source: "Authenticated delivery proof", as_of: `${day}T08:30:00+08:00`, state: "recorded", message: null, value: { photos: [{ photo_id: 41, order: "SO-100", captured_at: `${day}T08:30:00+08:00`, result: "Delivered" }] } };
+      return send(detail);
+    }
     const q = url.searchParams.get("q") ?? "", status = url.searchParams.get("status");
     const filtered = rows.filter(r => (!q || r.number.includes(q)) && (!status || status === "all" || status === "problems" ? status !== "problems" || r.status === "Partly delivered" : r.status === status));
     return send({ orders: filtered, total: filtered.length, offset: 0, scope: "Exact salesperson name matches only", coverage: "Accessible cached records only." });
+  });
+  await page.route("http://mock-api.test/api/media/**", async route => {
+    queries.push(new URL(route.request().url()));
+    await route.fulfill({ contentType: "image/png", headers: { "access-control-allow-origin": "*" }, body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6lS8AAAAASUVORK5CYII=", "base64") });
   });
   await page.goto(`${BASE}/app/order-tracker${mode === "list" ? "" : `?order=SO-100&from=${day}&to=${day}`}`);
   await page.locator(".ot h1").waitFor();
@@ -56,8 +64,10 @@ test("search submits explicitly, filters work, and a card opens", async () => {
   const before = queries.length;
   await page.getByRole("textbox", { name: "Find an order", exact: true }).fill("SO-101");
   assert.equal(queries.length, before);
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await page.waitForResponse(r => r.url().includes("q=SO-101"));
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes("q=SO-101")),
+    page.getByRole("button", { name: "Search", exact: true }).click(),
+  ]);
   await page.locator(".ot-order").first().waitFor();
   assert.equal(await page.locator(".ot-order").count(), 1);
   await page.getByRole("button", { name: "Problems", exact: true }).click();
@@ -94,5 +104,12 @@ test("Wet Market sees the tab and warehouse role cannot open it", async () => {
   await page.goto(`${BASE}/app/order-tracker`);
   await page.waitForURL("**/warehouse/dashboard");
   assert.equal(await page.locator(".ot").count(), 0);
+  await context.close();
+});
+
+test("proof photo is fetched with authentication and the read-only flag", async () => {
+  const { page, context, queries } = await open(390, "proof");
+  await page.locator(".ot-proof img").waitFor();
+  assert.ok(queries.some(url => url.pathname === "/api/media/41" && url.searchParams.get("read_only") === "true"));
   await context.close();
 });
