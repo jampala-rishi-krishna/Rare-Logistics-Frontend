@@ -81,18 +81,18 @@ export const isMissing = (value: unknown): boolean =>
 
 /** Existing dispatch number (DISPATCH_PHONE setting via /auth/support). Never driver/helper phones. */
 export function useLogisticsTel(): string | null {
-  const support = useQuery({ queryKey: ["auth-support"], queryFn: getSupport, staleTime: Infinity, retry: false, refetchOnWindowFocus: false });
+  const support = useQuery({ queryKey: ["auth-support"], queryFn: getSupport, staleTime: 60000, retry: false });
   return telHref(support.data?.dispatch_phone ?? null);
 }
 
-/** "Call Logistics": a tel: link when the dispatch number is set, otherwise a disabled button that says so. */
+/** "Call Logistics": a tel: link when the dispatch number is set, hidden when no dispatch number is configured. */
 export function CallLogistics({ variant = "solid", label = "Call Logistics", iconOnly = false, className = "" }: { variant?: "solid" | "outline" | "light"; label?: string; iconOnly?: boolean; className?: string }) {
   const tel = useLogisticsTel();
   const cls = `ot-btn ot-btn-${variant}${iconOnly ? " ot-btn-icon" : ""} ${className}`;
   const body = <><Phone size={iconOnly ? 19 : 18} strokeWidth={2.2} aria-hidden="true" />{iconOnly ? null : label}</>;
   return tel
     ? <a className={cls} href={tel} aria-label={iconOnly ? label : undefined}>{body}</a>
-    : <button type="button" className={cls} disabled aria-label={`${label} - number not set up yet`} title="Logistics number not set up yet">{body}</button>;
+    : null;
 }
 
 /** Skeleton block in the shape of the content it stands in for. */

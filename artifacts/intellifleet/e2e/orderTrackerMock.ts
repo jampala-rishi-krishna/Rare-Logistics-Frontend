@@ -6,7 +6,7 @@ import { BASE } from "./harness.ts";
 import { installMocks } from "./mockApi.ts";
 import type { Recorder } from "./mockApi.ts";
 import { DAY, NOW, designAnswer, designCard, designList, salesUser } from "./fixtures/orderTrackerDesign.ts";
-import type { Card, OrderList } from "../src/services/api/orderTracker.ts";
+import type { Answer, Card, OrderList } from "../src/services/api/orderTracker.ts";
 
 /** A small solid-colour PNG (stands in for a delivery photo so thumbnails are visible in screenshots). */
 function solidPng(w: number, h: number, [r, g, b]: [number, number, number]): Buffer {
@@ -37,6 +37,8 @@ export interface TrackerOptions {
   /** Replace the list response. */
   list?: (params: URLSearchParams) => OrderList;
   askDelayMs?: number;
+  answer?: (question: string) => Answer;
+  dispatchPhone?: string | null;
   /** Body served for /api/media/<id> (default: a small solid-colour PNG). */
   media?: (id: number) => { body: Buffer; contentType: string };
   waitFor?: "list" | "card" | "phone" | "ask" | "none";
@@ -67,6 +69,7 @@ export async function openTracker(browser: Browser, opts: TrackerOptions = {}): 
   const mediaAuth: Array<string | undefined> = [];
   let askFails = false;
   const recorder = await installMocks(page, { session: { user: { ...salesUser, role: opts.role ?? "sales" } } });
+  if (opts.dispatchPhone !== undefined) await page.route("http://mock-api.test/auth/support", route => route.fulfill({ contentType: "application/json", headers: CORS, body: JSON.stringify({ dispatch_phone: opts.dispatchPhone }) }));
   await page.route("http://mock-api.test/api/order-tracker/**", async route => {
     const req = route.request();
     const url = new URL(req.url());
@@ -77,7 +80,8 @@ export async function openTracker(browser: Browser, opts: TrackerOptions = {}): 
     if (url.pathname.endsWith("/ask")) {
       await new Promise(r => setTimeout(r, opts.askDelayMs ?? 400));
       if (askFails) return send({ detail: "The Ask service is unavailable. Use the Order card." }, 400);
-      return send(designAnswer(String(req.postDataJSON()?.question ?? "")));
+      const question = String(req.postDataJSON()?.question ?? "");
+      return send(opts.answer ? opts.answer(question) : designAnswer(question));
     }
     const one = /\/orders\/([^/]+)$/.exec(url.pathname);
     if (one) {

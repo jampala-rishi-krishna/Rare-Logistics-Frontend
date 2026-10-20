@@ -123,6 +123,12 @@
   .otq-send { flex: 1 1 100%; }
   .otq-foot-src { flex-basis: 100%; }
 }
+.otq-markdown { overflow-wrap: anywhere; line-height: 1.6; }
+.otq-markdown > p:first-child { font-size: 20px; font-weight: 600; }
+.otq-markdown p + p, .otq-markdown ul, .otq-markdown ol { margin-top: 12px; }
+.otq-markdown ul { list-style: disc; padding-left: 24px; }
+.otq-markdown ol { list-style: decimal; padding-left: 24px; }
+.otq-markdown strong { font-weight: 700; }
 .otq-card-dashed .otq-foot-bare { margin-top: 0; }
 .otq-foot-compact { margin-top: 14px; padding-top: 0; border-top: 0; }
 .otq-foot-compact .otq-votes { margin: -12px 0; }

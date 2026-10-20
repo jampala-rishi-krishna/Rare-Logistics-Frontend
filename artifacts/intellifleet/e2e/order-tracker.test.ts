@@ -11,6 +11,50 @@ let browser: Browser;
 before(async () => { await startServer(); browser = await launch(); });
 after(async () => { await browser?.close(); stopServer(); });
 
+test("Ask renders safe English Markdown and a dated buyers summary with bars only", async () => {
+  const view = await openTracker(browser, { query: "?view=ask", answer: q => ({
+    answer_id: "a".repeat(32), language: "en", not_recorded: false, tools: [], sources: [],
+    answer: q.includes("SKU") ? "Buyer counts for **October 16, 2026**.\n\nDuplicate item counts must not appear." :
+      "**SO26-18452** is on the way.\n\n- **Truck:** NAJ 6018\n- Second item\n\nFirst line\nSecond line\n\n<img src=x onerror=alert(1)>",
+    blocks: q.includes("SKU") ? [{ type: "bars", title: "Buyers per SKU", unit: "buyers", source: "Cached orders", as_of: null,
+      items: [{ label: "Pork belly 5 kg (RGF-P016)", value: 2 }, { label: "Fish (FISH-1)", value: 1 }] }] : []
+  }) });
+  const { page } = view;
+  await page.locator("#otq-input").fill("Where is the truck for SO26-18452?");
+  await page.locator(".otq-send").click();
+  await page.locator(".otq-card strong").first().waitFor();
+  assert.equal(await page.locator(".otq-card strong").first().innerText(), "SO26-18452");
+  assert.equal(await page.locator(".otq-card li").count(), 2);
+  assert.ok(await page.locator(".otq-card br").count());
+  assert.equal(await page.locator(".otq-card img").count(), 0);
+  assert.ok(!(await page.locator(".otq-card").innerText()).includes("**"));
+  await page.locator("#otq-input").fill("Buyers per SKU tomorrow");
+  await page.locator(".otq-send").click();
+  await page.locator(".otq-bars").waitFor();
+  const card = page.locator(".otq-turn").last();
+  assert.match(await card.innerText(), /October 16, 2026/);
+  assert.ok(!(await card.innerText()).includes("Duplicate item counts"));
+  assert.match(await card.innerText(), /2 buyers/);
+  assert.match(await card.innerText(), /1 buyer(?!s)/);
+  assert.equal((await card.innerText()).match(/Pork belly 5 kg \(RGF-P016\)/g)?.length, 1);
+  await view.context.close();
+});
+
+test("Call Logistics uses dispatch settings and is hidden when unset", async () => {
+  for (const phone of ["0285550100", null]) {
+    const view = await openTracker(browser, { query: orderUrl("SO26-18452"), dispatchPhone: phone });
+    if (phone) {
+      const link = view.page.getByRole("link", { name: "Call Logistics", exact: true });
+      await link.waitFor();
+      assert.equal(await link.getAttribute("href"), "tel:0285550100");
+    } else {
+      assert.equal(await view.page.getByRole("button", { name: /Call Logistics/ }).count(), 0);
+      assert.equal(await view.page.getByRole("link", { name: /Call Logistics/ }).count(), 0);
+    }
+    await view.context.close();
+  }
+});
+
 async function axe(page: Page, label: string) {
   const result = await new AxeBuilder({ page }).include(".ot").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   assert.deepEqual(result.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) })), [], label);

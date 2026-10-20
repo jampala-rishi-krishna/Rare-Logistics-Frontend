@@ -8,6 +8,7 @@ import type { Answer, AnswerBlock, Filter } from "@/services/api/orderTracker";
 import { SectionError, Skeleton, hhmm } from "./ui";
 import { AnswerBlocks, NotRecorded, headlineChip, safeLink } from "./AnswerBlocks";
 import "./ask.css";
+import { SafeMarkdown } from "./SafeMarkdown";
 
 const MIN = 3, MAX = 1000;
 
@@ -50,7 +51,7 @@ function AnswerCard({ turn, onOpenOrder, onVote }: { turn: Turn; onOpenOrder: (n
   const notRecorded = blocks.filter((b): b is Extract<AnswerBlock, { type: "not_recorded" }> => b.type === "not_recorded");
   const whole = notRecorded.length > 0 && notRecorded.length === blocks.length;
   const chip = headlineChip(blocks);
-  const lang = answer.language === "tl" ? "tl" : undefined;
+  const lang = "en";
 
   // Answers that list orders keep the divided footer of the design; short answers (tiles, bars) keep the source line
   // directly under the content with the feedback buttons beside it.
@@ -78,8 +79,8 @@ function AnswerCard({ turn, onOpenOrder, onVote }: { turn: Turn; onOpenOrder: (n
     </div>;
   }
   return <div className="otq-card" lang={lang}>
-    <div className="otq-head">{chip}<p className="otq-headline">{headline || "No answer text was returned."}</p></div>
-    {rest && <p className="otq-rest">{rest}</p>}
+    {chip && <div className="otq-head">{chip}</div>}
+    <div className="otq-markdown"><SafeMarkdown text={(blocks.some(b => b.type === "bars") ? headline : answer.answer) || "No answer text was returned."} /></div>
     {answer.not_recorded && !notRecorded.length && <p className="otq-note">Some information is not recorded or available. Check the source details below.</p>}
     <AnswerBlocks blocks={blocks} headline={headline} footerSources={names} onOpenOrder={onOpenOrder} />
     {footer}

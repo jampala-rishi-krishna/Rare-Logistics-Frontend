@@ -191,7 +191,7 @@ export default function OrderTracker() {
           // Counts for every filter come in the same list response (older backends: active filter only).
           const n = list.data?.counts?.[key] ?? (active ? list.data?.total : undefined);
           return <button type="button" key={key} className={`ot-q${active ? " ot-q-on" : ""}`} aria-pressed={active}
-            onClick={() => { setStatus(key); setOffset(0); if (key === "all") { setFrom(today); setTo(today); } }}>
+            onClick={() => { setStatus(key); setOffset(0); }}>
             {title}{n !== undefined ? <span className={`ot-q-n ot-q-n-${tone}`}>{n}</span> : null}
           </button>;
         })}

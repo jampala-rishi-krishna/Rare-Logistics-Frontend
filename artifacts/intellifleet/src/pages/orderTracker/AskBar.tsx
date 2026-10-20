@@ -23,11 +23,11 @@ export function AskBar({ onAsk }: { onAsk: (question: string) => void }) {
   }
   return <section className="ota" aria-label="Ask about any order">
     <form onSubmit={e => { e.preventDefault(); send(question); }}>
-      <label className="ota-label" htmlFor="ota-question"><MessageCircleQuestion size={18} aria-hidden="true" />Ask about any order — English or Tagalog</label>
+      <label className="ota-label" htmlFor="ota-question"><MessageCircleQuestion size={18} aria-hidden="true" />Ask about any order — English</label>
       <div className="ota-row">
         <input id="ota-question" className="ota-input" type="text" value={question} maxLength={1000} autoComplete="off"
           onChange={e => setQuestion(e.target.value)}
-          placeholder="e.g. Was my order paid in full?  ·  Nasaan na ang truck ko?" />
+          placeholder="e.g. Was my order paid in full?  ·  Where is my truck now?" />
         <button className="ota-send" type="submit" disabled={!ready}><Send size={20} strokeWidth={2.2} aria-hidden="true" />Ask</button>
       </div>
     </form>

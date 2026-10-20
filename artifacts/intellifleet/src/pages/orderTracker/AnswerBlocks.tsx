@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import { Camera, CircleHelp } from "lucide-react";
 import type { AnswerBlock } from "@/services/api/orderTracker";
 import { CallLogistics, Chip, SourceLine, StatusChip } from "./ui";
+import { SafeMarkdown } from "./SafeMarkdown";
 import "./ask.css";
 
 type Block<K extends AnswerBlock["type"]> = Extract<AnswerBlock, { type: K }>;
@@ -64,7 +65,7 @@ function Bars({ block, headline, footerSources }: { block: Block<"bars">; headli
       return <li className="otq-bar" key={`${item.label}-${i}`}>
         <span className="otq-bar-label">{item.label}</span>
         <span className="otq-bar-track" aria-hidden="true"><span className="otq-bar-fill" style={{ width: `${pct}%` }} /></span>
-        <span className="otq-bar-value">{item.value.toLocaleString("en-PH")} {block.unit}</span>
+        <span className="otq-bar-value">{item.value.toLocaleString("en-PH")} {block.unit === "buyers" && item.value === 1 ? "buyer" : block.unit}</span>
       </li>;
     })}</ul>
     <BlockSource source={block.source} asOf={block.as_of} footerSources={footerSources} />
@@ -79,7 +80,7 @@ export function NotRecorded({ block, extra, whole = false }: { block: Block<"not
     <div className="otq-nr-body">
       <Title className="otq-headline">{block.title}</Title>
       <p className="otq-nr-msg">{block.message}</p>
-      {extra && <p className="otq-nr-msg">{extra}</p>}
+      {extra && <p className="otq-nr-msg"><SafeMarkdown text={extra} inlineOnly /></p>}
       <div className="otq-actions"><CallLogistics label="Ask Logistics" className="otq-btn-ink" /></div>
     </div>
   </div>;
