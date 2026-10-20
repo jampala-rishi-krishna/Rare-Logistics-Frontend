@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { groupByCrew, rowCrew, type BoardMode } from "@/lib/overviewCrew";
+import { rowCrew, type BoardMode } from "@/lib/overviewCrew";
 import type { TripRow, TripsResponse } from "@/services/api/overview";
 import {
   durationText,
@@ -60,6 +60,15 @@ export default function TripsTab({
 }) {
   const rows = sortTrips(query.data?.trips ?? []);
   const [board, setBoard] = useState<BoardMode>("driver");
+  const tableRows = [...rows].sort((a, b) => {
+    const name = (r: TripRow) =>
+      board === "driver"
+        ? (rowCrew(r).driver?.name ?? "")
+        : rowCrew(r)
+            .helpers.map((h) => h.name)
+            .join(", ");
+    return name(a).localeCompare(name(b));
+  });
   const open = (r: TripRow) =>
     set({
       trip: r.batch_id,
@@ -71,7 +80,7 @@ export default function TripsTab({
     });
   const outcome = (r: TripRow) => {
     const o = outcomesOf(r);
-    return `${o.delivered} delivered ? ${o.partial} partial ? ${o.failed} not delivered`;
+    return `${o.delivered} delivered \u00b7 ${o.partial} partial \u00b7 ${o.failed} not delivered`;
   };
   return (
     <section className="grid min-w-0 gap-3" data-testid="trips-tab">
@@ -102,7 +111,7 @@ export default function TripsTab({
         <div className="rounded-lg border border-border p-6 text-center">
           <h2 className="font-semibold">No trips match these filters</h2>
           <p className="my-2 text-sm text-muted-foreground">
-            {filters.join(" ? ")}
+            {filters.join(" \u00b7 ")}
           </p>
           <button
             className={buttonClass}
@@ -114,107 +123,85 @@ export default function TripsTab({
           </button>
         </div>
       ) : (
-        groupByCrew(rows, board).map((g) => (
-          <div
-            key={g.key}
-            className="grid min-w-0 gap-2"
-            data-testid={`${board}-group`}
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table
+            className="w-full whitespace-nowrap text-left text-xs"
+            aria-label={board === "driver" ? "Driver trips" : "Helper trips"}
           >
-            <h2 className="flex flex-wrap items-baseline gap-2 font-semibold">
-              {g.person ? (
-                <CallLink
-                  name={g.person.name}
-                  role={board}
-                  phone={g.person.phone}
-                />
-              ) : (
-                g.label
-              )}
-              <span className="text-xs font-normal text-muted-foreground">
-                {g.rows.length} trip{g.rows.length === 1 ? "" : "s"}
-              </span>
-            </h2>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table
-                className="w-full whitespace-nowrap text-left text-xs"
-                aria-label={`${g.label} trips`}
-              >
-                <thead className="bg-muted">
-                  <tr>
-                    {[
-                      "Date",
-                      "Driver",
-                      "Helper",
-                      "Vehicle",
-                      "Status",
-                      "SOs",
-                      "Done",
-                      "Weight",
-                      "Packs",
-                      "Outcomes",
-                      "Trip length",
-                      "Started",
-                    ].map((h) => (
-                      <th key={h} className="p-3">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.rows.map((r) => (
-                    <tr
-                      key={r.batch_id}
-                      tabIndex={0}
-                      onClick={() => open(r)}
-                      onKeyDown={(e) => {
-                        if (e.target !== e.currentTarget) return;
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          open(r);
-                        }
-                      }}
-                      className={`cursor-pointer border-t border-border hover:bg-muted ${focusRing}`}
-                      data-testid="trip-row"
-                      aria-label={`Open ${r.vehicle ?? "truck"}, Trip ${r.trip_number}`}
-                    >
-                      {[
-                        r.date,
-                        rowCrew(r).driver?.name ?? "?",
-                        rowCrew(r)
-                          .helpers.map((h) => h.name)
-                          .join(", ") || "?",
-                        `${r.vehicle} ? Trip ${r.trip_number} of ${r.trips_on_date}`,
-                        tileLabel(tileOf(r)),
-                        r.so_count,
-                        r.stops_done,
-                        formatKg([r])?.text,
-                        r.packs ?? "?",
-                        outcome(r),
-                        durationText(r.duration_minutes ?? r.trip_minutes),
-                        manilaDateTime(r.started_at),
-                      ].map((v, i) => (
-                        <td key={i} className="p-3">
-                          {i === 3 ? (
-                            <button
-                              type="button"
-                              className="min-h-11 underline-offset-2 hover:underline"
-                              aria-label={`Open ${r.vehicle ?? "truck"}, Trip ${r.trip_number}`}
-                            >
-                              {v}
-                            </button>
-                          ) : (
-                            v
-                          )}
-                        </td>
-                      ))}
-                    </tr>
+            <thead className="bg-muted">
+              <tr>
+                {[
+                  "Date",
+                  "Driver",
+                  "Helper",
+                  "Vehicle",
+                  "Status",
+                  "SOs",
+                  "Done",
+                  "Weight",
+                  "Packs",
+                  "Outcomes",
+                  "Trip length",
+                  "Started",
+                ].map((h) => (
+                  <th key={h} className="p-3">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((r) => (
+                <tr
+                  key={r.batch_id}
+                  tabIndex={0}
+                  onClick={() => open(r)}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      open(r);
+                    }
+                  }}
+                  className={`cursor-pointer border-t border-border hover:bg-muted ${focusRing}`}
+                  data-testid="trip-row"
+                  aria-label={`Open ${r.vehicle ?? "truck"}, Trip ${r.trip_number}`}
+                >
+                  {[
+                    r.date,
+                    rowCrew(r).driver?.name ?? "\u2014",
+                    rowCrew(r)
+                      .helpers.map((h) => h.name)
+                      .join(", ") || "\u2014",
+                    `${r.vehicle} \u00b7 Trip ${r.trip_number} of ${r.trips_on_date}`,
+                    tileLabel(tileOf(r)),
+                    r.so_count,
+                    r.stops_done,
+                    formatKg([r])?.text,
+                    r.packs ?? "\u2014",
+                    outcome(r),
+                    durationText(r.duration_minutes ?? r.trip_minutes),
+                    manilaDateTime(r.started_at),
+                  ].map((v, i) => (
+                    <td key={i} className={i === 3 ? "px-3 py-0" : "p-3"}>
+                      {i === 3 ? (
+                        <button
+                          type="button"
+                          className="min-h-11 underline-offset-2 hover:underline"
+                          aria-label={`Open ${r.vehicle ?? "truck"}, Trip ${r.trip_number}`}
+                        >
+                          {v}
+                        </button>
+                      ) : (
+                        v
+                      )}
+                    </td>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {!isRange(state) && state.date === today && (
         <details className="rounded-lg border border-border p-3">
@@ -234,7 +221,7 @@ export default function TripsTab({
                   <td className="p-2">
                     <CallLink name={p.name} phone={p.phone} />
                   </td>
-                  <td className="p-2">{p.warehouse ?? "?"}</td>
+                  <td className="p-2">{p.warehouse ?? "\u2014"}</td>
                 </tr>
               ))}
             </tbody>

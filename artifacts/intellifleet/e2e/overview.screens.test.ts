@@ -61,7 +61,9 @@ describe("Driver Overview v2 manager workflows", () => {
     assert.equal(await page.locator("article[data-testid=trip-row]").count(), 0);
     assert.equal(await page.getByRole("button", { name: "Table view" }).count(), 0);
     await page.getByTestId("board-mode-helper").click();
-    assert.ok(await page.locator("[data-testid=helper-group] table").count());
+    assert.equal(await page.getByRole("table", { name: "Helper trips", exact: true }).count(), 1);
+    assert.equal(await page.getByRole("columnheader", { name: "Vehicle", exact: true }).count(), 1);
+    assert.equal(await page.getByTestId("helper-group").count(), 0);
     await page.getByRole("button", { name: "Open TRK-2002, Trip 1", exact: true }).click();
     const drawer = page.getByTestId("trip-drawer");
     await drawer.getByRole("button", { name: "Received", exact: true }).waitFor();
