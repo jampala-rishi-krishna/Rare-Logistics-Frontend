@@ -56,7 +56,7 @@
 .otp-tone-positive svg { color: hsl(var(--status-success)); }
 .otp-tone-warning svg { color: hsl(var(--status-warning)); }
 .otp-tone-unknown svg { color: hsl(var(--muted-foreground)); }
-.otp-tile-word { margin-top: 8px; font-size: 22px; font-weight: 800; line-height: 1.2; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.otp-tile-word { margin-top: 8px; font-size: 22px; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; overflow-wrap: normal; word-break: normal; hyphens: none; }
 .otp-word-positive { color: hsl(var(--status-success)); }
 .otp-word-warning { color: hsl(var(--status-warning)); }
 .otp-word-unknown { color: hsl(var(--muted-foreground)); }
@@ -65,6 +65,7 @@
 .otp-rules { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
 .otp-rules li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.35; }
 .otp-rules svg { flex: none; margin-top: 1px; }
+.otp-rules li, .otp-step-text > div, .otp-where-main, .otp-tile-head b { min-width: 0; }
 .otp-unverified { margin-top: 10px !important; display: inline-block; font-size: 12px; font-weight: 700; color: hsl(var(--status-warning)); background: hsl(var(--warning-bg)); border-radius: 8px; padding: 3px 8px; }
 .otp-proof-grid { margin-top: 12px; }
 

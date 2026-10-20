@@ -8,3 +8,6 @@ dist/
 *.log
 .cache/
 artifacts/intellifleet/e2e/.results/
+
+# Order Tracker production smoke screenshots contain real customer data - keep local only
+artifacts/intellifleet/e2e/screenshots/order-tracker/production/

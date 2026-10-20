@@ -52,7 +52,10 @@ function AnswerCard({ turn, onOpenOrder, onVote }: { turn: Turn; onOpenOrder: (n
   const chip = headlineChip(blocks);
   const lang = answer.language === "tl" ? "tl" : undefined;
 
-  const footer = <div className={names.length || linked.length ? "otq-foot" : "otq-foot otq-foot-bare"}>
+  // Answers that list orders keep the divided footer of the design; short answers (tiles, bars) keep the source line
+  // directly under the content with the feedback buttons beside it.
+  const listy = blocks.some(b => b.type === "order_table" || b.type === "actions");
+  const footer = <div className={names.length || linked.length ? (listy ? "otq-foot" : "otq-foot otq-foot-compact") : "otq-foot otq-foot-bare"}>
     <div className="otq-foot-src">
       {names.length > 0 && <p className="ot-src">{names.length > 1 ? "Sources" : "Source"}: {names.join(" · ")} · as of {hhmm(asOf)}{sources.some(s => s.not_recorded) ? " · some facts not recorded" : ""}</p>}
       {linked.length > 0 && <p className="otq-links"><span>Open record:</span>{linked.map((s, i) => <button type="button" key={`${s.source}-${i}`} className="otq-link" onClick={() => navigate(safeLink(s.link)!)}>{s.source}</button>)}</p>}
@@ -66,7 +69,9 @@ function AnswerCard({ turn, onOpenOrder, onVote }: { turn: Turn; onOpenOrder: (n
 
   if (whole) {
     const extra = [headline, rest].filter(Boolean).join(" ");
-    const showExtra = extra && !notRecorded.some(b => b.message.trim() === extra.trim() || b.title.trim() === extra.trim());
+    // The answer text usually repeats the block ("Not recorded. <message>"): show it only when it adds something.
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const showExtra = extra && !notRecorded.some(b => { const e = norm(extra); return e === norm(b.message) || e === norm(b.title) || e === norm(`${b.title} ${b.message}`) || norm(b.message).includes(e) || e.includes(norm(b.message)); });
     return <div className="otq-card otq-card-dashed" lang={lang}>
       {notRecorded.map((b, i) => <NotRecorded key={i} block={b} whole extra={i === 0 && showExtra ? extra : undefined} />)}
       {footer}

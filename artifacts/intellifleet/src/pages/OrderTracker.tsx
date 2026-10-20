@@ -31,6 +31,9 @@ function latest(list: tracker.OrderList | undefined): string | null {
   return best;
 }
 
+/** Jump (not the page's smooth scroll): restoring a position should not animate through the list. */
+function jump(y: number) { window.scrollTo({ top: y, left: 0, behavior: "instant" as ScrollBehavior }); }
+
 function useMedia(query: string): boolean {
   const subscribe = useCallback((notify: () => void) => { const m = window.matchMedia(query); m.addEventListener("change", notify); return () => m.removeEventListener("change", notify); }, [query]);
   return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => false);
@@ -73,11 +76,25 @@ export default function OrderTracker() {
     return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", key); };
   }, [dateOpen]);
 
+  // The tracker restores the list position itself; the browser's own restore on Back would race it and win.
+  useEffect(() => {
+    if (!("scrollRestoration" in window.history)) return;
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => { window.history.scrollRestoration = previous; };
+  }, []);
+
   // Phone: returning from one order to the list restores where the user was in the list.
   useLayoutEffect(() => {
     if (selected || view === "ask") return;
     const y = listScroll.current;
-    if (y !== null) { window.scrollTo(0, y); requestAnimationFrame(() => window.scrollTo(0, y)); listScroll.current = null; }
+    if (y === null) return;
+    listScroll.current = null;
+    jump(y);
+    // The list may still be laying out (slow phone): re-apply for a few frames until the position holds.
+    let frames = 0;
+    const settle = () => { if (Math.abs(window.scrollY - y) > 1 && frames++ < 20) { jump(y); requestAnimationFrame(settle); } };
+    requestAnimationFrame(settle);
   }, [selected, view]);
 
   // Narrow desktop/tablet: the columns stack, so bring the opened card into view.
@@ -91,7 +108,7 @@ export default function OrderTracker() {
   const hrefFor = (number: string) => `${BASE_PATH}?order=${encodeURIComponent(number)}${range}`;
   function shift(days: number) { const d = new Date(`${from}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); const ymd = d.toISOString().slice(0, 10); setFrom(ymd); setTo(ymd); setOffset(0); }
   function open(number: string) {
-    if (phone) { listScroll.current = window.scrollY; window.scrollTo(0, 0); }
+    if (phone) { listScroll.current = window.scrollY; jump(0); }
     pushedFromList.current = !selected && view !== "ask";
     navigate(hrefFor(number));
   }
@@ -103,7 +120,7 @@ export default function OrderTracker() {
   function openAsk(question: string | undefined, order?: string | null) {
     pushedFromList.current = false;
     setSeed(prev => question ? { question, id: (prev?.id ?? 0) + 1 } : null);
-    window.scrollTo(0, 0);
+    jump(0);
     navigate(`${BASE_PATH}?view=ask${order ? `&order=${encodeURIComponent(order)}` : ""}${range}`);
   }
   function leaveAsk() { if (askOrder) navigate(hrefFor(askOrder)); else back(); }
@@ -171,9 +188,11 @@ export default function OrderTracker() {
       <div className="ot-quick" role="group" aria-label="Quick filters">
         {QUICK.map(([key, title, tone]) => {
           const active = status === key;
+          // Counts for every filter come in the same list response (older backends: active filter only).
+          const n = list.data?.counts?.[key] ?? (active ? list.data?.total : undefined);
           return <button type="button" key={key} className={`ot-q${active ? " ot-q-on" : ""}`} aria-pressed={active}
             onClick={() => { setStatus(key); setOffset(0); if (key === "all") { setFrom(today); setTo(today); } }}>
-            {title}{active && list.data ? <span className={`ot-q-n ot-q-n-${tone}`}>{list.data.total}</span> : null}
+            {title}{n !== undefined ? <span className={`ot-q-n ot-q-n-${tone}`}>{n}</span> : null}
           </button>;
         })}
       </div>

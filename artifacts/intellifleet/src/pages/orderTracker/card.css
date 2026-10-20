@@ -19,7 +19,7 @@
 /* journey */
 .otk-block { padding: 24px 28px; border-bottom: 1px solid hsl(var(--border)); display: flex; flex-direction: column; }
 .otk-block-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.otk-h3 { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.3; }
+.otk-h3 { margin: 0; font-size: 18px; font-weight: 800; }
 .otk-steps { margin: 18px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .otk-step { min-width: 0; padding-right: 8px; }
 .otk-track { display: flex; align-items: center; }
@@ -32,7 +32,7 @@
 .otk-line-ink { background: hsl(var(--foreground)); }
 .otk-step-label { display: block; margin-top: 10px; font-size: 15px; font-weight: 700; }
 .otk-step-todo .otk-step-label { color: hsl(var(--foreground)); }
-.otk-step-time { margin-top: 2px; font-size: 20px; font-weight: 800; line-height: 1.25; }
+.otk-step-time { margin-top: 2px; font-size: 20px; font-weight: 800; }
 .otk-now { color: hsl(var(--info)); }
 .otk-step-sub { font-size: 13px; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
 
@@ -51,8 +51,9 @@
 .otk-cell-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .otk-cell-chip { margin-left: auto; }
 .otk-count { font-size: 13px; font-weight: 700; }
-.otk-cell-body { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
-.otk-cell-foot { margin-top: 12px; }
+/* Source line follows the content directly (design), it is not pinned to the bottom of the grid row. */
+.otk-cell-body { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.otk-cell-foot { margin-top: 10px; }
 
 .otk-outcome { font-size: 16px; font-weight: 700; }
 .otk-missing { font-size: 15px; color: hsl(var(--muted-foreground)); line-height: 1.5; }
@@ -75,10 +76,12 @@
 .otk-note-warning { background: hsl(var(--warning-bg)); color: hsl(var(--status-warning)); }
 .otk-note-positive { background: hsl(var(--success-bg)); color: hsl(var(--status-success)); }
 .otk-note-unknown { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+.otk-note-neutral { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
 
 .otk-docs { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .otk-doc { display: flex; align-items: center; gap: 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 12px 14px; }
 .otk-doc svg { flex: none; }
+.otk-doc > div, .otk-problem > div, .otk-receiver > span, .otk-rules li, .otk-title-row, .otk-cell-head > .otk-h3 { min-width: 0; }
 .otk-doc b { font-size: 15px; }
 .otk-doc-missing { border: 1.5px dashed hsl(var(--line-strong)); }
 .otk-doc-problem { border-color: hsl(var(--destructive) / .4); }

@@ -1,7 +1,7 @@
 /* Order list column. Colours: index.css tokens only. */
 .otl { flex: 1 1 400px; min-width: 0; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 20px; overflow: hidden; }
 .otl-head { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid hsl(var(--border)); }
-.otl-count { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0; line-height: 1.3; }
+.otl-count { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0; }
 .otl-sort { font-size: 13px; color: hsl(var(--muted-foreground)); font-weight: 600; white-space: nowrap; }
 .otl-rows { list-style: none; margin: 0; padding: 0; }
 .otl-rows > li + li { border-top: 1px solid hsl(var(--border)); }
@@ -14,12 +14,13 @@ a.otl-row:focus-visible { outline: 2px solid hsl(var(--foreground)); outline-off
 .otl-skel .otl-side { display: grid; gap: 10px; justify-items: end; }
 .otl-main { flex: 1; min-width: 0; }
 .otl-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.otl-num { font-size: 16px; font-weight: 700; line-height: 1.35; }
-.otl-cust { font-size: 15px; font-weight: 600; margin-top: 3px; line-height: 1.35; overflow-wrap: anywhere; }
-.otl-meta { font-size: 13px; color: hsl(var(--muted-foreground)); margin-top: 3px; line-height: 1.4; overflow-wrap: anywhere; }
-.otl-side { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 8px; text-align: right; flex: none; }
+.otl-num { font-size: 16px; font-weight: 700; }
+.otl-cust { font-size: 15px; font-weight: 600; margin-top: 3px; overflow-wrap: anywhere; }
+.otl-meta { font-size: 13px; color: hsl(var(--muted-foreground)); margin-top: 3px; overflow-wrap: anywhere; }
+/* Design: payment chip on top, the update age 8px under it; an age on its own sits mid-row. */
+.otl-side { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-start; gap: 8px; text-align: right; flex: none; }
 .otl-side > .otc { margin-top: 1px; }
-.otl-side > .otl-ago:only-child { margin-top: auto; margin-bottom: 2px; }
+.otl-side > .otl-ago:only-child { margin: auto 0; }
 .otl-ago { font-size: 12px; color: hsl(var(--muted-foreground)); white-space: nowrap; }
 .otl-foot { padding: 6px 20px; border-top: 1px solid hsl(var(--border)); display: flex; justify-content: center; align-items: center; gap: 12px; }
 .otl-more { min-height: 44px; border: 0; background: transparent; color: hsl(var(--foreground)); font-family: inherit; font-size: 15px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 0 8px; }

@@ -1,14 +1,18 @@
 /* Order Tracker page layout (approved design: docs/design/order-tracker/). Colours: index.css tokens only.
    The AppShell <main> already pads 16px / 28px, so .ot adds only the difference to reach the design's 32px gutter. */
-.ot { max-width: 1440px; margin: 0 auto; padding: 4px 4px 32px; color: hsl(var(--foreground)); font-family: var(--app-font-sans); font-variant-numeric: tabular-nums; }
+.ot { max-width: 1440px; margin: 0 auto; padding: 4px 4px 32px; color: hsl(var(--foreground)); font-family: var(--app-font-sans); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .ot *, .ot *::before, .ot *::after { box-sizing: border-box; }
+/* Free text from records (SO notes with WorkDrive URLs, e-mail addresses, long customer names, problem descriptions,
+   answer text, table cells) must wrap inside its card: break long unbroken strings only where they would overflow. */
+.ot { overflow-wrap: anywhere; }
+.ot .ot-text { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
 .ot button { font-family: inherit; }
 .ot button:focus-visible, .ot input:focus-visible, .ot a:focus-visible { outline: 2px solid hsl(var(--foreground)); outline-offset: 2px; }
 
 /* 1. Title row */
 .ot-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
-.ot-title h1 { margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
-.ot-title p { margin: 6px 0 0; font-size: 17px; font-weight: 500; color: hsl(var(--muted-foreground)); line-height: 1.4; }
+.ot-title h1 { margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+.ot-title p { margin: 6px 0 0; font-size: 17px; font-weight: 500; color: hsl(var(--muted-foreground)); }
 .ot-live { display: flex; align-items: center; gap: 4px; margin-bottom: -10px; }
 .ot-live-text { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); white-space: nowrap; }
 .ot-dot { width: 8px; height: 8px; border-radius: 50%; background: hsl(var(--status-success)); flex: none; }

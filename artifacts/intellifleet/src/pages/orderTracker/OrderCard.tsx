@@ -59,13 +59,23 @@ function StepDot({ state }: { state: JourneyStep["state"] }) {
   );
 }
 
+/** The later of two ISO stamps (either may be missing). */
+function later(a: string | null, b: string | null): string | null {
+  const ta = a ? new Date(a).getTime() : NaN, tb = b ? new Date(b).getTime() : NaN;
+  if (Number.isNaN(ta)) return Number.isNaN(tb) ? null : b;
+  return Number.isNaN(tb) || ta >= tb ? a : b;
+}
+
 function Journey({ v }: { v: OrderView }) {
   const steps = v.journey;
+  // One source line for the journey + location (the design's "Source: helper app · Cartrack GPS · as of 13:42").
+  const sources = [v.journeySource, v.location.source].filter((s, i, all) => !!s && all.indexOf(s) === i).join(" · ");
+  const asOf = later(v.journeyAsOf, v.location.asOf);
   return (
     <div className="otk-block otk-journey">
       <div className="otk-block-head">
         <h3 className="otk-h3">Journey</h3>
-        <SourceLine source={`Source: ${v.journeySource}`} asOf={v.journeyAsOf ?? undefined} />
+        <SourceLine source={`Source: ${sources}`} asOf={asOf ?? undefined} />
       </div>
       <ol className="otk-steps">
         {steps.map((s, i) => {
@@ -96,7 +106,6 @@ function Journey({ v }: { v: OrderView }) {
           ))}
         </div>
       </div>
-      <SourceLine source={`Location: ${v.location.source}`} asOf={v.location.asOf ?? undefined} />
     </div>
   );
 }
@@ -146,7 +155,7 @@ function Proof({ v }: { v: OrderView }) {
   const n = p.photos.length;
   return (
     <Section icon={<Camera {...ICON} />} title="Proof of delivery" chip={n ? <span className="otk-count">{n} photo{n === 1 ? "" : "s"}</span> : undefined}
-      foot={<SourceLine source={`Source: ${p.source}`} asOf={p.asOf ?? undefined}>{n ? " · photo times are checkout time; capture metadata may differ" : null}</SourceLine>}>
+      foot={<SourceLine source={`Source: ${p.source}`} asOf={p.asOf ?? undefined}>{n ? " · photo times are checkout time" : null}</SourceLine>}>
       <ProofPhotos photos={p.photos} variant="desk" emptyHint="No photos yet" />
       {!n && p.message && <p className="otk-small-muted">{explain(p.message)}</p>}
     </Section>
@@ -156,7 +165,6 @@ function Proof({ v }: { v: OrderView }) {
 function Payment({ v }: { v: OrderView }) {
   const p = v.payment;
   const owing = p.balance && p.balance !== "₱0";
-  const boxTone = p.status === "Unknown" ? "unknown" : p.matches === false || p.status !== "Paid" ? "warning" : "positive";
   return (
     <Section icon={<CreditCard {...ICON} />} tone={p.tone} title="Payment" chip={<PaymentChip status={p.status} size="md" />}
       foot={<SourceLine source={`Source: ${p.source}`} asOf={p.asOf ?? undefined} />}>
@@ -165,7 +173,7 @@ function Payment({ v }: { v: OrderView }) {
         <div><div className="otk-money-label">Paid</div><div className={`otk-money-value${p.paid ? " otk-pos" : " otk-muted"}`}>{p.paid ?? "—"}</div></div>
         <div><div className="otk-money-label">Balance</div><div className={`otk-money-value${!p.balance ? " otk-muted" : owing ? " otk-neg" : ""}`}>{p.balance ?? "—"}</div></div>
       </div>
-      <p className={`otk-note otk-note-${boxTone}`}>{p.note}</p>
+      <p className={`otk-note otk-note-${p.noteTone}`}>{p.note}</p>
     </Section>
   );
 }
@@ -196,7 +204,7 @@ const RULE_ICON: Record<RuleIcon, typeof Clock> = { clock: Clock, pin: MapPin, f
 function RuleList({ items }: { items: RuleItem[] }) {
   return (
     <ul className="otk-rules">
-      {items.map((r, i) => { const Icon = RULE_ICON[r.icon]; return <li key={i}><Icon {...ICON} />{r.text}</li>; })}
+      {items.map((r, i) => { const Icon = RULE_ICON[r.icon]; return <li key={i}><Icon {...ICON} /><span className="ot-text">{r.text}</span></li>; })}
     </ul>
   );
 }

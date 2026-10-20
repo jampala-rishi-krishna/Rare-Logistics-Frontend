@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildOrderView, explain, missing } from "./orderTrackerView.ts";
+import { buildOrderView, explain, missing, ruleIcon } from "./orderTrackerView.ts";
 import type { Card, Fact } from "../services/api/orderTracker";
 
 // Times are fixed Manila stamps so HH:MM assertions are stable in any machine timezone.
@@ -197,4 +197,30 @@ test("a card with no sections at all still builds without inventing values", () 
   assert.equal(v.payment.status, "Unknown");
   assert.equal(v.location.gps, null);
   assert.equal(v.delivery.receiver, null);
+});
+
+test("rule icons: places are pins (even 'Receiving Bay'), documents are files, times are clocks", () => {
+  assert.equal(ruleIcon("Use the back gate, Receiving Bay 2"), "pin");
+  for (const s of ["Dock C, show gate pass", "Enter through the side entrance", "Report at the receiving gate", "Drop pin is the loading ramp", "Park at the back"]) assert.equal(ruleIcon(s), "pin", s);
+  for (const s of ["Bring 2 copies of DR + PO copy", "Signed invoice needed", "Show the delivery permit", "Documents: DR and PO"]) assert.equal(ruleIcon(s), "file", s);
+  for (const s of ["Receiving 6:00–11:00 AM only", "Receiving until 12:00 noon", "Deliver before 10 AM", "Open 7am to 3pm", "Receiving hours: mornings only"]) assert.equal(ruleIcon(s), "clock", s);
+  assert.equal(ruleIcon("Call the store manager on arrival"), "note");
+});
+
+test("rules: the design's three notes get clock / pin / file", () => {
+  const v = buildOrderView(base({ customer_rules: fact("customer notes", { recorded_rules: { opening_time: "6:00 AM", receiving_cutoff_time: "11:00 AM", notes: "Use the back gate, Receiving Bay 2\nBring 2 copies of DR + PO copy" }, so_notes: null }) }), NOW).rules;
+  assert.deepEqual(v.recorded.map(r => [r.text, r.icon]), [["Receiving 6:00 AM–11:00 AM", "clock"], ["Use the back gate, Receiving Bay 2", "pin"], ["Bring 2 copies of DR + PO copy", "file"]]);
+});
+
+test("payment note tone: amber only when the amounts don't add up", () => {
+  const pay = (value: Record<string, unknown>) => buildOrderView(base({ payment: fact("Zoho Books", value) }), NOW).payment;
+  const partlyMatching = pay({ status: "Partly paid", invoice_total: "48250", paid: "38600", balance: "9650", arithmetic: "matches", fully_paid: false });
+  assert.equal(partlyMatching.noteTone, "neutral");
+  assert.equal(pay({ status: "Paid", invoice_total: "22400", paid: "22400", balance: "0", arithmetic: "matches", fully_paid: true }).noteTone, "positive");
+  const mismatch = pay({ status: "Partly paid", invoice_total: "48250", paid: "38000", balance: "9650", arithmetic: "doesn't match", fully_paid: false });
+  assert.equal(mismatch.noteTone, "warning");
+  assert.equal(mismatch.matches, false);
+  assert.match(mismatch.note, /don't add up/);
+  assert.equal(pay({ status: "Paid", invoice_total: "100", paid: "90", balance: "0", arithmetic: "doesn't match" }).noteTone, "warning");
+  assert.equal(buildOrderView(base(), NOW).payment.noteTone, "unknown");
 });

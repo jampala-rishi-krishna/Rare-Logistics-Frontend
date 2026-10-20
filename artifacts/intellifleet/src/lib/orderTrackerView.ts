@@ -49,6 +49,9 @@ export interface PhotoView { id: number; label: string; caption: string; basis: 
 export interface ProofView { photos: PhotoView[]; message: string | null; source: string; asOf: string | null }
 export interface PaymentView {
   status: string; tone: ViewTone;
+  /** Note box tone: warning ONLY when paid + balance don't add up to the total; positive when paid in full and matching;
+   *  neutral when the amounts match but a balance remains; unknown when payment is not recorded. */
+  noteTone: "warning" | "positive" | "neutral" | "unknown";
   total: string | null; paid: string | null; balance: string | null;
   matches: boolean | null;
   note: string;
@@ -169,11 +172,12 @@ function rejectedSummary(value: unknown): string | null {
   return `${rows.length} items with rejections`;
 }
 
-function ruleIcon(text: string): RuleIcon {
+/** Icon for one delivery-rule line. Place words win (a "Receiving Bay" is a place, not a time), then documents, then times. */
+export function ruleIcon(text: string): RuleIcon {
   const t = text.toLowerCase();
-  if (/\b\d{1,2}(:\d{2})?\s*(am|pm|nn|noon)\b|\b\d{1,2}:\d{2}\b|receiv|hour|cut-?off|open|close|until|before|after|morning|afternoon|time/.test(t)) return "clock";
-  if (/gate|dock|bay|entrance|door|back|park|address|location|floor|building|landmark|route/.test(t)) return "pin";
-  if (/cop(y|ies)|\bdr\b|\bpo\b|invoice|document|permit|receipt|form|sign/.test(t)) return "file";
+  if (/\b(gate|bay|dock|entrance|door|back|pin|park(ing)?|address|location|floor|building|landmark|route|ramp)\b/.test(t)) return "pin";
+  if (/\bcop(y|ies)\b|\bdr\b|\bpo\b|\binvoices?\b|\bdocuments?\b|\bpermits?\b|\breceipts?\b|\bforms?\b|\bsign(ed|ature)?\b|\bbring\b/.test(t)) return "file";
+  if (/\b\d{1,2}(:\d{2})?\s*(am|pm|nn|noon)\b|\b\d{1,2}:\d{2}\b|\bnoon\b|receiv|\bhours?\b|cut-?off|\bopens?\b|\bclose[sd]?\b|\buntil\b|\bbefore\b|\bafter\b|\bmornings?\b|\bafternoons?\b|\btime\b/.test(t)) return "clock";
   return "note";
 }
 function splitNotes(notes: unknown, verified: boolean): RuleItem[] {
@@ -302,6 +306,7 @@ export function buildOrderView(card: Card, now: number = Date.now()): OrderView 
   }
   const payment: PaymentView = {
     status: payStatus, tone: PAY_TONE[payStatus] ?? "unknown",
+    noteTone: !known ? "unknown" : matches === false ? "warning" : payStatus === "Paid" && matches === true ? "positive" : "neutral",
     total: known ? ptotal : null, paid: known ? ppaid : null, balance: known ? pbal : null, matches,
     note: noteParts.join(" "),
     short: !known ? "not recorded — ask Logistics" : payStatus === "Paid" ? `${ptotal ?? "—"}${matches ? " · matches invoice" : ""}` : `${pbal ?? "—"} balance of ${ptotal ?? "—"}`,

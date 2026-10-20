@@ -1,14 +1,14 @@
 /* Shared Order Tracker primitives. Colours: index.css tokens only. */
-.otc { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; font-size: 12px; line-height: 1.35; padding: 3px 9px; border-radius: 10px; border: 1px solid transparent; }
-.otc-md { font-size: 13px; padding: 4px 10px; }
-.otc-lg { font-size: 14px; padding: 5px 12px; border-radius: 12px; }
+.otc { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid transparent; }
+.otc-md { font-size: 13px; padding: 3px 9px; }
+.otc-lg { font-size: 14px; padding: 4px 11px; border-radius: 12px; }
 .otc-neutral { color: hsl(var(--foreground)); background: hsl(var(--muted)); border-color: hsl(var(--border)); }
 .otc-info { color: hsl(var(--info)); background: hsl(var(--info-bg)); }
 .otc-positive { color: hsl(var(--status-success)); background: hsl(var(--success-bg)); }
 .otc-warning { color: hsl(var(--status-warning)); background: hsl(var(--warning-bg)); }
 .otc-negative { color: hsl(var(--destructive)); background: hsl(var(--destructive-bg)); }
 .otc-pending, .otc-unknown { color: hsl(var(--muted-foreground)); background: hsl(var(--card)); border: 1px dashed hsl(var(--line-strong)); }
-.otc-solid { font-size: 14px; font-weight: 800; padding: 6px 12px; border-radius: 12px; border: 0; }
+.otc-solid { font-size: 14px; font-weight: 800; padding: 6px 12px; line-height: 1.2; border-radius: 12px; border: 0; }
 .otc-solid.otc-info { background: hsl(var(--info)); color: hsl(var(--primary-foreground)); }
 .otc-solid.otc-positive { background: hsl(var(--status-success)); color: hsl(var(--primary-foreground)); }
 .otc-solid.otc-warning { background: hsl(var(--warning-solid)); color: hsl(var(--foreground)); }
@@ -21,7 +21,7 @@
 .ot-tile-negative { background: hsl(var(--destructive-bg)); color: hsl(var(--destructive)); }
 .ot-tile-info { background: hsl(var(--info-bg)); color: hsl(var(--info)); }
 
-.ot-src { margin: 0; font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); line-height: 1.45; overflow-wrap: anywhere; }
+.ot-src { margin: 0; font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
 
 .ot-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px; border-radius: 12px; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap; }
 .ot-btn-solid { background: hsl(var(--foreground)); color: hsl(var(--primary-foreground)); border: 0; }

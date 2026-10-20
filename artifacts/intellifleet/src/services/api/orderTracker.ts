@@ -20,7 +20,9 @@ export interface Card extends Omit<OrderRow, "payment"> {
   /** Delivery city/area from the cached SO shipping address; null when not cached. */
   area?: string | null;
 }
-export interface OrderList { orders: OrderRow[]; total: number; offset: number; scope: string; coverage: string; source?: string; as_of?: string | null }
+export interface OrderList { orders: OrderRow[]; total: number; offset: number; scope: string; coverage: string; source?: string; as_of?: string | null;
+  /** Quick-filter counts (keys: all, "Out for delivery", "Delivered", problems) from the same scoped, searched rows. */
+  counts?: Record<string, number> }
 export interface Source { source: string; as_of: string | null; link: string | null; not_recorded: boolean }
 
 /** Structured answer blocks, built server-side ONLY from tool results fetched for that answer (never model-written numbers). */

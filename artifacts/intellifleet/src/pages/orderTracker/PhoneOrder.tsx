@@ -79,7 +79,8 @@ function WhereCard({ v }: { v: OrderView }) {
 }
 
 function JourneyCard({ v }: { v: OrderView }) {
-  const steps = v.journey;
+  // Phone design: the invoice step appears only once Logistics has checked the invoice back (it has a time).
+  const steps = v.journey.filter(s => s.key !== "invoice" || s.at);
   return (
     <section className="otp-card otp-pad" aria-labelledby="otp-journey">
       <h3 className="otp-h3" id="otp-journey">Journey</h3>
@@ -140,7 +141,7 @@ function Tiles({ v }: { v: OrderView }) {
 
 const RULE_ICON: Record<RuleIcon, typeof Clock> = { clock: Clock, pin: MapPin, file: File, note: StickyNote };
 function RuleRows({ items }: { items: RuleItem[] }) {
-  return <ul className="otp-rules">{items.map((r, i) => { const Icon = RULE_ICON[r.icon]; return <li key={i}><Icon size={18} strokeWidth={2} aria-hidden="true" />{r.text}</li>; })}</ul>;
+  return <ul className="otp-rules">{items.map((r, i) => { const Icon = RULE_ICON[r.icon]; return <li key={i}><Icon size={18} strokeWidth={2} aria-hidden="true" /><span className="ot-text">{r.text}</span></li>; })}</ul>;
 }
 
 function RulesCard({ v }: { v: OrderView }) {

@@ -13,11 +13,16 @@ function usePhotoUrl(id: number, attempt: number) {
     let active = true, objectUrl = "";
     setError(false); setUrl("");
     tracker.photo(id)
-      .then(blob => { if (!active) return; objectUrl = URL.createObjectURL(blob); setUrl(objectUrl); })
+      .then(blob => {
+        if (!active) return;
+        // An empty or non-image body (e.g. an error page served as 200) would paint as a blank tile: treat it as a failure.
+        if (!blob || blob.size === 0 || (blob.type && !blob.type.startsWith("image/"))) { setError(true); return; }
+        objectUrl = URL.createObjectURL(blob); setUrl(objectUrl);
+      })
       .catch(() => { if (active) setError(true); });
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [id, attempt]);
-  return { url, error };
+  return { url, error, fail: () => setError(true) };
 }
 
 export function ProofPhotos({ photos, variant, emptyHint }: { photos: PhotoView[]; variant: "desk" | "phone"; emptyHint: string }) {
@@ -45,7 +50,7 @@ export function ProofPhotos({ photos, variant, emptyHint }: { photos: PhotoView[
 
 function Thumb({ photo, variant, onOpen }: { photo: PhotoView; variant: "desk" | "phone"; onOpen: (url: string) => void }) {
   const [attempt, setAttempt] = useState(0);
-  const { url, error } = usePhotoUrl(photo.id, attempt);
+  const { url, error, fail } = usePhotoUrl(photo.id, attempt);
   const caption = variant === "desk" && <><span className="otm-cap-label">{photo.label}</span><span className="otm-cap-time">{photo.caption}</span></>;
   if (error) {
     return (
@@ -61,7 +66,7 @@ function Thumb({ photo, variant, onOpen }: { photo: PhotoView; variant: "desk" |
   return (
     <button type="button" className="otm-thumb" disabled={!url} onClick={() => url && onOpen(url)}
       aria-label={`Open photo: ${photo.label}, ${photo.caption} (${photo.basis})`}>
-      <span className="otm-thumb-box">{url ? <img src={url} alt="" /> : <span className="otm-thumb-loading">Loading…</span>}</span>
+      <span className="otm-thumb-box">{url ? <img src={url} alt="" decoding="async" onError={fail} /> : <span className="otm-thumb-loading">Loading…</span>}</span>
       {caption}
     </button>
   );
