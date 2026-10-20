@@ -1,0 +1,116 @@
+/* Desktop Order 360 card. Colours: index.css tokens only (no hex). Prefix otk-. */
+.otk { container: otk / inline-size; min-width: 0; background: hsl(var(--card)); color: hsl(var(--foreground)); border: 1px solid hsl(var(--border)); border-radius: 20px; overflow: hidden; font-family: var(--app-font-sans); font-variant-numeric: tabular-nums; }
+.otk p { margin: 0; }
+.otk-muted { color: hsl(var(--muted-foreground)) !important; }
+.otk-pos { color: hsl(var(--status-success)); }
+.otk-neg { color: hsl(var(--destructive)); }
+.otk-strong { font-weight: 600; }
+
+/* header */
+.otk-head { padding: 24px 28px; border-bottom: 1px solid hsl(var(--border)); display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; }
+.otk-head-main { min-width: 0; }
+.otk-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.otk-number { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; }
+.otk-customer { margin-top: 6px; font-size: 18px; font-weight: 600; }
+.otk-meta { margin-top: 4px; font-size: 14px; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+.otk-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.otk-actions .ot-btn-outline:focus-visible { outline: 2px solid hsl(var(--foreground)); outline-offset: 3px; }
+
+/* journey */
+.otk-block { padding: 24px 28px; border-bottom: 1px solid hsl(var(--border)); display: flex; flex-direction: column; }
+.otk-block-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.otk-h3 { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.3; }
+.otk-steps { margin: 18px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.otk-step { min-width: 0; padding-right: 8px; }
+.otk-track { display: flex; align-items: center; }
+.otk-dot { width: 32px; height: 32px; flex: none; box-sizing: border-box; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.otk-dot-done { background: hsl(var(--foreground)); color: hsl(var(--primary-foreground)); }
+.otk-dot-problem { background: hsl(var(--warning-solid)); color: hsl(var(--foreground)); font-size: 15px; font-weight: 900; }
+.otk-dot-current { background: hsl(var(--info)); border: 6px solid hsl(var(--info-bg)); }
+.otk-dot-todo { border: 2px solid hsl(var(--line-strong)); }
+.otk-line { flex: 1; height: 3px; margin-right: -8px; background: hsl(var(--border)); }
+.otk-line-ink { background: hsl(var(--foreground)); }
+.otk-step-label { display: block; margin-top: 10px; font-size: 15px; font-weight: 700; }
+.otk-step-todo .otk-step-label { color: hsl(var(--foreground)); }
+.otk-step-time { margin-top: 2px; font-size: 20px; font-weight: 800; line-height: 1.25; }
+.otk-now { color: hsl(var(--info)); }
+.otk-step-sub { font-size: 13px; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+
+.otk-where { margin-top: 22px; display: flex; gap: 18px; flex-wrap: wrap; }
+.otk-where-map { flex: 2 1 340px; min-width: 0; }
+.otk-stats { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.otk-stat { border: 1px solid hsl(var(--border)); border-radius: 16px; padding: 16px; }
+.otk-stat-label { font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.otk-stat-value { margin-top: 4px; font-size: 18px; font-weight: 800; }
+.otk-stat-sub { margin-top: 2px; font-size: 14px; color: hsl(var(--muted-foreground)); }
+.otk-journey > .ot-src:last-child { margin-top: 10px; }
+
+/* detail grid: 1px lines via gap over a line-coloured background */
+.otk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: hsl(var(--border)); }
+.otk-cell { background: hsl(var(--card)); padding: 24px 28px; display: flex; flex-direction: column; min-width: 0; }
+.otk-cell-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.otk-cell-chip { margin-left: auto; }
+.otk-count { font-size: 13px; font-weight: 700; }
+.otk-cell-body { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
+.otk-cell-foot { margin-top: 12px; }
+
+.otk-outcome { font-size: 16px; font-weight: 700; }
+.otk-missing { font-size: 15px; color: hsl(var(--muted-foreground)); line-height: 1.5; }
+.otk-text { font-size: 15px; line-height: 1.5; }
+.otk-small-muted { font-size: 13px; color: hsl(var(--muted-foreground)); line-height: 1.45; }
+.otk-table { border: 1px solid hsl(var(--border)); border-radius: 12px; overflow: hidden; }
+.otk-tr { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); padding: 10px 14px; font-size: 14px; border-top: 1px solid hsl(var(--border)); }
+.otk-tr > :last-child { text-align: right; font-weight: 700; }
+.otk-th { border-top: 0; background: hsl(var(--muted)); font-size: 12px; font-weight: 700; color: hsl(var(--muted-foreground)); }
+.otk-th > :last-child { font-weight: 700; }
+.otk-dashed { border: 1.5px dashed hsl(var(--line-strong)); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: hsl(var(--muted-foreground)); }
+.otk-dashed b { color: hsl(var(--foreground)); }
+.otk-receiver { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.otk-receiver svg { flex: none; }
+
+.otk-money { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 2px; }
+.otk-money-label { font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.otk-money-value { margin-top: 2px; font-size: 22px; font-weight: 800; overflow-wrap: anywhere; }
+.otk-note { border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 600; line-height: 1.45; }
+.otk-note-warning { background: hsl(var(--warning-bg)); color: hsl(var(--status-warning)); }
+.otk-note-positive { background: hsl(var(--success-bg)); color: hsl(var(--status-success)); }
+.otk-note-unknown { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+
+.otk-docs { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.otk-doc { display: flex; align-items: center; gap: 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 12px 14px; }
+.otk-doc svg { flex: none; }
+.otk-doc b { font-size: 15px; }
+.otk-doc-missing { border: 1.5px dashed hsl(var(--line-strong)); }
+.otk-doc-problem { border-color: hsl(var(--destructive) / .4); }
+.otk-doc-detail { font-size: 13px; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+
+.otk-rules { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 15px; }
+.otk-rules li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.35; }
+.otk-rules svg { flex: none; margin-top: 1px; }
+.otk-label-unverified { font-size: 12px; font-weight: 700; color: hsl(var(--status-warning)); background: hsl(var(--warning-bg)); border-radius: 8px; padding: 3px 8px; align-self: flex-start; }
+
+.otk-checklist { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 13px; }
+.otk-checklist dt { color: hsl(var(--muted-foreground)); font-weight: 600; }
+.otk-checklist dd { margin: 0; font-weight: 700; }
+.otk-problem { background: hsl(var(--muted)); border-radius: 12px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+.otk-problem svg { flex: none; margin-top: 1px; }
+.otk-problem-status, .otk-problem-desc, .otk-problem-reply { color: hsl(var(--muted-foreground)); }
+.otk-problem-desc, .otk-problem-reply { margin-top: 2px; }
+
+.otk-skel-stack { display: flex; flex-direction: column; gap: 10px; }
+.otk-skel-steps { gap: 12px; }
+
+@container otk (max-width: 680px) {
+  .otk-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container otk (max-width: 600px) {
+  .otk-head, .otk-block, .otk-cell { padding: 20px 18px; }
+  .otk-steps { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .otk-step { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 12px; padding: 0 0 14px; position: relative; }
+  .otk-track { grid-row: 1 / span 2; align-self: start; }
+  .otk-line { display: none; }
+  .otk-step-label { margin-top: 0; grid-column: 2; }
+  .otk-step-time { grid-column: 3; grid-row: 1; font-size: 17px; }
+  .otk-step-sub { grid-column: 2; }
+  .otk-money-value { font-size: 19px; }
+}
