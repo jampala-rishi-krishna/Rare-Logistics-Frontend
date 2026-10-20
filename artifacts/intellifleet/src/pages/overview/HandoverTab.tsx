@@ -17,6 +17,7 @@ import {
   useNow,
 } from "./shared";
 import { DateScope } from "./IssuesTab";
+import { ReceiveInvoiceButton } from "./ReceiveInvoiceButton";
 export default function HandoverTab({
   state,
   set,
@@ -75,6 +76,7 @@ export default function HandoverTab({
                   "Status",
                   "Since",
                   "Note",
+                  "Action",
                 ].map((h) => (
                   <th className="p-3" key={h}>
                     {h}
@@ -122,6 +124,7 @@ export default function HandoverTab({
                     </span>
                   </td>
                   <td className="max-w-48 break-words p-3">{r.note}</td>
+                  <td className="p-3"><ReceiveInvoiceButton itemId={r.item_id} handedOver={r.handed_over} status={r.state} /></td>
                 </tr>
               ))}
             </tbody>

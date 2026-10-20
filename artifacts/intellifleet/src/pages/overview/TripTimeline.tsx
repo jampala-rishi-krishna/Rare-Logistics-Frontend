@@ -38,6 +38,7 @@ import {
 } from "./shared";
 import { Rail } from "./TripsTab";
 import { IssueCard } from "./IssuesTab";
+import { ReceiveInvoiceButton } from "./ReceiveInvoiceButton";
 function Gps({ value }: { value: GpsType | null | undefined }) {
   if (typeof value?.lat === "number" && typeof value.lng === "number")
     return (
@@ -546,6 +547,8 @@ export default function TripDrawer({
                   {(
                     t.invoices ??
                     t.orders.map((o) => ({
+                      item_id: o.handover?.item_id,
+                      handed_over: o.handover?.handed_over,
                       so_id: o.so_id,
                       so_number: o.so_number,
                       invoice_no:
@@ -559,18 +562,13 @@ export default function TripDrawer({
                           : "with_driver"),
                     }))
                   ).map((inv) => (
-                    <button
-                      key={inv.so_id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2 text-left text-xs"
-                      onClick={() => openStop(inv.so_id)}
-                    >
-                      <span>
-                        {inv.so_number} · {inv.invoice_no ?? "—"}
-                      </span>
-                      <Chip tone={INVOICE_TONE[inv.status] ?? "neutral"}>
-                        {invoiceWord(inv.status)}
-                      </Chip>
-                    </button>
+                    <div key={inv.so_id} className="flex flex-wrap items-center gap-2 rounded border border-border p-2 text-xs">
+                      <button type="button" className="flex min-h-11 flex-1 flex-wrap items-center justify-between gap-2 text-left" onClick={() => openStop(inv.so_id)}>
+                        <span>{inv.so_number} ? {inv.invoice_no ?? "?"}</span>
+                        <Chip tone={INVOICE_TONE[inv.status] ?? "neutral"}>{invoiceWord(inv.status)}</Chip>
+                      </button>
+                      <ReceiveInvoiceButton itemId={inv.item_id} handedOver={inv.handed_over} status={inv.status} />
+                    </div>
                   ))}
                 </section>
                 <section className="grid gap-2">
@@ -641,29 +639,7 @@ export default function TripDrawer({
                     ))}
                   </ul>
                 </details>
-                <details className="rounded-lg border border-border p-3">
-                  <summary className="cursor-pointer font-semibold">
-                    Other days for this crew (last 7 days)
-                  </summary>
-                  <div className="mt-3 grid gap-2">
-                    {t.other_days?.length ? (
-                      t.other_days.map((day) => (
-                        <button
-                          className={`${buttonClass} h-auto justify-start py-2`}
-                          key={day.batch_id}
-                          onClick={() => set({ trip: day.batch_id, stop: "" })}
-                        >
-                          {day.date} · {day.vehicle} · Trip{" "}
-                          {day.trip_number ?? 1}
-                        </button>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No other trips in the last 7 days.
-                      </p>
-                    )}
-                  </div>
-                </details>
+
               </div>
             )
           )}

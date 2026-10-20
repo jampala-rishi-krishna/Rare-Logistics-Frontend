@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useQueryClient } from "@tanstack/react-query";
 import { liveFleetSocket, type FleetPosition } from "@/lib/live-fleet-socket";
 import { projectLatLngToMapXY, type UiVehicle } from "@/services/adapters";
+import { refreshTripQueries } from "./tripRefresh";
 import { isFeedStale } from "@/lib/live-motion";
 
 const FleetSocketContext = createContext<{ connected: boolean; feedStale: boolean }>({ connected: false, feedStale: true });
@@ -32,9 +33,13 @@ export function FleetSocketProvider({ children }: { children: ReactNode }) {
       markFeed();
       // While the socket is up /vehicles is not polled at all: one fetch on load, plus one on every RE-connect
       // to pick up whatever moved while we were disconnected. (The first connect is covered by the page's own load.)
-      if (hasConnectedBefore) void queryClient.invalidateQueries({ queryKey: ["vehicles"], exact: true });
+      if (hasConnectedBefore) {
+        void queryClient.invalidateQueries({ queryKey: ["vehicles"], exact: true });
+        void refreshTripQueries(queryClient);
+      }
       hasConnectedBefore = true;
     });
+    const offTrips = liveFleetSocket.onTripChange(() => { void refreshTripQueries(queryClient); });
     const offHeartbeat = liveFleetSocket.onHeartbeat(markFeed);
     const offPositions = liveFleetSocket.onPositions((positions: FleetPosition[]) => {
       markFeed();
@@ -73,6 +78,7 @@ export function FleetSocketProvider({ children }: { children: ReactNode }) {
     return () => {
       window.clearInterval(tick);
       offConnection();
+      offTrips();
       offHeartbeat();
       offPositions();
       liveFleetSocket.disconnect();

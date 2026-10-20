@@ -1,5 +1,7 @@
 # IntelliFleet Neon database
 
+2026-10-20 approved invoice-receipt update: Planner/Dispatcher/Admin Overview receipt reuses the existing `handover.resolve` transaction and invoice/trip event tables (no new schema or SQL path), records the actual actor role, requires a crew handover, invalidates Tracker history, and emits a data-free live refresh signal after commit; drawer history is reduced to same-day trip numbering.
+
 ## Order Tracker read model (2026-10-19)
 
 2026-10-20 approved fix: Tracker reads existing `trip_state.load` tables (trips, acknowledgements, stops, handovers/items, actor names) for selected assigned batches itself, single-flight with a 15-second/generation-invalidated projection cache; order/assignment records remain in the Confirmed Orders memory cache, with no Zoho calls or database writes.
@@ -28,7 +30,7 @@ the only date-filtered Neon reads.
 
 ### Driver Overview / Drive media additions (2026-10-15, approved task)
 
-- No schema change or migration. Overview's existing 15-second per-parameters/per-generation cache now also reads existing `trip_events`, `driver_issues`, and required-photo `form_template_items` facts for trip attention flags; existing `invoice_handover_items` are loaded with handovers for shared driver/Overview status. Trip drawer history uses the existing date-scoped batch reader for the same driver's preceding seven days. Invoices/issues add warehouse/search/optional-date filtering over their existing tables. No Zoho calls or background Neon writes are added.
+- No schema change or migration. Overview's existing 15-second per-parameters/per-generation cache now also reads existing `trip_events`, `driver_issues`, and required-photo `form_template_items` facts for trip attention flags; existing `invoice_handover_items` are loaded with handovers for shared driver/Overview status. Trip drawer numbering uses the existing date-scoped batch reader for the same driver's selected day; the seven-day drawer option and read have been removed. Invoices/issues add warehouse/search/optional-date filtering over their existing tables. No Zoho calls or background Neon writes are added.
 - Captions batch-read the existing `trip_photos` rows referenced by stop/checklist/issue answers, inside the Overview cache. Driver assignment detail/action payloads also batch-read referenced stop-photo metadata once across their order payloads; Today has no order photos and gains no photo read on its generation-cached polls. SO number/kind derive from existing stop/issue facts. For **new uploads**, `trip_photos.created_at` stores the validated client camera capture time in the same existing INSERT (missing timestamp falls back to server receipt time). Legacy photo rows keep their original upload timestamps; missing legacy metadata falls back to action client time. No capture-time column is added.
 - Photo bytes may now live in the Google Drive folder selected by `GDRIVE_PHOTO_FOLDER_ID`; the existing `trip_photos.storage_key` stores `gdrive:<fileId>`. Existing R2 keys retain their resolver. Metadata row writes and upload-key idempotency are unchanged. Drive-only background description/name finalization adds no Neon write. Exact configuration and process-local retry/cache limits: [GDRIVE_MEDIA.md](GDRIVE_MEDIA.md).
 

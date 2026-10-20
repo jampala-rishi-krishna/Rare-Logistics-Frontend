@@ -10,7 +10,8 @@ import {
   horizontalOverflow,
 } from "./harness.ts";
 import { installMocks } from "./mockApi.ts";
-import { today } from "./overviewMock.ts";
+import { dispatcherSession } from "./fixtures/overviewData.ts";
+import { today, v2Timeline } from "./overviewMock.ts";
 import { contrastViolations } from "./contrast.ts";
 let browser: Browser;
 before(async () => {
@@ -21,16 +22,17 @@ after(async () => {
   await browser?.close();
   stopServer();
 });
-async function open(width = 1440, path = "") {
+async function open(width = 1440, path = "", setup?: (page: Page) => Promise<void>, role = "admin") {
   const context = await browser.newContext({
     viewport: { width, height: 900 },
     timezoneId: "Asia/Manila",
     acceptDownloads: true,
   });
   const page = await context.newPage();
-  const recorder = await installMocks(page, { role: "admin" });
+  const recorder = await installMocks(page, { role, ...(role === "planner" ? { session: { user: { ...dispatcherSession.user, role: "planner" } } } : {}) });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
+  if (setup) await setup(page);
   await page.goto(`${BASE}/app/driver-overview${path}`);
   await page.waitForSelector('[data-testid="trip-row"]');
   return { page, context, recorder, errors };
@@ -38,6 +40,45 @@ async function open(width = 1440, path = "") {
 const count = async (page: Page) =>
   page.locator('[data-testid="trip-row"]').count();
 describe("Driver Overview v2 manager workflows", () => {
+  it("Planner gets driver/helper tables only, receives a handed invoice and gets live updates", async () => {
+    let received = false, writes = 0;
+    let push: ((message: string) => void) | null = null;
+    const { page, context, errors } = await open(1440, "", async page => {
+      await page.routeWebSocket("**/never**", ws => { push = message => ws.send(message); });
+      await page.route("http://mock-api.test/api/driver-overview/trips/b-3", route => {
+        const timeline = v2Timeline("b-3");
+        const invoice = { ...timeline.invoices[0], item_id: 99, handed_over: true, status: received ? "received" : "with_officer" };
+        return route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ ...timeline, invoices: [invoice], trip: { ...timeline.trip, status: received ? "closed" : "handover_submitted" } }) });
+      });
+      await page.route("http://mock-api.test/api/driver-overview/invoices/99/receive", route => {
+        if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "POST,OPTIONS", "access-control-allow-headers": "*" } });
+        const body = route.request().postDataJSON();
+        assert.equal(body.status, "received"); assert.ok(body.idempotency_key);
+        writes++; received = true;
+        return route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ ok: true }) });
+      });
+    }, "planner");
+    assert.equal(await page.locator("article[data-testid=trip-row]").count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Table view" }).count(), 0);
+    await page.getByTestId("board-mode-helper").click();
+    assert.ok(await page.locator("[data-testid=helper-group] table").count());
+    await page.getByRole("button", { name: "Open TRK-2002, Trip 1", exact: true }).click();
+    const drawer = page.getByTestId("trip-drawer");
+    await drawer.getByRole("button", { name: "Received", exact: true }).waitFor();
+    assert.ok(!(await drawer.innerText()).includes("Other days for this crew"));
+    await drawer.getByRole("button", { name: "Received", exact: true }).click();
+    await drawer.getByText("Received", { exact: true }).waitFor();
+    await page.waitForTimeout(200);
+    assert.equal(writes, 1);
+    assert.equal(await drawer.getByRole("button", { name: "Received", exact: true }).count(), 0);
+    assert.ok(push, "the app's shared live socket connected");
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes("/api/driver-overview/trips/b-3")),
+      Promise.resolve().then(() => push!(JSON.stringify({ type: "TRIP_STATE_CHANGED" }))),
+    ]);
+    assert.deepEqual(errors, []);
+    await context.close();
+  });
   it("one trip row per batch, exactly three tabs, tile counts equal matching rows and clear", async () => {
     const { page, context, errors } = await open();
     assert.equal(await count(page), 3);
@@ -113,9 +154,9 @@ describe("Driver Overview v2 manager workflows", () => {
       () => document.querySelectorAll('[data-testid="trip-row"]').length === 5,
     );
     await shot(page, "overview-after/range");
-    await page.getByRole("button", { name: "Table view" }).click();
+    assert.equal(await page.getByRole("button", { name: "Table view" }).count(), 0);
     await page
-      .getByRole("columnheader", { name: "Weight", exact: true })
+      .getByRole("columnheader", { name: "Weight", exact: true }).first()
       .waitFor();
     await shot(page, "overview-after/table");
     await context.close();

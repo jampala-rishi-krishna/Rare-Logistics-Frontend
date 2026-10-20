@@ -40,6 +40,7 @@ class LiveFleetSocket {
   private connectionHandlers = new Set<ConnectionHandler>();
   private heartbeatHandlers = new Set<HeartbeatHandler>();
   private statusHandlers = new Set<StatusHandler>();
+  private tripHandlers = new Set<HeartbeatHandler>();
   private closedByClient = false;
   /** Set by a 4401/4403 close: the server refused us, so retrying would just loop. */
   private stopped = false;
@@ -108,7 +109,9 @@ class LiveFleetSocket {
         return; // ignore malformed frames
       }
       if (!message || typeof message !== "object") return;
-      if (isStatusMessage(message)) {
+      if ((message as { type: string }).type === "TRIP_STATE_CHANGED") {
+        this.tripHandlers.forEach(h => h());
+      } else if (isStatusMessage(message)) {
         this.lastStatus = message;
         this.statusHandlers.forEach((h) => h(message));
       } else if ((message as { type: string }).type === "GPS_HEARTBEAT") {
@@ -159,6 +162,11 @@ class LiveFleetSocket {
   }
 
   /** {type: "status"} frames, e.g. {cartrack: "unavailable"} while the GPS provider is down. */
+  onTripChange(handler: HeartbeatHandler) {
+    this.tripHandlers.add(handler);
+    return () => this.tripHandlers.delete(handler);
+  }
+
   onStatus(handler: StatusHandler) {
     this.statusHandlers.add(handler);
     return () => this.statusHandlers.delete(handler);

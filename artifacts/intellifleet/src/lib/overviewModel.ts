@@ -62,7 +62,7 @@ export function parseUrlState(search: string, today: string): UrlState {
     trip: get("trip"),
     stop: get("stop"),
     tab: TAB_IDS.includes(tab) ? tab : "trips",
-    view: get("view") === "table" ? "table" : "list",
+    view: "table",
     only: get("only") === "1",
   };
 }

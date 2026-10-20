@@ -186,6 +186,7 @@ export interface TimelineOrder {
     address_gps?: { lat: number; lng: number } | null;
   } | null;
   handover: {
+    item_id?: number | null;
     invoice_no?: string | null;
     handed_over: boolean | null;
     crew_note: string | null;
@@ -216,6 +217,8 @@ export interface TimelineEvent {
 export type InvoiceStatus = "with_driver" | "with_officer" | "received" | "missing" | "discrepancy" | "not_handed_over" | string;
 
 export interface TripInvoice {
+  item_id?: number | null;
+  handed_over?: boolean | null;
   so_id: string;
   so_number: string;
   invoice_no: string | null;
@@ -381,6 +384,8 @@ export async function fetchMediaObjectUrl(photoId: number | string, size: "thumb
 }
 
 export interface HardCopyRow {
+  item_id?: number | null;
+  handed_over?: boolean | null;
   so_id?: string | null;
   so_number: string | null;
   order_type?: "SO" | "WM" | "PO" | "TO" | null;
