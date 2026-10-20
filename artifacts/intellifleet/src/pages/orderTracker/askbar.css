@@ -1,0 +1,22 @@
+/* Ask panel (ink). Colours: index.css tokens only. */
+.ota { background: hsl(var(--foreground)); color: hsl(var(--primary-foreground)); border-radius: 20px; padding: 24px; }
+.ota-label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 700; color: hsl(var(--on-ink-muted)); }
+.ota-label svg { flex: none; }
+.ota-row { margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap; }
+.ota-input { flex: 1 1 520px; min-width: 0; height: 60px; border-radius: 14px; border: 0; padding: 0 20px; font-family: inherit; font-size: 18px; font-weight: 500; color: hsl(var(--foreground)); background: hsl(var(--card)); }
+.ota-input::placeholder { color: hsl(var(--muted-foreground)); opacity: 1; }
+.ota-send { height: 60px; padding: 0 28px; border-radius: 14px; border: 0; background: hsl(var(--card)); color: hsl(var(--foreground)); font-family: inherit; font-size: 17px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
+.ota-send:disabled { cursor: default; }
+.ota-chips { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+/* 36px visual pill; the ::before extends the hit area to 44px without changing the layout. */
+.ota-chip { position: relative; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid hsl(var(--muted-foreground)); background: transparent; color: hsl(var(--primary-foreground)); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.ota-chip::before { content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }
+.ota-chip:hover { border-color: hsl(var(--on-ink-muted)); }
+.ota-input:focus-visible { outline: 3px solid hsl(var(--info)); outline-offset: 2px; }
+.ota-send:focus-visible, .ota-chip:focus-visible { outline: 2px solid hsl(var(--primary-foreground)); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .ota { padding: 18px 16px; border-radius: 16px; }
+  .ota-input { flex-basis: 100%; height: 56px; font-size: 16px; padding: 0 16px; }
+  .ota-send { flex: 1 1 100%; height: 52px; }
+  .ota-chip { white-space: normal; text-align: left; height: auto; min-height: 36px; padding: 6px 14px; line-height: 1.3; }
+}
