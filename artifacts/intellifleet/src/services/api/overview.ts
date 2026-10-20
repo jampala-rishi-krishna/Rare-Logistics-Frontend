@@ -405,6 +405,8 @@ export interface HardCopyRow {
 }
 
 export interface HardCopiesFilter {
+  from?: string;
+  to?: string;
   collected?: boolean;
   warehouse?: string;
   q?: string;
@@ -412,7 +414,7 @@ export interface HardCopiesFilter {
 }
 
 export function getHardCopies(f: HardCopiesFilter): Promise<{ generated_at: string; total: number; counts: Record<string, number>; rows: HardCopyRow[]; truncated?: boolean }> {
-  return api.get(`${BASE}/hardcopies`, q({ warehouse: f.warehouse || undefined, q: f.q?.trim() || undefined, date: f.date || undefined, collected: f.collected ? "true" : undefined }));
+  return api.get(`${BASE}/hardcopies`, q({ warehouse: f.warehouse || undefined, q: f.q?.trim() || undefined, date: f.date || undefined, from: f.from || undefined, to: f.to || undefined, collected: f.collected ? "true" : undefined }));
 }
 
 export interface IssueRow {

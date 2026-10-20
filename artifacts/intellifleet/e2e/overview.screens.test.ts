@@ -46,8 +46,10 @@ describe("Driver Overview v2 manager workflows", () => {
     const { page, context, errors } = await open(1440, "", async page => {
       await page.routeWebSocket("**/never**", ws => { push = message => ws.send(message); });
       await page.route("http://mock-api.test/api/driver-overview/hardcopies**", route => {
-        const collected = new URL(route.request().url()).searchParams.get("collected") === "true";
-        const rows = collected === received ? [{ item_id: 99, handed_over: true, so_id: "so-1", so_number: "SO-COLLECT-1", invoice_no: "31879", customer_name: "Test Customer", vehicle: "TRK-2002", driver_name: "Test Driver", batch_id: "b-3", delivery_date: today, delivery_outcome: "Delivered", state: collected ? "received" : "with_officer", state_label: collected ? "Collected" : "With officer", received_by: collected ? "Test Planner" : null, holder: "Test Planner", since: new Date().toISOString(), note: null }] : [];
+        const params = new URL(route.request().url()).searchParams;
+        const collected = params.get("collected") === "true";
+        const inDate = params.has("from") ? params.get("from")! <= today && today <= params.get("to")! : params.get("date") === today;
+        const rows = collected === received && (!collected || inDate) ? [{ item_id: 99, handed_over: true, so_id: "so-1", so_number: "SO-COLLECT-1", invoice_no: "31879", customer_name: "Test Customer", vehicle: "TRK-2002", driver_name: "Test Driver", batch_id: "b-3", delivery_date: today, delivery_outcome: "Delivered", state: collected ? "received" : "with_officer", state_label: collected ? "Collected" : "With officer", received_by: collected ? "Test Planner" : null, holder: "Test Planner", since: new Date().toISOString(), note: null }] : [];
         return route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ total: rows.length, counts: rows.length ? { [collected ? "received" : "with_officer"]: rows.length } : {}, rows }) });
       });
       await page.route("http://mock-api.test/api/driver-overview/trips/b-3", route => {
@@ -93,6 +95,17 @@ describe("Driver Overview v2 manager workflows", () => {
     await page.getByRole("button", { name: "Partly delivered (0)", exact: true }).click();
     await page.getByText("No collected invoices match these filters.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Delivered (1)", exact: true }).click();
+    await page.getByRole("cell", { name: "SO-COLLECT-1", exact: true }).waitFor();
+    assert.equal(await page.getByRole("checkbox", { name: "Only this date" }).count(), 0);
+    await page.getByTestId("day-prev").click();
+    await page.getByRole("tab", { name: "Collected invoices (0)", exact: true }).waitFor();
+    await page.getByText("No collected invoices match these filters.", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("cell", { name: "SO-COLLECT-1", exact: true }).count(), 0);
+    await page.getByTestId("range-toggle").click();
+    await page.getByTestId("range-to").fill(today);
+    await page.getByRole("tab", { name: "Collected invoices (1)", exact: true }).waitFor();
+    await page.getByRole("cell", { name: "SO-COLLECT-1", exact: true }).waitFor();
+    await page.getByTestId("range-from").fill(today);
     await page.getByRole("cell", { name: "SO-COLLECT-1", exact: true }).waitFor();
     assert.deepEqual(errors, []);
     await context.close();

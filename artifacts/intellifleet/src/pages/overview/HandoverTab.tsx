@@ -5,6 +5,7 @@ import {
   invoiceWord,
   sinceText,
   manilaDateTime,
+  isRange,
   type UrlState,
 } from "@/lib/overviewModel";
 import { useHardCopies } from "./queries";
@@ -53,15 +54,19 @@ export default function HandoverTab({
   );
   return (
     <section className="grid min-w-0 gap-3" data-testid="invoices-tab">
-      <DateScope
-        state={state}
-        set={set}
-        label={
-          collected
-            ? "All delivery dates - collected invoices"
-            : "All dates — anything not yet received"
-        }
-      />
+      {collected ? (
+        <p className="text-sm text-muted-foreground">
+          {isRange(state)
+            ? `Delivery dates: ${state.from} to ${state.to}`
+            : `Delivery date: ${state.date}`}
+        </p>
+      ) : (
+        <DateScope
+          state={state}
+          set={set}
+          label={"All dates \u2014 anything not yet received"}
+        />
+      )}
       <div
         role="group"
         aria-label="Invoice status"

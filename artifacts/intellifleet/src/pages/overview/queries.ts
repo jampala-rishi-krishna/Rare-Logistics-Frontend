@@ -43,18 +43,23 @@ export function useTripDetail(batchId: string) {
   });
 }
 
-/** Outstanding invoices: all dates unless "Only this date" is ticked; search + warehouse always apply. */
+/** Collected invoices always follow the calendar; outstanding invoices retain their optional date scope. */
 export function useHardCopies(s: UrlState, collected = false) {
   const f = {
     warehouse: s.wh || undefined,
     q: s.q.trim() || undefined,
-    date: s.only && !isRange(s) ? s.date : undefined,
+    ...(collected
+      ? isRange(s)
+        ? { from: s.from, to: s.to }
+        : { date: s.date }
+      : { date: s.only && !isRange(s) ? s.date : undefined }),
     collected,
   };
   return useQuery({
     queryKey: ["driver-overview", "hardcopies", f],
     queryFn: () => overviewApi.getHardCopies(f),
-    placeholderData: keepPreviousData,
+    enabled: !collected || !isRange(s) || rangeError(s.from, s.to) === null,
+    placeholderData: collected ? undefined : keepPreviousData,
     ...POLL,
   });
 }

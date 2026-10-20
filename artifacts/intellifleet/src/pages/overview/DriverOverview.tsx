@@ -22,7 +22,7 @@ export default function DriverOverview() {
   const { state, set, today } = useOverviewUrl();
   const trips = useTrips(state);
   const invoices = useHardCopies({ ...state, only: false });
-  const collected = useHardCopies({ ...state, only: false }, true);
+  const collected = useHardCopies(state, true);
   const issues = useIssues(state, "open", false);
   const now = useNow();
   const [exporting, busy] = useState(false);
