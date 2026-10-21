@@ -82,3 +82,10 @@ test("officer screens are read-only for dispatchers", () => {
   assert.ok(!isOfficerReadOnly("logistics_officer"));
   assert.ok(!isOfficerReadOnly("admin"));
 });
+
+test("sales and wet market see only Control Tower, Fleet, Orders and Order Tracker", () => {
+  for (const role of ["sales", "wet_market"]) {
+    for (const href of ["/app/tower", "/app/fleet", "/app/orders", "/app/order-tracker"]) assert.equal(canSeeNavItem(href, role), true, `${role} ${href}`);
+    for (const href of ["/app/loads", "/app/routes", "/app/fleet-health", "/app/driver-overview", "/app/comms", "/app/reports"]) assert.equal(canSeeNavItem(href, role), false, `${role} ${href}`);
+  }
+});

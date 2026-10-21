@@ -619,8 +619,9 @@ const cx = (...classes: Array<string | false | undefined>) =>
   classes.filter(Boolean).join(" ");
 
 function RoleGate({ children, allowed, loginPath = "/login" }: { children: ReactNode; allowed: readonly string[]; loginPath?: string }) {
-  const [, setLocation] = useLocation();
-  const [ready, setReady] = useState(false);
+  const [location, setLocation] = useLocation();
+  const [readyForPath, setReadyForPath] = useState<string | null>(null);
+  const canOpenPath = (role: string) => !location.startsWith("/app/") || canSeeNavItem(location.split("?")[0], role);
   useEffect(() => {
     let active = true;
     if (!getStoredSessionId()) {
@@ -639,12 +640,12 @@ function RoleGate({ children, allowed, loginPath = "/login" }: { children: React
         }
         if (user.mustChangePassword) {
           setLocation("/set-password");
-        } else if (!allowed.includes(role)) {
+        } else if (!allowed.includes(role) || !canOpenPath(role)) {
           const target = redirectForDisallowedRole(role);
           if (target === "/login") clearStoredSessionId();
           setLocation(target);
         } else {
-          setReady(true);
+          setReadyForPath(location);
         }
       })
       .catch((error) => {
@@ -657,14 +658,17 @@ function RoleGate({ children, allowed, loginPath = "/login" }: { children: React
         } catch {
           lastRole = null;
         }
-        if (offline && lastRole && allowed.includes(lastRole)) setReady(true);
+        if (offline && lastRole && allowed.includes(lastRole)) {
+          if (canOpenPath(lastRole)) setReadyForPath(location);
+          else setLocation(redirectForDisallowedRole(lastRole));
+        }
         else setLocation(loginPath);
       });
     return () => {
       active = false;
     };
-  }, [allowed.join(","), loginPath, setLocation]);
-  return ready ? <>{children}</> : <div className="flex min-h-[100dvh] items-center justify-center text-sm text-[#77787b]">Checking access...</div>;
+  }, [allowed.join(","), loginPath, location, setLocation]);
+  return readyForPath === location ? <>{children}</> : <div className="flex min-h-[100dvh] items-center justify-center text-sm text-[#77787b]">Checking access...</div>;
 }
 function Button({
   children,
@@ -2987,6 +2991,7 @@ function FleetOptimizationModal({
 }
 
 function Tower() {
+  const { readOnly } = useAccess(); // Sales / Wet Market: view only (no poll, optimize or new order)
   const [tab, setTab] = useState<"Fleet" | "Comms" | "Routes">(
     "Fleet",
   );
@@ -3084,7 +3089,7 @@ function Tower() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([fleetApi.triggerFleetPoll(), fleetApi.refreshVehicles()]);
+      if (!readOnly) await Promise.all([fleetApi.triggerFleetPoll(), fleetApi.refreshVehicles()]);
       await Promise.all([
         qc.refetchQueries({ queryKey: ["vehicles"] }),
         qc.refetchQueries({ queryKey: ["alerts"] }),
@@ -3115,18 +3120,22 @@ function Tower() {
             <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
             {refreshing ? "Refreshing..." : "Refresh feed"}
           </Button>
-          <Button
-            onClick={() => setShowOptimizationModal(true)}
-            variant="outline"
-            className="rounded-[4px] px-3 py-2"
-          >
-            <Activity size={14} />
-            Optimize Fleet
-          </Button>
-          <Button className="rounded-[4px] px-3 py-2">
-            <Plus size={14} />
-            New order
-          </Button>
+          {!readOnly && (
+            <>
+              <Button
+                onClick={() => setShowOptimizationModal(true)}
+                variant="outline"
+                className="rounded-[4px] px-3 py-2"
+              >
+                <Activity size={14} />
+                Optimize Fleet
+              </Button>
+              <Button className="rounded-[4px] px-3 py-2">
+                <Plus size={14} />
+                New order
+              </Button>
+            </>
+          )}
         </div>
       </div>
       <div className="mb-5 grid grid-cols-2 gap-3 border-y border-[#e4e3df] py-4 md:grid-cols-4">

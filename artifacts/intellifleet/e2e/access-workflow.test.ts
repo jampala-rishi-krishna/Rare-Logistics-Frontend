@@ -67,16 +67,28 @@ test("planner requests unassign with required reason and sees only permitted nav
   assert.deepEqual(errors,[]); await context.close();
 });
 
-test("Sales and Wet Market confirmed orders are read-only",async()=>{
+test("Sales and Wet Market have only the four approved tabs and cannot open other pages",async()=>{
   for(const role of ["sales","wet_market"]) {
-    const {context,page,errors}=await open(role);
-    assert.equal(await page.getByRole("button",{name:"Edit",exact:true}).count(),0);
-    assert.equal(await page.getByRole("button",{name:"Unassign",exact:true}).count(),0);
-    assert.equal(await page.getByRole("button",{name:"Email",exact:true}).isVisible(),false);
-    assert.equal(await page.getByRole("button",{name:"Load Planning",exact:true}).isVisible(),false);
-    assert.equal(await page.getByRole("link",{name:"Fleet",exact:true}).count(),0);
-    await shot(page,`access-workflow/${role}-confirmed`);
-    assert.deepEqual(errors,[]); await context.close();
+    const context=await browser.newContext({viewport:{width:1440,height:950}});
+    const page=await context.newPage();
+    await installMocks(page,{session:{user:{id:1,fullName:"Department User",email:`${role}@example.test`,role,status:"active",is_manager:false}}});
+    const approved=["/app/tower","/app/fleet","/app/orders","/app/order-tracker"];
+    for(const path of approved) {
+      await page.goto(`${BASE}${path}`);
+      await page.locator(".app-sidebar nav").waitFor();
+      assert.equal(new URL(page.url()).pathname,path);
+      const links=await page.locator('.app-sidebar nav a[href^="/app/"]').evaluateAll(els=>els.map(el=>el.getAttribute("href")));
+      assert.deepEqual(links.sort(),[...approved].sort());
+    }
+    for(const path of ["/app/loads","/app/routes","/app/comms","/app/reports","/app/driver-overview","/app/fleet-health","/admin/users"]) {
+      await page.goto(`${BASE}${path}`);
+      await page.waitForURL(`${BASE}/app/orders`);
+      await page.locator(".app-sidebar nav").waitFor();
+    }
+    await page.setViewportSize({width:390,height:844});
+    const mobileLinks=await page.locator('.mobile-bottom-nav a').evaluateAll(els=>els.map(el=>el.getAttribute("href")));
+    assert.deepEqual(mobileLinks.sort(),[...approved].sort());
+    await context.close();
   }
 });
 

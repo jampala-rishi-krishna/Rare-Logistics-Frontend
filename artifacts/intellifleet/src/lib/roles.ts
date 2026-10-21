@@ -23,8 +23,11 @@ export const NAV_ROLES: Record<string, readonly string[]> = {
 // Roles that may open the officer screens but not act on them.
 export const OFFICER_READ_ONLY_ROLES: readonly string[] = ["dispatcher"];
 
+// Sales / Wet Market logins see only these tabs (read-only; the backend allows GETs for exactly these screens).
+export const DEPARTMENT_TABS: readonly string[] = ["/app/tower", "/app/fleet", "/app/orders", "/app/order-tracker"];
+
 export function canSeeNavItem(href: string, role: string | null | undefined): boolean {
-  if (["sales", "wet_market"].includes((role ?? "").toLowerCase())) return ["/app/orders", "/app/loads", "/app/order-tracker"].includes(href);
+  if (["sales", "wet_market"].includes((role ?? "").toLowerCase())) return DEPARTMENT_TABS.includes(href);
   const allowed = NAV_ROLES[href];
   if (!allowed) return true;
   return allowed.includes((role ?? "").toLowerCase());
