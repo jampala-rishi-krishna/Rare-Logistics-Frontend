@@ -34,7 +34,8 @@ export function validateSettingInput(setting: Pick<AdminSetting, "label" | "type
     return { ok: true, value: text };
   }
   const text = raw.trim();
-  if (!/^-?\d+$/.test(text)) return { ok: false, message: `${setting.label} must be a whole number.` };
+  const decimalAllowed = setting.key === "ZOHO_GUARD_CACHE_ONLY_PCT";
+  if (!(decimalAllowed ? /^-?\d+(\.\d+)?$/ : /^-?\d+$/).test(text)) return { ok: false, message: `${setting.label} must be ${decimalAllowed ? "a number" : "a whole number"}.` };
   const number = Number(text);
   if (setting.min !== null && number < setting.min) return { ok: false, message: `${setting.label} must be at least ${setting.min}.` };
   if (setting.max !== null && number > setting.max) return { ok: false, message: `${setting.label} must be at most ${setting.max}.` };

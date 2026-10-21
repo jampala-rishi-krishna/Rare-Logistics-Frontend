@@ -12,6 +12,13 @@ test("numbers are accepted inside the server bounds", () => {
   assert.deepEqual(validateSettingInput(budget, "10000"), { ok: true, value: 10000 });
 });
 
+test("cache-only percentage accepts decimals for an exact call threshold", () => {
+  const guard = { ...budget, key: "ZOHO_GUARD_CACHE_ONLY_PCT", min: 50, max: 99 };
+  assert.deepEqual(validateSettingInput(guard, "95.83333333333333"), { ok: true, value: 95.83333333333333 });
+  for (const bad of ["NaN", "Infinity", "49.9", "99.1"]) assert.equal(validateSettingInput(guard, bad).ok, false);
+  assert.equal(validateSettingInput(budget, "6000.5").ok, false);
+});
+
 test("numbers outside the bounds or not whole are explained", () => {
   assert.deepEqual(validateSettingInput(stale, "0"), { ok: false, message: "Driver stale threshold must be at least 1." });
   assert.deepEqual(validateSettingInput(stale, "1441"), { ok: false, message: "Driver stale threshold must be at most 1440." });

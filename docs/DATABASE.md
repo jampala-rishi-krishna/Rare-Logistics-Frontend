@@ -193,7 +193,7 @@ call, at the same moments (assign / unassign / status change / delivery), as SO 
 | `DISPATCH_PHONE` | Number the driver app's "Call dispatch" dials; empty hides the button | digits, `+ - ( )` and spaces, max 32 | env `DISPATCH_PHONE`, else empty |
 | `DRIVER_STALE_MINUTES` | Driver Overview "stale" threshold | whole number 1-1440 | env, else 15 |
 | `ZOHO_DAILY_BUDGET` | Platform soft budget of Zoho calls/day (80% pauses non-essential calls) | whole number 100 to `ZOHO_ORG_DAILY_LIMIT` | env, else 4500 |
-| `ZOHO_GUARD_CACHE_ONLY_PCT` | Percentage of `ZOHO_DAILY_BUDGET` at which non-essential Zoho calls pause (the app serves cached data) | whole number 50-99 | env, else 92 |
+| `ZOHO_GUARD_CACHE_ONLY_PCT` | Percentage of `ZOHO_DAILY_BUDGET` at which non-essential Zoho calls pause (the app serves cached data); decimal percentages allowed, threshold rounded to nearest call. A 6000 budget and 95.83333333333333% gives exactly 5750 calls. Same existing setting row and save/load paths; no schema change. | finite number 50-99 | env, else 92 |
 | `ZOHO_FAILSAFE_SO_DETAIL_CAP` | SO-detail calls allowed while today's usage total could not be restored from Neon | whole number 0-1000 | env, else 50 |
 
 Resolution order: admin override > environment variable > built-in default. **Read path:** one `SELECT` of the table at startup
