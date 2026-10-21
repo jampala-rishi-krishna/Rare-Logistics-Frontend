@@ -30,8 +30,8 @@ export function isFinished(batch: Pick<Batch, "trip">): boolean {
 }
 
 // The crew members the signed-in person can call (helper sees "Call driver" + any other helper; driver sees the helper).
-export function crewCallsOf(batch: Pick<Batch, "crew" | "helpers">, me: Pick<DriverMe, "driver_id" | "staff_id" | "role" | "viewer_role"> | null | undefined): CrewCall[] {
-  return crewCalls(normalizeCrew(batch.crew, batch.helpers), viewerRoleOf(me), [me?.staff_id, me?.driver_id]);
+export function crewCallsOf(batch: Pick<Batch, "crew" | "helpers" | "viewer_role">, me: Pick<DriverMe, "driver_id" | "staff_id" | "role" | "viewer_role"> | null | undefined): CrewCall[] {
+  return crewCalls(normalizeCrew(batch.crew, batch.helpers), viewerRoleOf(batch, me), [me?.staff_id, me?.driver_id]);
 }
 
 // Crew contact: "Driver: <name>" / "Helper: <name>" with the number, and a labelled call button when it is dialable.
@@ -176,6 +176,7 @@ function TripCard({ batch, scope, me, index, total, active, waitFor }: { batch: 
         )}
       </div>
       <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 4, overflowWrap: "anywhere" }}>{batch.vehicle}</div>
+      <div data-testid="trip-viewer-role" style={{ fontSize: 14, color: C.sub, marginTop: 4 }}>{t.yourTripRole(viewerRoleOf(batch, me))}</div>
       {finished && (
         <div data-testid="driver-card-delivered" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 16, fontWeight: 700, color: C.green }}>
           <Icon name="check" size={20} color={C.green} width={2.4} />

@@ -108,6 +108,7 @@ function Header({ batch, state, t, backHref, backLabel, me, done }: { batch: Bat
     <div data-testid="driver-trip-header" style={{ background: C.card, padding: "12px 20px 4px" }}>
       <RoundButton icon="back" label={backLabel} href={backHref} testId="driver-trip-back" />
       <div style={{ fontSize: 15, color: C.sub, marginTop: 12 }}>{t.tripDetails}</div>
+      {batch.viewer_role && <div data-testid="trip-viewer-role" style={{ fontSize: 14, color: C.sub, marginTop: 4 }}>{t.yourTripRole(batch.viewer_role)}</div>}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 2 }}>
         <h1 style={{ margin: 0, fontSize: "clamp(28px, 8.5vw, 34px)", fontWeight: 800, letterSpacing: "-0.03em", overflowWrap: "anywhere", minWidth: 0 }}>{batch.vehicle}</h1>
         <Chip tone={chip.tone} big testId="driver-trip-chip" icon={chip.tone === "green" ? "check" : undefined}>

@@ -77,6 +77,7 @@ export interface TripInfo {
 }
 
 export interface Batch {
+  viewer_role?: "driver" | "helper";
   batch_id: string;
   delivery_date: string;
   // CONTRACT 2026-10-16: /today returns today's AND tomorrow's items (absent = today). See lib/tripDays.ts.

@@ -80,8 +80,7 @@ export default function DriverProfile() {
   const data = me.data;
   const dispatchTel = telHref(data?.dispatch_phone);
   const viewerRole = viewerRoleOf(data);
-  const isHelper = viewerRole === "helper";
-  const partners = (data?.crew_today ?? []).filter((p) => String(p.id) !== String(data?.staff_id ?? data?.driver_id) && (isHelper ? p.role === "driver" : p.role !== "driver"));
+  const partners = (data?.crew_today ?? []).filter((p) => String(p.id) !== String(data?.staff_id ?? data?.driver_id));
 
   const logout = async () => {
     const waiting = queue.entries.filter((e) => e.status !== "done").length;
@@ -142,7 +141,7 @@ export default function DriverProfile() {
             <Row label={t.truckToday} testId="profile-vehicle">
               {data.vehicles_today && data.vehicles_today.length > 0 ? data.vehicles_today.join(", ") : t.none}
             </Row>
-            <Row label={isHelper ? t.driverToday : t.helperToday} last testId="profile-crew">
+            <Row label={t.crewToday} last testId="profile-crew">
               {partners.length > 0 ? partners.map((p) => p.name).join(", ") : t.none}
             </Row>
           </div>

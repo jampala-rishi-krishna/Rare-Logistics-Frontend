@@ -5956,7 +5956,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
       selected && data.order.requires_reefer && selected.reefer === false,
     );
   const driverOptions = data.drivers.filter((d) => d.kind === "driver");
-  const helperOptions = data.drivers.filter((d) => d.kind === "helper");
+  const helperOptions = data.drivers.filter((d) => (d.kind === "helper" || d.kind === "driver") && d.id !== driverId);
   // A driver is required, except for third-party / manually entered trucks (no staff to notify).
   const driverRequired = !(selected?.third_party || manualVehicleOpen);
   const missingDriver = driverRequired && driverId === null && !newDriverOpen;
@@ -6301,7 +6301,11 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
             data-testid="select-assignment-driver"
             value={driverId === null ? "" : String(driverId)}
             disabled={newDriverOpen && !/helper/i.test(newDriver.title)}
-            onChange={(e) => setDriverId(e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => {
+              const nextDriverId = e.target.value === "" ? null : Number(e.target.value);
+              setDriverId(nextDriverId);
+              setHelperIds((ids) => ids.filter((helperId) => helperId !== nextDriverId));
+            }}
             className="w-full border border-[#d8d7d2] bg-white px-2 py-2 text-sm"
           >
             <option value="">{driverRequired ? "Select a driver" : "No driver"}</option>
@@ -6319,6 +6323,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
           <div className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-[#55565a]">
             Helper — optional (one per truck)
           </div>
+          <p className="mb-2 text-xs text-[#77787b]">Drivers can also serve as helpers. Select a different person for each role.</p>
           <div className="grid gap-1 border border-[#d8d7d2] bg-white p-2 text-sm md:grid-cols-2">
             {helperOptions.length === 0 && (
               <div className="text-xs text-[#77787b]">No active helpers available.</div>
