@@ -264,8 +264,8 @@ function useVehiclesData(liveTracking = true, selectedDate?: string) {
   return { ...query, data: query.data ?? [] };
 }
 
-// Calendar date (YYYY-MM-DD) in Manila, offset by whole days. Fleet and Orders default to the
-// NEXT delivery day, so the date must never depend on the browser's or UTC's idea of "today".
+// Calendar date (YYYY-MM-DD) in Manila, offset by whole days. Fleet defaults to today;
+// Orders defaults to the next delivery day, independently of the browser's timezone.
 function manilaDate(offsetDays = 0) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date(Date.now() + offsetDays * 86400000));
 }
@@ -3432,7 +3432,7 @@ function DataTablePage({
   const today = manilaDate(0);
   // Fleet opens on the next delivery day. Orders assigned to trucks for later days only show
   // when that day is picked on the calendar, with that day's own load and fulfillment.
-  const [fleetDate, setFleetDate] = useState(nextExpectedDate);
+  const [fleetDate, setFleetDate] = useState(() => manilaDate());
   // FleetSocketProvider (mounted once at the app root) keeps the ["vehicles"] cache live here
   // too - no per-page connect/disconnect needed.
   const { data: vehiclesData, refetch: refetchVehicles, isFetching: vehiclesFetching } = useVehiclesData(kind !== "fleet", kind === "fleet" ? fleetDate : undefined);
@@ -3656,7 +3656,7 @@ function DataTablePage({
               />
             </div>
             <div className="flex min-w-0 flex-wrap gap-2">
-              {kind === "fleet" && <label className="flex items-center gap-2 text-xs text-[#55565a]">Date <input aria-label="Fleet date" type="date" value={fleetDate} onChange={(e) => setFleetDate(e.target.value || nextExpectedDate())} className="border border-[#d8d7d2] bg-white px-2 py-2 text-sm" /></label>}
+              {kind === "fleet" && <label className="flex items-center gap-2 text-xs text-[#55565a]">Date <input aria-label="Fleet date" type="date" value={fleetDate} onChange={(e) => setFleetDate(e.target.value || manilaDate())} className="border border-[#d8d7d2] bg-white px-2 py-2 text-sm" /></label>}
               {kind === "fleet" && <Button variant="outline" className="rounded-[4px] px-3 py-2" onClick={refreshFleetData} disabled={fleetRefreshing}><RefreshCw size={14} className={fleetRefreshing ? "animate-spin" : ""} />{fleetRefreshing ? "Refreshing…" : "Refresh"}</Button>}
               {kind === "orders" && <Button variant="outline" className="rounded-[4px] px-3 py-2" onClick={refreshOrders} disabled={ordersFetching}><RefreshCw size={14} className={ordersFetching ? "animate-spin" : ""} />{ordersFetching ? "Refreshing..." : "Refresh"}</Button>}
               {kind === "orders" && <Button variant="outline" className="rounded-[4px] px-3 py-2" onClick={() => setShowOrderFilters((v) => !v)}>
