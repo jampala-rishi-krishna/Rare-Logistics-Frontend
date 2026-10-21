@@ -36,7 +36,6 @@ import { TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
 import TransferOrdersTab, { TRANSFER_ORDERS_KEY } from "./TransferOrdersTab";
 import PurchaseOrdersTab, { PURCHASE_ORDERS_KEY } from "./PurchaseOrdersTab";
 import { useAccess } from "@/hooks/use-access";
-import { RequestUnassignDialog } from "./RequestUnassignDialog";
 import ConfirmedEmailDialog from "./ConfirmedEmailDialog";
 import UnassignConfirmDialog from "./UnassignConfirmDialog";
 import { canShowUnassign, type AssignmentRuleOrder } from "@/lib/assignmentRules";
@@ -359,7 +358,6 @@ function SalesOrdersView({
 }) {
   const [, navigate] = useLocation();
   const { manager, readOnly } = useAccess();
-  const [requestIds, setRequestIds] = useState<string[]>([]);
   const [emailOpen, setEmailOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [confirmUnassign, setConfirmUnassign] = useState(false);
@@ -629,7 +627,7 @@ function SalesOrdersView({
     }
   };
   const unassign = async (order: inventoryApi.SalesOrderSummary) => {
-    if (!manager) { if (!readOnly) setRequestIds([order.id]); return; }
+    if (readOnly) return;
     setUnassignPreviewing(true);
     const plan = await previewUnassignPlan([order.id]);
     setUnassignPreviewing(false);
@@ -680,7 +678,7 @@ function SalesOrdersView({
   };
   /** "Unassign selected": preview first; only orders already in progress / delivered get the extra dialog. */
   const openBulkUnassign = async () => {
-    if (!manager) {if (!readOnly) setRequestIds(selectedOrderIds); return;}
+    if (readOnly) return;
     setUnassignPreviewing(true);
     const plan = await previewUnassignPlan(selectedOrderIds);
     setUnassignPreviewing(false);
@@ -731,7 +729,7 @@ function SalesOrdersView({
           assignmentScope ? (
             <>
               <button hidden={readOnly} onClick={() => void openBulkUnassign()} disabled={readOnly || bulkUnassigning || unassignPreviewing || !selectedOrderIds.length} className={primaryButtonClass} data-testid="bulk-unassign-button">
-                {bulkUnassigning || unassignPreviewing ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} {manager ? "Unassign selected" : "Request unassign"} ({selectedOrderIds.length})
+                {bulkUnassigning || unassignPreviewing ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Unassign selected ({selectedOrderIds.length})
               </button>
               <button hidden={readOnly} onClick={() => setEmailOpen(true)} disabled={!visibleOrderIds.length} className={dangerButtonClass} data-testid="confirmed-email-button">
                 <Mail size={14} /> Email
@@ -854,7 +852,7 @@ function SalesOrdersView({
             onOpen={openOrder}
             onEdit={manager ? (order) => navigate(`/app/routes?assign=${encodeURIComponent(order.id)}`) : undefined}
             onUnassign={readOnly ? undefined : (order) => void unassign(order)}
-            unassignLabel={manager ? "Unassign" : "Request unassign"}
+            unassignLabel="Unassign"
           />
           {(page > 1 || orders.data?.has_more) && (
             <div className="flex items-center justify-end gap-2 border-t border-[#e4e3df] px-4 py-3">
@@ -1038,7 +1036,7 @@ function SalesOrdersView({
                                       void unassign(order);
                                     }}
                                   >
-                                    {manager ? "Unassign" : "Request unassign"}
+                                    Unassign
                                   </button>
                                 )}
                               </div>
@@ -1110,7 +1108,6 @@ function SalesOrdersView({
           </section>
         </div>
       )}
-      {requestIds.length > 0 && <RequestUnassignDialog ids={requestIds} onClose={() => setRequestIds([])} onSent={() => {setRequestIds([]); setSyncMessage("Unassign request sent to managers."); void client.invalidateQueries({queryKey:["access-alerts"]});}}/>}
       {unassignGuard && (
         <UnassignConfirmDialog
           plan={unassignGuard.plan}

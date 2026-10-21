@@ -51,19 +51,23 @@ test("manager sees attribution last before actions and unassign controls",async(
   assert.deepEqual(errors,[]); await context.close();
 });
 
-test("planner requests unassign with required reason and sees only permitted navigation",async()=>{
+test("planner unassigns directly without manager approval and sees only permitted navigation",async()=>{
   const view=await open("planner"); const {page,context,errors}=view;
   assert.equal(await page.getByRole("columnheader",{name:"Assigned by",exact:true}).count(),0);
   assert.equal(await page.getByRole("button",{name:"Edit",exact:true}).count(),0);
   assert.equal(await page.getByRole("link",{name:"Fleet Health",exact:true}).count(),0);
   assert.ok(await page.getByRole("link",{name:"Driver Overview",exact:true}).count());
-  await page.getByRole("button",{name:"Request unassign",exact:true}).click();
-  const dialog=page.getByRole("dialog",{name:"Request unassign"});
-  assert.equal(await dialog.getByRole("button",{name:"Send request"}).isDisabled(),true);
-  await dialog.getByRole("textbox").fill("Wrong truck");
-  await dialog.getByRole("button",{name:"Send request"}).click();
-  await page.getByText("Unassign request sent to managers.",{exact:true}).waitFor();
-  assert.deepEqual(view.request(),{order_ids:["one"],reason:"Wrong truck"});
+  assert.equal(await page.getByRole("button",{name:/Request unassign/}).count(),0);
+  page.once("dialog",dialog=>void dialog.accept());
+  await page.getByRole("button",{name:"Unassign",exact:true}).click();
+  await page.getByText("Unassigned SO26-18449.",{exact:true}).waitFor();
+  assert.ok(view.recorder.calls.some(call=>call.method==="POST" && call.path==="/api/load-planning/assignments/one/unassign"));
+  await page.getByRole("checkbox",{name:"Select SO26-18449",exact:true}).check();
+  await page.getByTestId("bulk-unassign-button").click();
+  await page.getByTestId("bulk-unassign-dialog").getByRole("button",{name:"Unassign",exact:true}).click();
+  await page.getByText(/Unassigned 1 order/).waitFor();
+  assert.ok(view.recorder.calls.some(call=>call.method==="POST" && call.path==="/api/load-planning/assignments/bulk-unassign"));
+  assert.equal(view.request(),undefined);
   assert.deepEqual(errors,[]); await context.close();
 });
 
