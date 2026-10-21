@@ -118,7 +118,7 @@ export function designList(params: URLSearchParams, rows: OrderRow[] = designRow
   const status = params.get("status") ?? "all";
   const orders = rows.filter(r => (!q || `${r.number} ${r.customer} ${r.truck ?? ""}`.toLowerCase().includes(q))
     && (status === "all" ? true : status === "problems" ? r.status === "Partly delivered" || r.status === "Not delivered" : r.status === status));
-  return { orders, total: orders.length, offset: 0, scope: "Orders where you are the recorded salesperson", coverage: "Accessible cached records only.", as_of: at("13:42") };
+  return { orders, total: orders.length, offset: 0, scope: "All assigned orders", coverage: "Accessible cached records only.", as_of: at("13:42") };
 }
 
 // ---- Ask: the four mockup turns ----

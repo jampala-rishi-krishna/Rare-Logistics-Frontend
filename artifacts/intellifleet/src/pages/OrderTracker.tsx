@@ -59,13 +59,13 @@ export default function OrderTracker() {
   const [, navigate] = useLocation();
   const phone = useMedia(PHONE);
   const { user } = useAccess();
-  const ownOrdersOnly = !!user && ["sales", "wet_market"].includes(user.role);
+  const ownOrdersOnly = false;
 
   const filter: tracker.Filter = { date_from: from, date_to: to, q: query, status, offset };
   const invalidRange = !from || !to || from > to || (new Date(to).getTime() - new Date(from).getTime()) / 86400000 > 30;
-  const list = useQuery({ queryKey: ["order-tracker", from, to, query, status, offset], queryFn: () => tracker.findOrders(filter), enabled: !invalidRange && view !== "ask", retry: false, refetchOnWindowFocus: false });
-  const card = useQuery({ queryKey: ["order-tracker-card", selected, from, to], queryFn: () => tracker.getOrder(selected!, filter), enabled: !invalidRange && !!selected, retry: false, refetchOnWindowFocus: false });
-  useEffect(() => { const first = params.get("from"), last = params.get("to"); if (first) setFrom(first); if (last) setTo(last); }, [selected, params.get("from"), params.get("to")]);
+  const list = useQuery({ queryKey: ["order-tracker", user?.id, user?.role, from, to, query, status, offset], queryFn: () => tracker.findOrders(filter), enabled: !!user && !invalidRange && view !== "ask", retry: false, refetchOnWindowFocus: false });
+  const card = useQuery({ queryKey: ["order-tracker-card", user?.id, user?.role, selected, from, to], queryFn: () => tracker.getOrder(selected!, filter), enabled: !!user && !invalidRange && !!selected, retry: false, refetchOnWindowFocus: false });
+  useEffect(() => { const first = params.get("from"), last = params.get("to"); setFrom(first ?? today); setTo(last ?? first ?? today); }, [params.get("from"), params.get("to"), today]);
 
   // Date popover: close on outside press / Escape.
   useEffect(() => {
@@ -192,7 +192,7 @@ export default function OrderTracker() {
           const n = list.data?.counts?.[key] ?? (active ? list.data?.total : undefined);
           return <button type="button" key={key} className={`ot-q${active ? " ot-q-on" : ""}`} aria-pressed={active}
             onClick={() => { setStatus(key); setOffset(0); }}>
-            {title}{n !== undefined ? <span className={`ot-q-n ot-q-n-${tone}`}>{n}</span> : null}
+            {key === "all" ? "All orders" : title}{n !== undefined ? <span className={`ot-q-n ot-q-n-${tone}`}>{n}</span> : null}
           </button>;
         })}
       </div>

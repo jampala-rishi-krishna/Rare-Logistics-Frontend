@@ -112,14 +112,15 @@ test("permits: 'Not recorded yet — Logistics can add them' (desktop) and 'Not 
   await phone.context.close();
 });
 
-test("Sales user with no matching orders: ownership sentence and Call Logistics", async () => {
+test("Sales user with no matching orders: date hint and Call Logistics", async () => {
   const view = await openTracker(browser, { width: 1440, waitFor: "none", list: p => designList(p, []) });
   const { page } = view;
   const empty = page.locator(".otl-empty");
   await empty.waitFor();
   const text = await empty.innerText();
   assert.match(text, /No orders for this date or search\./);
-  assert.match(text, /You see orders where you are the recorded salesperson\. If one is missing, Logistics can check the salesperson on the order\./);
+  assert.match(text, /Try another date, filter or reference\./);
+  assert.doesNotMatch(text, /recorded salesperson/);
   await empty.getByRole("link", { name: "Call Logistics" }).waitFor();
   assert.equal(await empty.getByRole("link", { name: "Call Logistics" }).getAttribute("href"), "tel:0285550100");
   await shot(page, states("sales-no-orders-1440"));

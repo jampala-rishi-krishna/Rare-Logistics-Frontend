@@ -11,6 +11,24 @@ let browser: Browser;
 before(async () => { await startServer(); browser = await launch(); });
 after(async () => { await browser?.close(); stopServer(); });
 
+test("Sales and Wet Market tracker opens all orders for today and resets old date links", async () => {
+  for (const role of ["sales", "wet_market"]) {
+    const view = await openTracker(browser, { role, width: 1440 });
+    const { page, requests } = view;
+    assert.ok(requests.some(url => url.pathname.endsWith("/orders") && url.searchParams.get("date_from") === "2026-10-15" && url.searchParams.get("date_to") === "2026-10-15"));
+    assert.ok(await page.getByRole("button", { name: /^All orders/ }).count());
+    assert.equal(await page.getByText(/recorded salesperson/).count(), 0);
+    // A stale order link must not make the sidebar's plain tracker entry keep yesterday.
+    await page.goto(new URL("/app/order-tracker?from=2026-10-14&to=2026-10-14", page.url()).href);
+    await page.locator("a.otl-row").first().waitFor();
+    await page.locator('.app-sidebar a[href="/app/order-tracker"]').click();
+    await page.locator("a.otl-row").first().waitFor();
+    const lists = requests.filter(url => url.pathname.endsWith("/orders"));
+    assert.equal(lists.at(-1)?.searchParams.get("date_from"), "2026-10-15");
+    await view.context.close();
+  }
+});
+
 test("Ask renders safe English Markdown and a dated buyers summary with bars only", async () => {
   const view = await openTracker(browser, { query: "?view=ask", answer: q => ({
     answer_id: "a".repeat(32), language: "en", not_recorded: false, tools: [], sources: [],
