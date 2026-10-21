@@ -82,6 +82,13 @@ export interface SalesOrderSummary {
   last_modified_by?: string | null;
   /** TO#/PO# used instead of an invoice number. */
   order_reference?: string | null;
+  fulfillment_type?: string | null;
+  pickup_warehouses?: string[] | null;
+  /** Why this order cannot be unassigned right now (null when it can). */
+  unassign_blocked_reason?: string | null;
+  /** Helper-app stop outcome and check-out time (ISO), when the stop is done. */
+  stop_outcome?: string | null;
+  checkout_at?: string | null;
 }
 
 export interface ZohoLockStatus {
@@ -394,7 +401,8 @@ export function getSalesOrderDetail(id: string) {
     `/api/load-planning/inventory/sales-orders/${encodeURIComponent(id)}`,
   ).then((response) => {
     const record = response?.salesorder || response;
-    return { ...record, raw_json: response?.raw_json || record?.raw_json } as SalesOrderSummary & { raw_json?: Record<string, unknown> };
+    // delivery_status is computed at the top level of the response (not inside `salesorder`): keep it for the drawer.
+    return { ...record, delivery_status: record?.delivery_status ?? response?.delivery_status ?? null, raw_json: response?.raw_json || record?.raw_json } as SalesOrderSummary & { raw_json?: Record<string, unknown>; delivery_status?: string | null };
   });
 }
 

@@ -45,6 +45,11 @@ test("header meta shows only the parts that exist", () => {
   assert.deepEqual(buildOrderView(c, NOW).meta, []);
 });
 
+test("header meta adds delivery method and fulfillment type when the order has them", () => {
+  const c = { ...base(), delivery_method: "Company Truck", fulfillment_type: "Company Delivery" } as Card;
+  assert.deepEqual(buildOrderView(c, NOW).meta, ["Guiguinto", "Invoice/DR 0012345", "Client PO PO-88213", "Delivery method: Company Truck", "Fulfillment type: Company Delivery"]);
+});
+
 test("journey: partial result is a problem step with the reason, invoice step not recorded", () => {
   const v = buildOrderView(base(), NOW);
   assert.deepEqual(v.journey.map(s => [s.label, s.state, s.time]), [

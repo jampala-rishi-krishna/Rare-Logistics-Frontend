@@ -25,6 +25,7 @@ import {
   OUTCOME,
   attentionLabel,
   outcomeKey,
+  isCancelledOutcome,
   photoCaption,
 } from "@/lib/overviewModel";
 import type { PhotoLike, Tone } from "@/lib/overviewModel";
@@ -142,7 +143,7 @@ export function OutcomeChip({
       title={outcome ?? undefined}
       icon={<span aria-hidden>{o.glyph}</span>}
     >
-      {o.word.charAt(0).toUpperCase() + o.word.slice(1)}
+      {isCancelledOutcome(outcome) ? "Cancelled" : o.word.charAt(0).toUpperCase() + o.word.slice(1)}
     </Chip>
   );
 }

@@ -138,10 +138,10 @@ const humanKey = (key: string) => key.replace(/_/g, " ").replace(/^./, c => c.to
 
 const STATUS_TONE: Record<string, ViewTone> = {
   "Not yet loaded": "pending", Loaded: "neutral", "Out for delivery": "info", Arrived: "info",
-  Delivered: "positive", "Partly delivered": "warning", "Not delivered": "negative", "Back at warehouse": "neutral",
+  Delivered: "positive", "Partly delivered": "warning", "Not delivered": "negative", Cancelled: "negative", "Back at warehouse": "neutral",
 };
 const PAY_TONE: Record<string, ViewTone> = { Paid: "positive", "Partly paid": "warning", Unpaid: "neutral" };
-const RESULTS = new Set(["Delivered", "Partly delivered", "Not delivered"]);
+const RESULTS = new Set(["Delivered", "Partly delivered", "Not delivered", "Cancelled"]);
 const ACTIVE = new Set(["Out for delivery", "Arrived"]);
 
 /** Officer invoice record: proof.value.officer_invoice, else loading_check.value.officer_invoice. */
@@ -205,7 +205,10 @@ export function buildOrderView(card: Card, now: number = Date.now()): OrderView 
   // ---- header ----
   const invoiceDr = str(rv.invoice_dr) ?? str(invoice?.number) ?? str(pv.invoice_number);
   const po = str(dv.client_po_number);
-  const meta = [str(card.area), invoiceDr && `Invoice/DR ${invoiceDr}`, po && `Client PO ${po}`].filter((x): x is string => !!x);
+  const deliveryMethod = str((card as { delivery_method?: unknown }).delivery_method);
+  const fulfillmentType = str((card as { fulfillment_type?: unknown }).fulfillment_type);
+  const meta = [str(card.area), invoiceDr && `Invoice/DR ${invoiceDr}`, po && `Client PO ${po}`,
+    deliveryMethod && `Delivery method: ${deliveryMethod}`, fulfillmentType && `Fulfillment type: ${fulfillmentType}`].filter((x): x is string => !!x);
 
   // ---- journey ----
   const ackAt = str(tv.acknowledged_at), ackBy = str(tv.acknowledged_by);

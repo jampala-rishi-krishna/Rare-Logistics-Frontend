@@ -7,6 +7,8 @@
 .otc-positive { color: hsl(var(--status-success)); background: hsl(var(--success-bg)); }
 .otc-warning { color: hsl(var(--status-warning)); background: hsl(var(--warning-bg)); }
 .otc-negative { color: hsl(var(--destructive)); background: hsl(var(--destructive-bg)); }
+.otc-orange { color: hsl(var(--status-orange)); background: hsl(var(--orange-bg)); }
+.otc-solid.otc-orange { background: hsl(var(--status-orange)); color: hsl(var(--primary-foreground)); }
 .otc-pending, .otc-unknown { color: hsl(var(--muted-foreground)); background: hsl(var(--card)); border: 1px dashed hsl(var(--line-strong)); }
 .otc-solid { font-size: 14px; font-weight: 800; padding: 6px 12px; line-height: 1.2; border-radius: 12px; border: 0; }
 .otc-solid.otc-info { background: hsl(var(--info)); color: hsl(var(--primary-foreground)); }

@@ -6,25 +6,32 @@ import { Phone } from "lucide-react";
 import { getSupport } from "@/services/api/auth";
 import { telHref } from "@/lib/driver";
 import "./ui.css";
+import { isTimedStatus, manilaHm, statusStyle } from "@/lib/statusColors";
 
-export type Tone = "neutral" | "info" | "positive" | "warning" | "negative" | "pending" | "unknown";
+export type Tone = "neutral" | "info" | "positive" | "warning" | "orange" | "negative" | "pending" | "unknown";
 
 // Delivery status -> chip tone. Text is always shown; colour never carries meaning alone.
 const STATUS_TONE: Record<string, Tone> = {
   "Not yet loaded": "pending", Loaded: "neutral", "Out for delivery": "info", Arrived: "info",
-  Delivered: "positive", "Partly delivered": "warning", "Not delivered": "negative", "Back at warehouse": "neutral",
+  Delivered: "positive", "Partly delivered": "warning", "Not delivered": "negative", Cancelled: "negative", "Back at warehouse": "neutral",
 };
 const PAYMENT_TONE: Record<string, Tone> = { Paid: "positive", "Partly paid": "warning", Unpaid: "neutral" };
 
-export const statusTone = (status: string | null | undefined): Tone => STATUS_TONE[status ?? ""] ?? "unknown";
+// Green / orange / red come from the ONE shared helper (src/lib/statusColors.ts) so the tracker matches Orders, Fleet,
+// Confirmed Orders and Load Planning; the tracker-only states (Not yet loaded, Out for delivery...) keep their tone.
+const SHARED_TONE: Partial<Record<string, Tone>> = { green: "positive", orange: "orange", red: "negative" };
+export const statusTone = (status: string | null | undefined): Tone => SHARED_TONE[statusStyle(status).tone] ?? STATUS_TONE[status ?? ""] ?? "unknown";
 export const paymentTone = (status: string | null | undefined): Tone => PAYMENT_TONE[status ?? ""] ?? "unknown";
 
 /** One chip component for every status. size "lg" = order header; "solid" = phone header (solid tint, white text). */
 export function Chip({ tone, children, size = "sm", solid = false }: { tone: Tone; children: ReactNode; size?: "sm" | "md" | "lg"; solid?: boolean }) {
   return <span className={`otc otc-${tone} otc-${size}${solid ? " otc-solid" : ""}`}>{children}</span>;
 }
-export const StatusChip = ({ status, size, solid }: { status: string; size?: "sm" | "md" | "lg"; solid?: boolean }) =>
-  <Chip tone={statusTone(status)} size={size} solid={solid}>{status}</Chip>;
+/** `at` = helper-app check-out time: shown in Manila time next to a final status, e.g. "Delivered · 10:31". */
+export const StatusChip = ({ status, size, solid, at }: { status: string; size?: "sm" | "md" | "lg"; solid?: boolean; at?: string | null }) => {
+  const hm = at && isTimedStatus(status) ? manilaHm(at) : null;
+  return <Chip tone={statusTone(status)} size={size} solid={solid}>{hm ? `${status} · ${hm}` : status}</Chip>;
+};
 export const PaymentChip = ({ status, size }: { status: string | null | undefined; size?: "sm" | "md" | "lg" }) =>
   <Chip tone={paymentTone(status)} size={size}>{status && PAYMENT_TONE[status] ? status : "Unknown"}</Chip>;
 

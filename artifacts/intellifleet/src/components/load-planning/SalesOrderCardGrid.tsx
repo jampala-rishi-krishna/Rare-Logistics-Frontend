@@ -1,11 +1,15 @@
 import { useAccess } from "@/hooks/use-access";
+import { OrderStatusChip } from "@/components/OrderStatusChip";
+import { effectiveOrderStatus } from "@/lib/statusColors";
 import { BranchBadge } from "./BranchControls";
 import { OrderTypeBadge } from "./OrderTypeBadge";
 import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
 import { Lock } from "lucide-react";
 import type { SalesOrderSummary } from "@/services/api/inventory";
 import { formatAddress } from "@/lib/address";
+import { multiPickupLabel } from "@/lib/pickupWarehouses";
 import { formatKgPartial } from "@/lib/kgDisplay";
+import { canShowUnassign, type AssignmentRuleOrder } from "@/lib/assignmentRules";
 import { CARDS_PER_PAGE, pageOfCards, type ViewMode } from "@/lib/loadPlanningView";
 
 const KPI_LABEL = "KPI view";
@@ -95,9 +99,10 @@ export function SalesOrderCard({
         <button type="button" onClick={() => onOpen(order)} className="min-w-0 max-w-full flex-1 text-left">
           <div className="mono text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}><span className="mr-1.5 align-middle"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div>
           <h3 className="mt-1 break-words text-sm font-semibold text-black">{order.customer_name ?? "Unnamed customer"}</h3>
+          {multiPickupLabel(order) && <div className="mt-0.5 text-[10px] font-semibold text-[#77787b]" data-testid="multi-pickup">{multiPickupLabel(order)}</div>}
         </button>
         <div className="flex max-w-[45%] shrink-0 flex-col items-end gap-1">
-          <span className="break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{(order.order_status ?? "-").replaceAll("_", " ")}</span>
+          <span className="shrink-0"><OrderStatusChip small status={effectiveOrderStatus({ stopOutcome: order.stop_outcome, orderStatus: order.order_status, shipmentStatus: order.shipment_status })} checkoutAt={order.checkout_at} /></span>
           {lock?.is_locked && (
             <span className="inline-flex items-center gap-1 text-[10px] text-[#1e7b44]" title={[lock.config_name, lock.locked_by, lock.lock_time].filter(Boolean).join(" - ")}>
               <Lock size={11} /> {lock.config_name || "Locked"}
@@ -133,7 +138,7 @@ export function SalesOrderCard({
               Edit
             </button>
           )}
-          {onUnassign && order.assignment_status === "assigned" && (
+          {onUnassign && canShowUnassign(order as AssignmentRuleOrder) && (
             <button type="button" className="text-xs font-semibold text-[#86000B] underline" onClick={() => onUnassign(order)}>
               {unassignLabel}
             </button>

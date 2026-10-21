@@ -14,13 +14,13 @@ import { TrackerMap } from "./TrackerMap";
 import { ProofPhotos } from "./ProofPhotos";
 import "./phone.css";
 
-const RESULT = new Set(["Delivered", "Partly delivered", "Not delivered"]);
+const RESULT = new Set(["Delivered", "Partly delivered", "Not delivered", "Cancelled"]);
 const STATE_TEXT: Record<JourneyStep["state"], string> = { done: "done", problem: "problem", current: "in progress", todo: "not yet" };
 
 function StatusIcon({ status }: { status: string }) {
   const p = { size: 16, strokeWidth: 2.2, "aria-hidden": true } as const;
   if (status === "Delivered") return <Check {...p} />;
-  if (status === "Partly delivered" || status === "Not delivered") return <TriangleAlert {...p} />;
+  if (status === "Partly delivered" || status === "Not delivered" || status === "Cancelled") return <TriangleAlert {...p} />;
   if (status === "Loaded" || status === "Not yet loaded") return <Package {...p} />;
   return <Truck {...p} />;
 }

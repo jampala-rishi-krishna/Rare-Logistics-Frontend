@@ -152,6 +152,8 @@ const en = {
   notes: "Notes",
   showItems: (n: number) => `Show ${n} ${plural(n, "item", "items")}`,
   hideItems: "Hide items",
+  pickupAt: (w: string) => `Pick up at ${w}`,
+  noWarehouse: "Warehouse not set",
   far: (m: number | null) => (m === null ? "You are far from the customer" : `You are far from the customer (${m} m)`),
   farArrived: (m: number | null) => (m === null ? "You are far from the customer" : `You are far from the customer (${m} m)`),
   nearArrived: (m: number) => `${m} m from the customer`,
@@ -181,6 +183,20 @@ const en = {
   notFullyTitle: "Not fully delivered",
   partial: "Partial",
   failed: "Not delivered",
+  // cancel at the customer's / sales agent's request (outcome "cancelled_by_request")
+  cancelDelivery: "Cancel delivery",
+  cancelled: "Cancelled",
+  cancelWho: "Who asked to cancel?",
+  cancelCustomer: "Customer",
+  cancelAgent: "Sales agent",
+  cancelName: "Name of the person who asked",
+  cancelNamePh: "Type the name",
+  cancelNote: "Note (optional)",
+  cancelProof: "Proof photo (message, signed note or screenshot)",
+  needCancelWho: "Choose who asked",
+  needCancelName: "Type the name",
+  needCancelProof: "Take a photo of the proof first",
+  reasonsCancel: ["Customer changed mind", "Order cancelled by sales", "Wrong order / duplicate", "Price or payment issue", "Will re-order later", "Other"],
   problemKind: "Problem",
   whatHappened: "What happened?",
   otherReason: "Type the reason",
@@ -483,6 +499,8 @@ const tl: Dict = {
   notes: "Notes",
   showItems: (n) => `Ipakita ang ${n} item`,
   hideItems: "Itago ang items",
+  pickupAt: (w) => `Kunin sa ${w}`,
+  noWarehouse: "Walang nakalagay na bodega",
   far: (m) => (m === null ? "Malayo ka pa sa customer" : `Malayo ka pa sa customer (${m} m)`),
   farArrived: (m) => (m === null ? "Malayo ka pa sa customer" : `Malayo ka pa sa customer (${m} m)`),
   nearArrived: (m) => `${m} m mula sa customer`,
@@ -511,6 +529,19 @@ const tl: Dict = {
   notFullyTitle: "Hindi buo ang hatid",
   partial: "Kulang",
   failed: "Hindi naihatid",
+  cancelDelivery: "I-cancel ang hatid",
+  cancelled: "Cancelled",
+  cancelWho: "Sino ang nag-cancel?",
+  cancelCustomer: "Customer",
+  cancelAgent: "Sales agent",
+  cancelName: "Pangalan ng nag-cancel",
+  cancelNamePh: "Isulat ang pangalan",
+  cancelNote: "Note (kung meron)",
+  cancelProof: "Litrato ng patunay (message, pirmadong sulat o screenshot)",
+  needCancelWho: "Piliin kung sino ang nag-cancel",
+  needCancelName: "Isulat ang pangalan",
+  needCancelProof: "Kunan muna ng litrato ang patunay",
+  reasonsCancel: ["Nagbago ang isip ng customer", "Kinansel ng sales", "Maling order / doble", "Problema sa presyo o bayad", "Mag-o-order ulit", "Iba pa"],
   problemKind: "Problema",
   whatHappened: "Anong nangyari?",
   otherReason: "Isulat ang dahilan",
@@ -696,7 +727,7 @@ export function photoCaption(meta: Pick<PhotoMeta, "so_number" | "captured_at" |
   const t = DICTS[lang];
   const p = manilaParts(meta.captured_at);
   const k = String(meta.kind ?? "").toLowerCase();
-  const result = k === "delivered" ? t.stateDelivered : k === "partial" ? t.partial : k === "failed" ? t.failed : k === "problem" ? t.problemKind : "";
+  const result = k === "delivered" ? t.stateDelivered : k === "partial" ? t.partial : k === "failed" ? t.failed : k === "cancel_proof" ? t.cancelled : k === "problem" ? t.problemKind : "";
   return [meta.so_number ?? "", p ? `${p.day} ${MONTHS[lang][p.month]}` : "", p?.time ?? "", result].filter(Boolean).join(" · ");
 }
 

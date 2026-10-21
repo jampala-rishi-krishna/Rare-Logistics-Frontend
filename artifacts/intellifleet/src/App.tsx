@@ -1,4 +1,8 @@
 import { queryRetryDelayMs, queryShouldRetry } from "@/lib/apiErrors";
+import { OrderStatusChip } from "@/components/OrderStatusChip";
+import { effectiveOrderStatus, manilaHm, statusStyle } from "@/lib/statusColors";
+import { deriveOrderTimeline } from "@/lib/orderTimeline";
+import { formatKg } from "@/lib/kgDisplay";
 import {
   Children,
   useEffect,
@@ -93,7 +97,8 @@ import { RgfLogisticsReportView } from "@/components/reports/RgfLogisticsReport"
 import { CommsGateway } from "@/components/dispatch/CommsGateway";
 import { AdminContactControls, VoicePausedBanner, WhatsappPausedBanner } from "@/components/dispatch/VoiceCallsControl";
 import { GmailDisconnectedBanner } from "@/components/dispatch/GmailDisconnectedBanner";
-import { AssignmentEmailStatusPanel, EmailStatusChip } from "@/components/load-planning/AssignmentEmailStatus";
+import { AssignmentEmailStatusPanel, CrewEmailCell } from "@/components/load-planning/AssignmentEmailStatus";
+import { CREW_EMAIL_TOOLTIP } from "@/lib/emailStatus";
 import DispatchDashboardPage from "@/pages/DispatchDashboardRefreshing";
 import FleetHealthPage from "@/components/fleet-health/FleetHealthPage";
 import {
@@ -168,6 +173,8 @@ import SetPassword from "@/pages/SetPassword";
 import DriverLogin from "@/pages/driver/DriverLogin";
 import DriverForgot from "@/pages/driver/DriverForgot";
 import DriverRoutes from "@/pages/driver/DriverRoutes";
+import UnableToAssignDialog from "@/components/load-planning/UnableToAssignDialog";
+import { pickupBlocksFrom, type PickupBlock } from "@/lib/assignmentRules";
 
 type Role = "Planner" | "Driver" | "Admin" | "Sales" | "Wet Market" | "Helper" | "Logistics Officer";
 // Widened from a fixed enum to a plain string: real order status values come
@@ -185,7 +192,7 @@ interface Vehicle {
   x: number;
   y: number;
   zone: string;
-  associatedSos?: { soNumber: string; clientName: string | null; destinationCity: string | null; warehouse: string | null; orderedWeightKg?: number | null; shippedWeightKg?: number | null; deliveryStatus?: string | null; order_type?: string | null; orderType?: string | null; destination_warehouse?: string | null }[];
+  associatedSos?: fleetApi.ApiVehicle["associated_sos"];
   warehousePickup?: string | null;
   locked?: boolean;
   lockReason?: string | null;
@@ -220,7 +227,15 @@ interface Order {
   batchId?: string | null;
   emailStatus?: inventoryApi.SalesOrderSummary["email_status"];
   emailError?: string | null;
+  emailSentAt?: string | null;
   orderType?: "SO" | "WM" | "PO" | "TO";
+  deliveryMethod?: string | null;
+  fulfillmentType?: string | null;
+  pickupWarehouses?: string[] | null;
+  unassignBlockedReason?: string | null;
+  shipmentStatus?: string | null;
+  stopOutcome?: string | null;
+  checkoutAt?: string | null;
 }
 
 const orders: Order[] = [];
@@ -282,7 +297,15 @@ function useOrdersData(dateFrom: string, dateTo: string, options: { search?: str
         batchId: item.assignment_batch_id ?? null,
         emailStatus: item.email_status ?? null,
         emailError: item.email_error ?? null,
+        emailSentAt: item.email_sent_at ?? null,
         orderType: orderTypeOfRow(item),
+        deliveryMethod: item.delivery_method ?? null,
+        fulfillmentType: item.fulfillment_type ?? null,
+        pickupWarehouses: item.pickup_warehouses ?? null,
+        unassignBlockedReason: item.unassign_blocked_reason ?? null,
+        shipmentStatus: item.shipment_status ?? null,
+        stopOutcome: item.stop_outcome ?? null,
+        checkoutAt: item.checkout_at ?? null,
       } satisfies Order)) };
     },
     staleTime: 5000,
@@ -3444,7 +3467,7 @@ function DataTablePage({
   const [orderDelivery, setOrderDelivery] = useState("");
   const [showOrderFilters, setShowOrderFilters] = useState(false);
   const [showOrderColumns, setShowOrderColumns] = useState(false);
-  const [orderColumns, setOrderColumns] = useState({ customer: true, route: true, vehicle: true, status: true, eta: true });
+  const [orderColumns, setOrderColumns] = useState({ customer: true, route: true, vehicle: true, crewEmail: true, status: true, eta: true });
   const orderOptions = { search: query, status: orderStatus, assignment: orderAssignment, vehicle: orderVehicle, customer: orderCustomer, deliveryStatus: orderDelivery, orderTypes: "SO,WM,PO,TO" };
   const { data: ordersData, total: ordersTotal, refetch: refetchOrders, isFetching: ordersFetching } = useOrdersData(orderFrom, orderTo, orderOptions);
   const zohoUsage = useQuery({
@@ -3637,7 +3660,7 @@ function DataTablePage({
               </Button>}
             </div>
             {kind === "orders" && showOrderFilters && <div className="w-full border border-[#e4e3df] bg-white p-3 text-xs"><div className="flex flex-wrap gap-3"><label>Status <select value={orderStatus} onChange={(e) => setOrderStatus(e.target.value)} className="ml-1 border px-2 py-1"><option>All</option><option>Confirmed</option><option>Acknowledged</option><option>Closed</option><option>Void</option></select></label><label>Assignment <select value={orderAssignment} onChange={(e) => setOrderAssignment(e.target.value as "assigned" | "unassigned")} className="ml-1 border px-2 py-1"><option value="assigned">Assigned</option><option value="unassigned">Unassigned</option></select></label><label>Delivery <select value={orderDelivery} onChange={(e) => setOrderDelivery(e.target.value)} className="ml-1 border px-2 py-1"><option value="">All</option><option>Pending</option><option>Shipped</option><option>Delivered</option></select></label><input aria-label="Filter vehicle" placeholder="Vehicle" value={orderVehicle} onChange={(e) => setOrderVehicle(e.target.value)} className="border px-2 py-1" /><input aria-label="Filter customer" placeholder="Customer" value={orderCustomer} onChange={(e) => setOrderCustomer(e.target.value)} className="border px-2 py-1" /></div></div>}
-            {kind === "orders" && showOrderColumns && <div className="w-full border border-[#e4e3df] bg-white p-3 text-xs"><div className="flex flex-wrap gap-3">{(["customer", "route", "vehicle", "status", "eta"] as const).map((column) => <label key={column} className="flex items-center gap-1"><input type="checkbox" checked={orderColumns[column]} onChange={() => setOrderColumns((current) => ({ ...current, [column]: !current[column] }))} disabled={column === "status"} />{column === "eta" ? "Expected Shipment" : column[0].toUpperCase() + column.slice(1)}</label>)}</div></div>}
+            {kind === "orders" && showOrderColumns && <div className="w-full border border-[#e4e3df] bg-white p-3 text-xs"><div className="flex flex-wrap gap-3">{(["customer", "route", "vehicle", "crewEmail", "status", "eta"] as const).map((column) => <label key={column} className="flex items-center gap-1" title={column === "crewEmail" ? CREW_EMAIL_TOOLTIP : undefined}><input type="checkbox" checked={orderColumns[column]} onChange={() => setOrderColumns((current) => ({ ...current, [column]: !current[column] }))} disabled={column === "status"} />{column === "eta" ? "Expected Shipment" : column === "crewEmail" ? "Crew email" : column[0].toUpperCase() + column.slice(1)}</label>)}</div></div>}
             {kind === "fleet" && fleetRefreshAt && <span className="w-full text-right text-[10px] text-[#77787b]">Updated {fleetRefreshAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · Auto-refresh every 30 min</span>}
           </div>
           {kind === "fleet" && <FleetTable vehicles={vehiclesData} />}
@@ -3682,7 +3705,7 @@ function TableFrame({
   );
 }
 function FleetMobileCards({ vehicles, onSelect }: { vehicles: Vehicle[]; onSelect: (vehicle: Vehicle) => void }) {
-  return <div className="grid gap-2 p-2 md:hidden">{vehicles.map((v) => { const sos = v.associatedSos || []; return <article key={v.id} className={`rounded-[4px] border p-3 ${v.locked ? "border-[#d7d7d3] bg-[#e7e7e4] text-[#77787b]" : "border-[#e4e3df] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><div className="mono text-sm font-bold text-black">{v.plate}</div><div className="mt-0.5 text-xs">Vehicle ID: {v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</div><StatusChip status={v.status} /></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#efeeeb] pt-3 text-xs"><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Speed</div><div className="font-semibold">{v.speed} kph</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fuel</div><div className="font-semibold">{v.fuel}%</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Zone</div><div>{v.zone || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Warehouse pickup</div><div>{v.warehousePickup || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Load</div><div className={loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) ? "font-semibold text-[#c4291f]" : ""}>{v.load ? `${v.load.assignedWeightKg.toLocaleString()} / ${v.load.capacityKg.toLocaleString()} kg` : "—"}</div>{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) && <div className="text-[10px] font-semibold text-[#c4291f]">{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg)!.text}</div>}</div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fulfillment</div><div>{v.fulfillment ? `${Math.round(v.fulfillment.percent)}% ${v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}` : "—"}</div></div></div><div className="mt-3 border-t border-[#efeeeb] pt-2"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Associated orders (SO / WM / PO / TO)</div>{sos.length ? <button className="mt-1 flex flex-wrap gap-1 text-left" onClick={() => onSelect(v)}>{sos.slice(0, 3).map((so) => <span className="inline-flex items-center gap-1 rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }} key={so.soNumber}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</span>)}{sos.length > 3 && <span className="px-1 text-[10px] text-black">+{sos.length - 3} more</span>}</button> : <div className="mt-1 text-xs">—</div>}</div></article>; })}</div>;
+  return <div className="grid gap-2 p-2 md:hidden">{vehicles.map((v) => { const sos = v.associatedSos || []; return <article key={v.id} className={`rounded-[4px] border p-3 ${v.locked ? "border-[#d7d7d3] bg-[#e7e7e4] text-[#77787b]" : "border-[#e4e3df] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><div className="mono text-sm font-bold text-black">{v.plate}</div><div className="mt-0.5 text-xs">Vehicle ID: {v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</div><StatusChip status={v.status} /></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#efeeeb] pt-3 text-xs"><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Speed</div><div className="font-semibold">{v.speed} kph</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fuel</div><div className="font-semibold">{v.fuel}%</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Zone</div><div>{v.zone || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Warehouse pickup</div><div>{v.warehousePickup || "—"}</div></div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Load</div><div className={loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) ? "font-semibold text-[#c4291f]" : ""}>{v.load ? `${formatKg(v.load.assignedWeightKg, { unit: false })} / ${formatKg(v.load.capacityKg)}` : "—"}</div>{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg) && <div className="text-[10px] font-semibold text-[#c4291f]">{loadOverage(v.load?.assignedWeightKg, v.load?.capacityKg)!.text}</div>}</div><div><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fulfillment</div><div>{v.fulfillment ? `${Math.round(v.fulfillment.percent)}% ${v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}` : "—"}</div></div></div><div className="mt-3 border-t border-[#efeeeb] pt-2"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Associated orders (SO / WM / PO / TO)</div>{sos.length ? <button className="mt-1 flex flex-wrap gap-1 text-left" onClick={() => onSelect(v)}>{sos.slice(0, 3).map((so) => <span className="inline-flex items-center gap-1 rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }} key={so.soNumber}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</span>)}{sos.length > 3 && <span className="px-1 text-[10px] text-black">+{sos.length - 3} more</span>}</button> : <div className="mt-1 text-xs">—</div>}</div></article>; })}</div>;
 }
 function FleetTable({ vehicles }: { vehicles: Vehicle[] }) {
   const [selected, setSelected] = useState<Vehicle | null>(null);
@@ -3699,15 +3722,15 @@ function FleetTable({ vehicles }: { vehicles: Vehicle[] }) {
         return <tr className={muted} key={v.id}>
           <td className={`sticky left-0 z-[1] px-4 py-4 ${v.locked ? "bg-[#e7e7e4]" : "bg-white"}`}><span className="mono font-semibold text-sm">{v.plate}</span><div className="mt-1 text-xs">{v.id}</div>{v.lockReason && <div className="mt-1 text-[10px] font-semibold">{v.lockReason}</div>}</td>
           <td className="px-3"><button className="flex flex-wrap gap-1 text-left" onClick={() => sos.length && setSelected(v)}>{sos.length ? sos.slice(0, 2).map((so) => <span className="inline-flex items-center gap-1 rounded-full border border-[#d8d7d2] px-2 py-0.5 text-[10px]" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }} key={so.soNumber}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</span>) : "—"}{sos.length > 2 && <span className="text-xs">+{sos.length - 2}</span>}</button></td>
-          <td className="px-3 text-xs"><div className="flex max-w-[150px] flex-wrap gap-1">{sos.length ? sos.slice(0, 2).map((so) => <span title={`Raw status: ${so.deliveryStatus || "unresolved"}`} className={`rounded-full px-2 py-0.5 text-[10px] ${so.deliveryStatus === "Delivered" ? "bg-[#e5f4e9] text-[#28723d]" : "bg-[#f2f1ed] text-[#55565a]"}`} key={`${so.soNumber}-status`}>{so.deliveryStatus || "Unresolved"}</span>) : "—"}{sos.length > 2 && <span>+{sos.length - 2}</span>}</div></td>
+          <td className="px-3 text-xs"><div className="flex max-w-[150px] flex-wrap gap-1">{sos.length ? sos.slice(0, 2).map((so) => <OrderStatusChip small key={`${so.soNumber}-status`} title={`${so.soNumber} · raw status: ${so.deliveryStatus || "unresolved"}`} status={effectiveOrderStatus({ stopOutcome: so.stop_outcome, deliveryStatus: so.deliveryStatus, orderStatus: so.status, shipmentStatus: so.shipmentStatus }) || "Unresolved"} checkoutAt={so.checkout_at} />) : "—"}{sos.length > 2 && <span>+{sos.length - 2}</span>}</div></td>
           <td className="px-3 text-xs">{compact(sos.map((so) => so.destinationCity).filter(Boolean) as string[]) || "—"}</td><td className="px-3"><StatusChip status={v.status} /></td><td className="px-3 text-[#55565a]">{v.zone}</td><td className="px-3 mono text-xs font-semibold">{v.speed} kph</td>
           <td className="px-3"><div className="flex items-center gap-2"><div className="h-1.5 w-16 bg-[#e8e7e3]"><div className="h-full bg-black" style={{ width: `${v.fuel}%` }} /></div><span className="mono text-xs">{v.fuel}%</span></div></td>
-          <td className="px-3 text-xs">{v.load ? (() => { const over = loadOverage(v.load.assignedWeightKg, v.load.capacityKg); return <><div className={over ? "font-semibold text-[#c4291f]" : ""}>{v.load.assignedWeightKg.toLocaleString()} / {v.load.capacityKg.toLocaleString()} kg</div><div className="mt-1 h-1.5 w-20 bg-[#e8e7e3]"><div className={`h-full ${over ? "bg-[#c4291f]" : "bg-black"}`} style={{ width: `${Math.min(100, v.load.utilizationPercent)}%` }} /></div><div className={`mt-1 mono text-[10px] ${over ? "font-semibold text-[#c4291f]" : ""}`}>{Math.round(v.load.utilizationPercent)}%</div>{over && <div className="mt-0.5 text-[10px] font-semibold text-[#c4291f]">{over.text}</div>}</>; })() : "—"}</td>
-          <td className="px-3 text-xs">{v.fulfillment ? <><div>{Math.round(v.fulfillment.percent)}% {v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}</div><div className="mt-1 text-[10px] text-[#77787b]">{v.fulfillment.shippedWeightKg.toLocaleString()} / {v.fulfillment.assignedWeightKg.toLocaleString()} kg</div></> : "—"}</td>
+          <td className="px-3 text-xs">{v.load ? (() => { const over = loadOverage(v.load.assignedWeightKg, v.load.capacityKg); return <><div className={over ? "font-semibold text-[#c4291f]" : ""}>{formatKg(v.load.assignedWeightKg, { unit: false })} / {formatKg(v.load.capacityKg)}</div><div className="mt-1 h-1.5 w-20 bg-[#e8e7e3]"><div className={`h-full ${over ? "bg-[#c4291f]" : "bg-black"}`} style={{ width: `${Math.min(100, v.load.utilizationPercent)}%` }} /></div><div className={`mt-1 mono text-[10px] ${over ? "font-semibold text-[#c4291f]" : ""}`}>{Math.round(v.load.utilizationPercent)}%</div>{over && <div className="mt-0.5 text-[10px] font-semibold text-[#c4291f]">{over.text}</div>}</>; })() : "—"}</td>
+          <td className="px-3 text-xs">{v.fulfillment ? <><div>{Math.round(v.fulfillment.percent)}% {v.fulfillment.status === "fulfilled" ? "Fulfilled" : v.fulfillment.status === "partial" ? "Partial" : "Pending"}</div><div className="mt-1 text-[10px] text-[#77787b]">{formatKg(v.fulfillment.shippedWeightKg, { unit: false })} / {formatKg(v.fulfillment.assignedWeightKg)}</div></> : "—"}</td>
           <td className="px-3 text-xs">{v.warehousePickup || "—"}</td>
         </tr>;
       })}
-      </tbody></table>{selected && <div className="fixed inset-0 z-[2000] bg-black/20" onClick={() => setSelected(null)}><aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-auto bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-between"><h2 className="text-lg font-bold">Associated orders · {selected.plate}</h2><button onClick={() => setSelected(null)}><X size={18} /></button></div><p className="mt-2 text-xs text-[#77787b]">Weights use the authoritative per-line Zoho package calculation. Load is the sum of assigned SO weights.</p>{(selected.associatedSos || []).map((so) => <div className="mt-4 border-b border-[#efeeeb] pb-4" key={so.soNumber}><div className="flex items-center gap-2 font-semibold" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}</div><div className="mt-1 text-xs text-[#55565a]">{so.clientName || "—"} · {so.destinationCity || "—"}{normalizeOrderType(so.order_type ?? so.orderType) === "TO" && so.destination_warehouse ? ` · to ${so.destination_warehouse}` : ""}</div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><div className="text-[#77787b]">Assigned</div><div className="font-semibold">{so.orderedWeightKg == null ? "—" : `${so.orderedWeightKg} kg`}</div></div><div><div className="text-[#77787b]">Shipped</div><div className="font-semibold">{so.shippedWeightKg == null ? "—" : `${so.shippedWeightKg} kg`}</div></div><div><div className="text-[#77787b]">Remaining</div><div className="font-semibold">{so.orderedWeightKg == null || so.shippedWeightKg == null ? "—" : `${Math.max(0, so.orderedWeightKg - so.shippedWeightKg)} kg`}</div></div></div><div className="mt-1 text-xs text-[#77787b]">Pickup: {so.warehouse || "—"}</div></div>)}</aside></div>}</div>
+      </tbody></table>{selected && <div className="fixed inset-0 z-[2000] bg-black/20" onClick={() => setSelected(null)}><aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-auto bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-between"><h2 className="text-lg font-bold">Associated orders · {selected.plate}</h2><button onClick={() => setSelected(null)}><X size={18} /></button></div><p className="mt-2 text-xs text-[#77787b]">Weights use the authoritative per-line Zoho package calculation. Load is the sum of assigned SO weights.</p>{(selected.associatedSos || []).map((so) => <div className="mt-4 border-b border-[#efeeeb] pb-4" key={so.soNumber}><div className="flex items-center gap-2 font-semibold" style={{ color: orderTypeColor(so.order_type ?? so.orderType) }}><OrderTypeBadge type={so.order_type ?? so.orderType} />{so.soNumber}<span className="ml-auto"><OrderStatusChip small status={effectiveOrderStatus({ stopOutcome: so.stop_outcome, deliveryStatus: so.deliveryStatus, orderStatus: so.status, shipmentStatus: so.shipmentStatus }) || "Unresolved"} checkoutAt={so.checkout_at} /></span></div><div className="mt-1 text-xs text-[#55565a]">{so.clientName || "—"} · {so.destinationCity || "—"}{normalizeOrderType(so.order_type ?? so.orderType) === "TO" && so.destination_warehouse ? ` · to ${so.destination_warehouse}` : ""}</div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><div className="text-[#77787b]">Assigned</div><div className="font-semibold">{formatKg(so.orderedWeightKg)}</div></div><div><div className="text-[#77787b]">Shipped</div><div className="font-semibold">{formatKg(so.shippedWeightKg)}</div></div><div><div className="text-[#77787b]">Remaining</div><div className="font-semibold">{so.orderedWeightKg == null || so.shippedWeightKg == null ? "—" : formatKg(Math.max(0, so.orderedWeightKg - so.shippedWeightKg))}</div></div></div><div className="mt-1 text-xs text-[#77787b]">Pickup: {so.warehouse || "—"}</div></div>)}</aside></div>}</div>
   );
 }
 function OrderTable({
@@ -3717,7 +3740,7 @@ function OrderTable({
 }: {
   orders: Order[];
   onSelect: (o: Order) => void;
-  columns: { customer: boolean; route: boolean; vehicle: boolean; status: boolean; eta: boolean };
+  columns: { customer: boolean; route: boolean; vehicle: boolean; crewEmail: boolean; status: boolean; eta: boolean };
 }) {
   const queryClient = useQueryClient();
   const { readOnly } = useAccess();
@@ -3763,6 +3786,7 @@ function OrderTable({
           {columns.customer && <th>Customer</th>}
           {columns.route && <th>Route</th>}
           {columns.vehicle && <th>Vehicle</th>}
+          {columns.crewEmail && <th title={CREW_EMAIL_TOOLTIP}>Crew email</th>}
           {columns.status && <th>Status</th>}
           {columns.eta && <th>Expected Shipment</th>}
           <th />
@@ -3771,7 +3795,7 @@ function OrderTable({
     >
       {groupOrdersByTruck(onOrders).flatMap((group) => [
         <tr key={`group-${group.vehicle}`} className="bg-[#f7f7f4]" data-testid={`truck-group-${group.vehicle}`}>
-          <td colSpan={7} className="px-4 py-2 text-xs font-semibold text-[#55565a]">
+          <td colSpan={8} className="px-4 py-2 text-xs font-semibold text-[#55565a]">
             <span className="mono text-black">{group.vehicle}</span> · {group.orders.length} order{group.orders.length === 1 ? "" : "s"}
             {describeCounts(countByType(group.orders.map((o) => ({ id: o.sourceId ?? o.id, order_type: o.orderType })))) ? ` (${describeCounts(countByType(group.orders.map((o) => ({ id: o.sourceId ?? o.id, order_type: o.orderType }))))})` : ""}
           </td>
@@ -3792,15 +3816,13 @@ function OrderTable({
           </td>
           {columns.customer && <td>{o.customer}</td>}
           {columns.route && <td className="text-[#55565a]">{o.route}</td>}
-          {columns.vehicle && (
-            <td className="mono text-xs">
-              {o.vehicle}
-              <div>
-                <EmailStatusChip status={o.emailStatus} error={o.emailError} retrying={retrying === o.sourceId} onRetry={readOnly ? undefined : () => retryEmail(o)} sending={sendingNow === o.sourceId} onSend={readOnly ? undefined : () => sendNow(o)} />
-              </div>
+          {columns.vehicle && <td className="mono text-xs">{o.vehicle}</td>}
+          {columns.crewEmail && (
+            <td>
+              <CrewEmailCell status={o.emailStatus} sentAt={o.emailSentAt} error={o.emailError} retrying={retrying === o.sourceId} onRetry={readOnly ? undefined : () => retryEmail(o)} sending={sendingNow === o.sourceId} onSend={readOnly ? undefined : () => sendNow(o)} />
             </td>
           )}
-          {columns.status && <td><StatusChip status={o.status} /></td>}
+          {columns.status && <td><OrderStatusChip status={effectiveOrderStatus({ stopOutcome: o.stopOutcome, orderStatus: o.salesOrderStatus ?? o.status, shipmentStatus: o.shipmentStatus })} checkoutAt={o.checkoutAt} /></td>}
           {columns.eta && <td className="text-xs">{o.eta}</td>}
           <td>
             <ChevronRight size={16} className="text-[#77787b]" />
@@ -3819,21 +3841,34 @@ function OrderDrawer({
   onClose: () => void;
 }) {
   const detail = useQuery({
-    queryKey: ["confirmed-so-detail", order.id],
-    queryFn: () => inventoryApi.getSalesOrderDetail(order.id),
+    queryKey: ["confirmed-so-detail", order.sourceId ?? order.id],
+    queryFn: () => inventoryApi.getSalesOrderDetail(order.sourceId ?? order.id),
     staleTime: 0,
     refetchOnMount: "always",
   });
   const liveOrder: any = detail.data || order;
   const liveProducts: NonNullable<inventoryApi.SalesOrderSummary["products"]> = liveOrder.products || order.products || [];
   const packages = Array.isArray(liveOrder.packages) ? liveOrder.packages : [];
-  const normalizedDeliveryStatus = liveOrder.delivery_status || "Unknown";
-  const lifecycle = [
-    { title: "Order created", detail: liveOrder.created_time || liveOrder.order_date || "Zoho Sales Order", done: true },
-    { title: "Confirmed", detail: liveOrder.order_status || "Confirmed", done: ["confirmed", "acknowledged", "closed"].includes(String(liveOrder.order_status || "").toLowerCase()) },
-    { title: "Shipped", detail: liveOrder.shipment_status || (packages.length ? `${packages.length} package(s)` : "Awaiting shipment"), done: Boolean(liveOrder.shipment_status) || packages.some((p: any) => ["shipped", "delivered"].includes(String(p.status || "").toLowerCase())) },
-    { title: "Delivered", detail: packages.length ? packages.map((p: any) => `${p.package_number || p.package_id || "Package"}: ${p.status || "Unresolved"}`).join(" · ") : "Awaiting package delivery", done: packages.length > 0 && packages.every((p: any) => String(p.status || "").toLowerCase() === "delivered") },
-  ];
+  // Same status the Orders list shows (list order_status = Zoho `status`, lower-cased); the Zoho detail record carries
+  // `status` / `shipped_status`, not `order_status` / `shipment_status`, so read both and fall back to the list row.
+  const zohoOrderStatus: string | null = liveOrder.order_status || liveOrder.status || order.salesOrderStatus || order.status || null;
+  const zohoShipmentStatus: string | null = liveOrder.shipment_status || liveOrder.shipped_status || liveOrder.shipping_status || order.shipmentStatus || null;
+  const stopOutcome: string | null = liveOrder.stop_outcome || order.stopOutcome || null;
+  const checkoutAt: string | null = liveOrder.checkout_at || order.checkoutAt || null;
+  const timeline = deriveOrderTimeline({
+    orderStatus: zohoOrderStatus,
+    shipmentStatus: zohoShipmentStatus,
+    deliveryStatus: liveOrder.delivery_status,
+    packageStatuses: packages.map((p: any) => p.status || p.detailed_status),
+    stopOutcome,
+    checkoutAt,
+    createdAt: liveOrder.created_time || liveOrder.order_date || liveOrder.date || null,
+  });
+  const normalizedDeliveryStatus = timeline.reached === 3 ? timeline.finalLabel : liveOrder.delivery_status && liveOrder.delivery_status !== "Unknown" ? liveOrder.delivery_status : timeline.reached === 2 ? "Shipped" : "Pending";
+  const lifecycle = timeline.steps;
+  // Fill the line from 0 up to the current step after opening (CSS transition; off under prefers-reduced-motion).
+  const [timelineFill, setTimelineFill] = useState(0);
+  useEffect(() => { const id = requestAnimationFrame(() => setTimelineFill(timeline.fill)); return () => cancelAnimationFrame(id); }, [timeline.fill]);
   return (
     <div className="fixed inset-0 z-40 bg-black/10" onClick={onClose}>
       <aside
@@ -3851,8 +3886,8 @@ function OrderDrawer({
         </div>
         <div className="mt-5">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusChip status={liveOrder.order_status || order.status} />
-            <span className="text-xs text-[#55565a]">Delivery: <strong>{normalizedDeliveryStatus}</strong></span>
+            <OrderStatusChip status={effectiveOrderStatus({ stopOutcome, orderStatus: zohoOrderStatus, shipmentStatus: zohoShipmentStatus })} checkoutAt={checkoutAt} />
+            <span className="text-xs text-[#55565a]">Delivery: <strong style={{ color: statusStyle(normalizedDeliveryStatus).color }}>{normalizedDeliveryStatus}</strong></span>
           </div>
           <p className="mt-4 text-sm text-[#55565a]">
             {liveOrder.customer_name || order.customer} · {liveOrder.shipping_city || order.route}
@@ -3878,29 +3913,34 @@ function OrderDrawer({
           <div className="mt-10 border-t border-[#e4e3df] pt-5">
           <div className="micro mb-6 text-[#77787b]">Lifecycle · Zoho Inventory</div>
           <div className="mb-5 grid gap-2 border-b border-[#e4e3df] pb-4 text-xs text-[#55565a]">
-            <div><span className="text-[#77787b]">Order status:</span> {liveOrder.order_status || "Unknown"}</div>
-            <div><span className="text-[#77787b]">Shipment status:</span> {liveOrder.shipment_status || liveOrder.shipping_status || "Unknown"}</div>
+            <div><span className="text-[#77787b]">Order status:</span> {zohoOrderStatus ? statusStyle(zohoOrderStatus).label : "Unknown"}</div>
+            <div><span className="text-[#77787b]">Shipment status:</span> {zohoShipmentStatus ? statusStyle(zohoShipmentStatus).label : "Not shipped"}</div>
+            {stopOutcome ? <div><span className="text-[#77787b]">Helper app:</span> {statusStyle(stopOutcome).label}{checkoutAt ? ` · checked out ${manilaHm(checkoutAt) ?? ""}` : ""}</div> : null}
             <div><span className="text-[#77787b]">Package status:</span> {packages.length ? packages.map((p: any) => `${p.package_number || p.package_id || "Package"}: ${p.status || p.detailed_status || "Unknown"}`).join(" · ") : "No packages"}</div>
             <div><span className="text-[#77787b]">Normalized delivery status:</span> {normalizedDeliveryStatus}</div>
           </div>
-          <div className="route-flow">
-            {lifecycle.map((step, i) => (
-              <div className="route-step mb-6 flex gap-4" key={step.title}>
+          <div className="relative" data-testid="order-timeline" data-reached={timeline.reached}>
+            <div aria-hidden className="absolute left-[5px] top-2 bottom-8 w-[2px] bg-[#e4e3df]">
+              <div className="order-timeline-fill w-full" style={{ height: `${timelineFill * 100}%`, background: lifecycle[timeline.reached]?.tone !== "neutral" && lifecycle[timeline.reached]?.state === "done" ? statusStyle(lifecycle[timeline.reached].title).color : "hsl(var(--foreground))" }} />
+            </div>
+            {lifecycle.map((step) => {
+              const toneColor = step.tone === "neutral" ? "hsl(var(--foreground))" : statusStyle(step.title).color;
+              return (
+              <div className="relative mb-6 flex gap-4" key={step.title} data-state={step.state} data-tone={step.tone}>
                 <div
-                  className={cx(
-                    "mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white shadow-[0_0_0_1px_#0b0b0b]",
-                    step.done ? "bg-black" : "bg-white",
-                  )}
+                  className="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white"
+                  style={{ background: step.state === "todo" ? "white" : toneColor, boxShadow: `0 0 0 1px ${step.state === "todo" ? "#b0b0b0" : toneColor}` }}
                 />
                 <div>
-                  <div className="mono text-[10px] text-[#77787b]">{step.done ? "Live" : "Pending"}</div>
-                  <div className="mt-1 text-sm font-semibold">{step.title}</div>
+                  <div className="mono text-[10px] text-[#77787b]">{step.state === "done" ? "Done" : step.state === "current" ? "Current" : "Pending"}{step.time ? ` · ${step.time}` : ""}</div>
+                  <div className="mt-1 text-sm font-semibold" style={step.tone !== "neutral" && step.state !== "todo" ? { color: toneColor } : undefined}>{step.title}</div>
                   <div className="mt-1 text-xs text-[#77787b]">
                     {step.detail}
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         <Button
@@ -5196,7 +5236,7 @@ function Portal({ page }: { page: "orders" | "tracking" | "support" }) {
                 <div className="mt-2 font-semibold">{o.shipping_city || "-"}</div>
                 <div className="mt-1 text-xs text-[#77787b]">{o.customer_name || "-"}</div>
               </div>
-              <StatusChip status={o.order_status || "Confirmed"} />
+              <OrderStatusChip status={o.order_status || "Confirmed"} />
             </div>
             {o.expected_shipment_date && (
               <div className="mt-5 flex justify-between border-t border-[#efeeeb] pt-4 text-xs">
@@ -5807,6 +5847,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     useState<inventoryApi.CreatedDriver | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [pickupBlocked, setPickupBlocked] = useState<{ blocked: PickupBlock[]; assignedCount: number } | null>(null);
   const [assignmentPreview, setAssignmentPreview] = useState<{
     salesOrderIds: string[];
     vehicleId: string;
@@ -5990,6 +6031,10 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
             }
           : undefined;
       const assigned: any = await inventoryApi.assignSalesOrders(ids, vehicle, assignedDriver, assignedHelperIds, manualVehiclePayload);
+      // Customer pickups are left out by the server: one "Unable to assign" popup lists them; the rest are assigned.
+      const pickupLeftOut = pickupBlocksFrom(assigned);
+      if (pickupLeftOut.length) setPickupBlocked({ blocked: pickupLeftOut, assignedCount: (assigned?.salesorder_ids ?? []).length });
+      const assignedIds: string[] = Array.isArray(assigned?.salesorder_ids) && assigned.salesorder_ids.length ? assigned.salesorder_ids : ids;
       const overCapacityNote = assigned?.over_capacity
         ? ` Warning: over capacity by ${Number(assigned.over_capacity_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg (${Number(assigned.over_capacity_percent).toLocaleString("en-US", { maximumFractionDigits: 1 })}%).`
         : "";
@@ -6001,16 +6046,22 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
       await queryClient.invalidateQueries({ queryKey: ["inventory-purchase-orders"] });
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
       if (!assignedDriverIds.length) {
-        onNotice(`${ids.length} order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Third-party truck has no staff notification recipient.${overCapacityNote}`);
+        onNotice(`${assignedIds.length} order${assignedIds.length === 1 ? "" : "s"} assigned to ${vehicle}. Third-party truck has no staff notification recipient.${overCapacityNote}`);
         return;
       }
-      const savedAssignment = { salesOrderIds: ids, vehicleId: vehicle, driverIds: assignedDriverIds, manualVehicle: manualVehiclePayload, assignmentBatchId: assigned?.assignment_batch_id ?? null };
+      const savedAssignment = { salesOrderIds: assignedIds, vehicleId: vehicle, driverIds: assignedDriverIds, manualVehicle: manualVehiclePayload, assignmentBatchId: assigned?.assignment_batch_id ?? null };
       setLastAssignment(savedAssignment);
       onNotice(
-        `${ids.length} order${ids.length === 1 ? "" : "s"} assigned to ${vehicle}. Nothing has been sent yet: review the email and press Send to notify the driver.${overCapacityNote}`,
+        `${assignedIds.length} order${assignedIds.length === 1 ? "" : "s"} assigned to ${vehicle}. Nothing has been sent yet: review the email and press Send to notify the driver.${overCapacityNote}`,
       );
       await openEmailEditor(savedAssignment, true);
     } catch (e: any) {
+      const pickupOnly = pickupBlocksFrom(e);
+      if (pickupOnly.length) {
+        setPickupBlocked({ blocked: pickupOnly, assignedCount: 0 });
+        setError("");
+        return;
+      }
       setError(e?.message || "Assignment failed.");
     } finally {
       setBusy(false);
@@ -6046,6 +6097,7 @@ function AssignmentPanel({ onNotice }: { onNotice: (s: string) => void }) {
     <>
       <VoicePausedBanner className="mb-5" />
       <WhatsappPausedBanner className="mb-5" />
+      {pickupBlocked && <UnableToAssignDialog blocked={pickupBlocked.blocked} assignedCount={pickupBlocked.assignedCount} onClose={() => setPickupBlocked(null)} />}
       <section className="mb-5 border border-[#0b0b0b] bg-[#fafaf8] p-5">
         <div className="flex items-start justify-between">
           <div>

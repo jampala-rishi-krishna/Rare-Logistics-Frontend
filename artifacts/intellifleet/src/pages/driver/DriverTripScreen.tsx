@@ -13,6 +13,8 @@ import { useOfflineQueue } from "@/lib/offlineRuntime";
 import { errorInfo } from "@/lib/tripErrors";
 import { buildCheckoutAnswers, checkoutItemsForOrder, initialCheckoutForm, isItemRequired, isItemVisible, mapServerErrors, usableItems, validateCheckout, INVOICE_KEY } from "@/lib/tripForms";
 import type { FieldErrors, FormValue, FormValues } from "@/lib/tripForms";
+import { buildCancelAnswers, cancelSubmitEnabled, validateCancel, CANCELLED_OUTCOME, CANCEL_PROOF_KEY } from "@/lib/cancelDelivery";
+import type { CancelForm, CancelRequester } from "@/lib/cancelDelivery";
 import { newIdempotencyKey } from "@/lib/tripActions";
 import { isRemovedByDispatch } from "@/lib/offlineQueue";
 import { acknowledgePath, actionsEnabled, directionsUrl, stopState, tripStep } from "@/lib/tripNav";
@@ -222,7 +224,7 @@ function Timeline({ batch, state, t, current, warehouse }: { batch: BatchDetail;
               <TypeBadge type={o.order_type} />
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {o.so_number} · {stateLabel(t, s)}
-                {eff.stopStatus === "checked_out" && eff.outcome && !/^deliver/i.test(eff.outcome) ? ` (${/^partial/i.test(eff.outcome) ? t.partial : t.failed})` : ""}
+                {eff.stopStatus === "checked_out" && eff.outcome && !/^deliver/i.test(eff.outcome) ? ` (${/^partial/i.test(eff.outcome) ? t.partial : /^cancelled/i.test(eff.outcome) ? t.cancelled : t.failed})` : ""}
               </span>
             </div>
           </TimelineRow>
@@ -386,7 +388,14 @@ function CurrentStopCard({ eff, t, here }: { eff: EffectiveOrder; t: Dict; here:
             <div data-testid="driver-item-lines" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {o.lines.map((line, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 14, paddingTop: 6, borderTop: i === 0 ? 0 : `1px solid ${C.muted}` }}>
-                  <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{line.name}</span>
+                  <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                    {line.name}
+                    {line.warehouse && (
+                      <span data-testid="driver-line-warehouse" style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.sub }}>
+                        {t.pickupAt(line.warehouse)}
+                      </span>
+                    )}
+                  </span>
                   <b style={{ whiteSpace: "nowrap" }}>
                     {formatQty(line.quantity)}
                     {line.unit ? ` ${line.unit}` : ""}
@@ -486,9 +495,10 @@ function DoneView({ batch, state, t, handover }: { batch: BatchDetail; state: Ef
 
 // ---------- Delivered sheet (screen 5) = check-out ----------
 
-type Mode = "delivered" | "partial" | "failed";
+type Mode = "delivered" | "partial" | "failed" | "cancel";
 
 function outcomeValue(options: string[] | null | undefined, mode: Mode): string {
+  if (mode === "cancel") return CANCELLED_OUTCOME; // not a template option: the server validates the cancel fields instead
   const list = options ?? [];
   const re = mode === "delivered" ? /^deliver/i : mode === "partial" ? /^partial/i : /^fail/i;
   return list.find((o) => re.test(o.trim())) ?? (mode === "delivered" ? "Delivered" : mode === "partial" ? "Partially delivered" : "Failed");
@@ -517,9 +527,14 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
   const [otherText, setOtherText] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [general, setGeneral] = useState<string | null>(null);
+  const [cancelWho, setCancelWho] = useState<CancelRequester | null>(null);
+  const [cancelName, setCancelName] = useState("");
+  const [cancelNote, setCancelNote] = useState("");
+  const [cancelPhoto, setCancelPhoto] = useState<FormValue>(null);
+  const cancelling = mode === "cancel";
 
-  const reasons = mode === "partial" ? t.reasonsPartial : t.reasonsFailed;
-  const reasonsEn = mode === "partial" ? DICTS.en.reasonsPartial : DICTS.en.reasonsFailed;
+  const reasons = mode === "partial" ? t.reasonsPartial : cancelling ? t.reasonsCancel : t.reasonsFailed;
+  const reasonsEn = mode === "partial" ? DICTS.en.reasonsPartial : cancelling ? DICTS.en.reasonsCancel : DICTS.en.reasonsFailed;
   const reasonText = reasonIdx === null ? "" : reasonIdx === reasonsEn.length - 1 ? otherText.trim() : reasonsEn[reasonIdx];
   const current: FormValues = { ...values, ...(outcomeItem ? { outcome: outcomeValue(outcomeItem.options, mode) } : {}), ...(mode !== "delivered" ? { reason: reasonText } : { reason: "" }) };
   const photoItem = items.find((i) => (i.item_type === "photo") && isItemVisible(i, items, current)) ?? null;
@@ -537,23 +552,27 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
     });
   };
 
+  const cancelForm: CancelForm = { requestedBy: cancelWho, name: cancelName, reason: reasonText, note: cancelNote, photo: cancelPhoto };
   const submit = async () => {
     setGeneral(null);
-    const errs = validateCheckout(items, current);
+    const errs = cancelling ? validateCancel(items, current, cancelForm) : validateCheckout(items, current);
     const shown: FieldErrors = {};
     for (const [k, msg] of Object.entries(errs)) {
       if (k === INVOICE_KEY) shown[k] = /digit/i.test(msg) ? t.digitsOnly : t.needInvoice;
       else if (photoItem && k === photoItem.key) shown[k] = t.needPhoto;
       else if (k === "reason") shown[k] = t.needReason;
+      else if (k === "cancel_requested_by") shown[k] = t.needCancelWho;
+      else if (k === "cancel_requester_name") shown[k] = t.needCancelName;
+      else if (k === CANCEL_PROOF_KEY) shown[k] = t.needCancelProof;
       else shown[k] = driverMessage(msg, t);
     }
     setErrors(shown);
     if (Object.keys(shown).length > 0) return;
-    const built = buildCheckoutAnswers(items, current, newIdempotencyKey);
+    const built = cancelling ? buildCancelAnswers(items, values, cancelForm, newIdempotencyKey) : buildCheckoutAnswers(items, current, newIdempotencyKey);
     const out = await actions.run({
       kind: "check_out",
       so_id: eff.so_id,
-      label: `Delivered ${o.so_number}`,
+      label: `${cancelling ? "Cancelled" : "Delivered"} ${o.so_number}`,
       path: driverApi.paths.checkOut(batch.batch_id, eff.so_id),
       extra: { template_id: template.id, answers: built.answers },
       blobs: built.blobs,
@@ -625,13 +644,33 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
     <Sheet open={open} onClose={onClose} busy={busy} context={context} testId="driver-delivered-sheet">
       <SheetTitle>{mode === "delivered" ? t.deliveredQ : t.notFullyTitle}</SheetTitle>
       {mode !== "delivered" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
           <Pill height={52} on={mode === "partial"} onClick={() => (setMode("partial"), setReasonIdx(null))} testId="driver-outcome-partial">
             {t.partial}
           </Pill>
           <Pill height={52} on={mode === "failed"} onClick={() => (setMode("failed"), setReasonIdx(null))} testId="driver-outcome-failed">
             {t.failed}
           </Pill>
+          <Pill height={52} on={cancelling} onClick={() => (setMode("cancel"), setReasonIdx(null))} testId="driver-outcome-cancel">
+            {t.cancelDelivery}
+          </Pill>
+        </div>
+      )}
+      {cancelling && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <FieldLabel>{t.cancelWho}</FieldLabel>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+            <Pill height={48} on={cancelWho === "customer"} onClick={() => setCancelWho("customer")} testId="driver-cancel-who-customer">
+              {t.cancelCustomer}
+            </Pill>
+            <Pill height={48} on={cancelWho === "sales_agent"} onClick={() => setCancelWho("sales_agent")} testId="driver-cancel-who-agent">
+              {t.cancelAgent}
+            </Pill>
+          </div>
+          <FieldError>{errors.cancel_requested_by}</FieldError>
+          <FieldLabel>{t.cancelName}</FieldLabel>
+          <input type="text" value={cancelName} placeholder={t.cancelNamePh} onChange={(e) => setCancelName(e.target.value)} style={fieldInput} data-testid="driver-cancel-name" />
+          <FieldError>{errors.cancel_requester_name}</FieldError>
         </div>
       )}
       {invoiceField}
@@ -647,14 +686,34 @@ function DeliveredSheet({ open, onClose, batch, eff, state, templates, scope, on
           </div>
           {reasonIdx === reasons.length - 1 && <input type="text" value={otherText} placeholder={t.otherReason} onChange={(e) => setOtherText(e.target.value)} style={fieldInput} data-testid="driver-reason-other" />}
           <FieldError>{errors.reason}</FieldError>
+          {cancelling && (
+            <>
+              <FieldLabel>{t.cancelNote}</FieldLabel>
+              <input type="text" value={cancelNote} onChange={(e) => setCancelNote(e.target.value)} style={fieldInput} data-testid="driver-cancel-note" />
+            </>
+          )}
         </div>
       )}
-      {photoBlock}
+      {cancelling ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <FieldLabel>{t.cancelProof}</FieldLabel>
+          {photoOn ? (
+            <PhotoTiles value={cancelPhoto} onChange={(v) => (setCancelPhoto(v), setErrors((p) => ({ ...p, [CANCEL_PROOF_KEY]: "" })))} testId="driver-cancel-photo" context={{ batch_id: batch.batch_id, so_id: eff.so_id, so_number: o.so_number, field_key: CANCEL_PROOF_KEY, kind: "cancel_proof" }} />
+          ) : (
+            <div data-testid="driver-photo-not-available" style={{ fontSize: 13, color: C.sub, fontWeight: 500 }}>
+              {t.photoNotAvailable}
+            </div>
+          )}
+          <FieldError>{errors[CANCEL_PROOF_KEY]}</FieldError>
+        </div>
+      ) : (
+        photoBlock
+      )}
       {extras.map((item) => (
         <TemplateField key={item.key} item={item} value={values[item.key]} onChange={(v) => set(item.key, v)} required error={errors[item.key]} />
       ))}
       {general && <FieldError>{general}</FieldError>}
-      <PrimaryButton icon="check" height={62} fontSize={19} disabled={busy || !actions.ready} onClick={() => void submit()} testId="driver-delivered-submit">
+      <PrimaryButton icon="check" height={62} fontSize={19} disabled={busy || !actions.ready || (cancelling && !cancelSubmitEnabled(cancelForm))} onClick={() => void submit()} testId="driver-delivered-submit">
         {busy ? t.saving : mode === "delivered" ? t.deliveredBtn : t.saveOutcome}
       </PrimaryButton>
       {outcomeItem && (

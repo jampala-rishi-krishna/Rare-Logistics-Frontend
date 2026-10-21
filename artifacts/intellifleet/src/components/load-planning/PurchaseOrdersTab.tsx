@@ -6,6 +6,8 @@ import { PickupControls, PickupSheetButton } from "./PickupControls";
 import { formatAddress } from "@/lib/address";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { OrderTypeBadge } from "./OrderTypeBadge";
+import { OrderFieldCells, OrderFieldColumnSettings, useOrderFieldColumns } from "./OrderFieldColumns";
+import { orderFieldValue } from "@/lib/orderColumns";
 import { BranchBadge } from "./BranchControls";
 import { ConnectionStatusBar, viewOfQuery } from "@/components/ui/ConnectionStatusBar";
 import { EmptyState, FilterField, ListError, Toolbar, buttonClass, inputClass, primaryButtonClass } from "./ToolbarControls";
@@ -56,6 +58,9 @@ const COLUMNS: [string, number][] = [
 /** Inventory > PO: PO- purchase orders (never "SS PO-", never SariSuki). No Acknowledge for PO. */
 export default function PurchaseOrdersTab() {
   const client = useQueryClient();
+  const fieldColumns = useOrderFieldColumns();
+  const columns = [...COLUMNS, ...fieldColumns.headers];
+  const tableWidth = 1900 + fieldColumns.contentExtra;
   const initial = tomorrowPht();
   const [from, setFrom] = useState(initial);
   const [to, setTo] = useState(initial);
@@ -189,20 +194,23 @@ export default function PurchaseOrdersTab() {
                   <div className="col-span-2"><div className="text-[10px] uppercase text-[#77787b]">Vendor shipping address / contact</div>{formatAddress(order.shipping_address)}<br/>{order.vendor_contact?.person} {order.vendor_contact?.phone}{order.vendor_address_missing && <strong className="block text-red-700">Vendor address missing</strong>}{order.changed_after_cutoff && <span className="block text-blue-700">Changed after 2 PM</span>}<PickupSheetButton id={order.id}/></div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Destination</div>{dash(order.destination_warehouse)}</div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Qty / Weight</div>{order.total_item_quantity ?? "-"} · {orderKg(order, pending)}</div>
+                  <div><div className="text-[10px] uppercase text-[#77787b]">Delivery method</div>{orderFieldValue(order, "delivery_method")}</div>
+                  <div><div className="text-[10px] uppercase text-[#77787b]">Fulfillment type</div>{orderFieldValue(order, "fulfillment_type")}</div>
                 </div>
               </article>
             ))}
           </div>
-          <HorizontalScrollTable contentWidth="1900px">
-            <table className="w-full min-w-[1900px] table-fixed text-left text-xs">
+          <div className="hidden justify-end px-4 pt-3 md:flex"><OrderFieldColumnSettings prefs={fieldColumns.prefs} onToggle={fieldColumns.toggle} /></div>
+          <HorizontalScrollTable contentWidth={`${tableWidth}px`}>
+            <table className="w-full table-fixed text-left text-xs" style={{ minWidth: `${tableWidth}px` }}>
               <colgroup>
-                {COLUMNS.map(([name, width]) => (
+                {columns.map(([name, width]) => (
                   <col key={name} style={{ width: `${width}px` }} />
                 ))}
               </colgroup>
               <thead className="border-b border-[#e4e3df] bg-[#f7f7f4] text-[10px] uppercase tracking-widest text-[#77787b]">
                 <tr>
-                  {COLUMNS.map(([name]) => (
+                  {columns.map(([name]) => (
                     <th key={name} className="whitespace-normal px-3 py-3 font-semibold leading-tight">
                       {name}
                     </th>
@@ -227,6 +235,7 @@ export default function PurchaseOrdersTab() {
                     <td className="whitespace-nowrap px-3 py-4 align-top font-semibold">{orderKg(order, pending)}</td>
                     <td className="px-3 py-4 text-sm">{formatAddress(order.shipping_address)}<br/>{order.vendor_contact?.person} {order.vendor_contact?.phone}{order.vendor_address_missing && <strong className="block text-red-700">Vendor address missing</strong>}</td>
                     <td className="px-3 py-4"><PickupSheetButton id={order.id}/></td>
+                    <OrderFieldCells order={order} columns={fieldColumns.visible} />
                   </tr>
                 ))}
               </tbody>

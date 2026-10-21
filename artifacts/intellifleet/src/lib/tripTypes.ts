@@ -169,6 +169,8 @@ export interface OrderLine {
   unit: string | null;
   packs: number | null;
   kg: number | null;
+  /** Pickup warehouse of this line ("METS" / "GLACIER" / other Zoho location name); null = not recorded. */
+  warehouse?: string | null;
 }
 
 export interface OrderContact {
@@ -226,6 +228,8 @@ export interface DriverOrder {
   address_text: string;
   shipment_date: string | null;
   lines: OrderLine[];
+  /** Distinct pickup warehouses of the lines; ["METS", "GLACIER"] = one SO picked from both. */
+  pickup_warehouses?: string[];
   total_kg: number;
   kg_complete?: boolean;
   kg_unknown_lines?: number;

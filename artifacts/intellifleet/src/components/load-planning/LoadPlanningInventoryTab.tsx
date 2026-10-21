@@ -13,9 +13,13 @@ import {
   X,
 } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
+import { multiPickupLabel } from "@/lib/pickupWarehouses";
 import { sendOptions } from "@/lib/emailStatus";
 import { StockQty } from "./StockQty";
 import { formatAddress } from "@/lib/address";
+import { formatKg } from "@/lib/kgDisplay";
+import { OrderStatusChip } from "@/components/OrderStatusChip";
+import { effectiveOrderStatus } from "@/lib/statusColors";
 import { lineProduct, lineProductName, lineStock } from "@/lib/loadPlanningLines";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { SalesOrderCardGrid } from "./SalesOrderCardGrid";
@@ -26,6 +30,8 @@ import { forgetSessionAcknowledged, rememberSessionAcknowledged, removeOrdersFro
 import { uniqueOrders, type ViewMode } from "@/lib/loadPlanningView";
 import type { QueryClient } from "@tanstack/react-query";
 import { OrderTypeBadge } from "./OrderTypeBadge";
+import { OrderFieldCells, OrderFieldColumnSettings, useOrderFieldColumns } from "./OrderFieldColumns";
+import { orderFieldValue } from "@/lib/orderColumns";
 import { TypeFilterSelect, type InventoryOrderKind } from "./OrderTypeControls";
 import TransferOrdersTab, { TRANSFER_ORDERS_KEY } from "./TransferOrdersTab";
 import PurchaseOrdersTab, { PURCHASE_ORDERS_KEY } from "./PurchaseOrdersTab";
@@ -33,6 +39,7 @@ import { useAccess } from "@/hooks/use-access";
 import { RequestUnassignDialog } from "./RequestUnassignDialog";
 import ConfirmedEmailDialog from "./ConfirmedEmailDialog";
 import UnassignConfirmDialog from "./UnassignConfirmDialog";
+import { canShowUnassign, type AssignmentRuleOrder } from "@/lib/assignmentRules";
 import { confirmRequiredOrders, planUnassign, skippedText, type UnassignPlan, type UnassignPreviewOrder } from "@/lib/unassignConfirm";
 import { describeCounts, orderTypesParam, countByType, type TypeFilter } from "@/lib/orderMerge";
 import { isReferenceType, orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
@@ -71,7 +78,7 @@ function lineWeightLabel(product: ReturnType<typeof lineProduct>, pending?: bool
     ? pending
       ? "..."
       : "-"
-    : `${Number(product.total_weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`;
+    : formatKg(Number(product.total_weight_kg));
 }
 
 function tomorrowPht() {
@@ -382,6 +389,7 @@ function SalesOrdersView({
   const [cardPage, setCardPage] = useState(1);
   const cardsView = Boolean(assignmentScope) && viewMode === "kpi";
   const client = useQueryClient();
+  const fieldColumns = useOrderFieldColumns();
   const apiOrderStatus =
     !assignmentScope && orderStatus === "All"
       ? "All except acknowledged"
@@ -400,6 +408,7 @@ function SalesOrdersView({
     130,
     300,
     220,
+    ...fieldColumns.widths,
     150,
     150,
     120,
@@ -650,7 +659,7 @@ function SalesOrdersView({
       setSelectedOrderIds([]);
       const notDone = [
         ...excluded.map((row) => ({ id: row.number || row.id, reason: row.reason })),
-        ...(result.skipped ?? []).map((row) => ({ id: orderNumberOf(row.id), reason: row.reason })),
+        ...(result.skipped ?? []).map((row) => ({ id: (row as { order_number?: string | null }).order_number || orderNumberOf(row.id), reason: row.reason })),
       ];
       setSyncMessage(`Unassigned ${result.count} order${result.count === 1 ? "" : "s"} (${describeCounts(result.count_by_type ?? {}) || "none"}).${skippedText(notDone)}`);
       await refetchOrderLists(client, result.unassigned ?? []);
@@ -861,8 +870,8 @@ function SalesOrdersView({
         </>
       ) : (
         <>
-          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, lineIndex, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); const product = lineProduct(order, item, lineIndex); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => openOrder(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{(assignmentScope || series === "WM") && <span className="mr-1.5"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div></div><span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">{status(order.order_status)}</span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{lineProductName(product, item)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{lineWeightLabel(product, orders.data?.stock_pending)}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><HorizontalScrollTable contentWidth="2200px">
-            <table className="w-full min-w-[2200px] table-fixed text-left text-xs">
+          <div className="grid gap-3 p-3 md:hidden">{rows.map(({ order, item, lineIndex, address: shipping, city: locationCity }, index) => { const flags = fulfillment(order); const product = lineProduct(order, item, lineIndex); return <article key={`mobile-${order.id}-${item.line_item_id ?? index}`} className="min-w-0 w-full max-w-full overflow-hidden border border-[#e4e3df] bg-[#fafaf8] p-3 [overflow-wrap:anywhere] [word-break:break-word]"><div className="flex min-w-0 items-start gap-3"><input type="checkbox" aria-label={`Select ${order.salesorder_number ?? order.id}`} checked={selectedOrderIds.includes(String(order.id))} onChange={() => toggleOrder(String(order.id))} /><button className="min-w-0 max-w-full flex-1 text-left" onClick={() => openOrder(order)}><div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0 max-w-full"><div className="mono break-all text-xs" style={{ color: orderTypeColor(orderTypeOfRow(order)) }}>{(assignmentScope || series === "WM") && <span className="mr-1.5"><OrderTypeBadge type={orderTypeOfRow(order)} /></span>}{order.salesorder_number ?? order.id}<BranchBadge code={order.branch_code} name={order.branch_name} /></div><div className="mt-1 break-words font-semibold">{order.customer_name ?? "-"}</div>{multiPickupLabel(order) && <div className="mt-1 text-[10px] font-semibold text-[#77787b]" data-testid="multi-pickup">{multiPickupLabel(order)}</div>}</div><span className="max-w-[45%] shrink-0"><OrderStatusChip small status={effectiveOrderStatus({ stopOutcome: order.stop_outcome, orderStatus: order.order_status, shipmentStatus: order.shipment_status })} checkoutAt={order.checkout_at} /></span></div></button></div><div className="mt-3 grid min-w-0 max-w-full grid-cols-2 gap-x-4 gap-y-2 overflow-hidden border-t border-[#e4e3df] pt-3 text-xs"><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Expected shipment</div><div className="break-words font-semibold">{dateLabel(order.expected_shipment_date)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">City</div><div className="break-words">{locationCity}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Product</div><div className="break-words font-semibold">{lineProductName(product, item)}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Quantity</div><div className="break-words">{item.quantity ?? "-"} {item.unit || "units"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Total weight</div><div className="break-words">{lineWeightLabel(product, orders.data?.stock_pending)}</div></div><div className="col-span-2 min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipping address</div><div className="whitespace-pre-line break-words">{shipping}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Delivery method</div><div className="break-words">{orderFieldValue(order, "delivery_method")}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Fulfillment type</div><div className="break-words">{orderFieldValue(order, "fulfillment_type")}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Shipped</div><div>{flags.shipped ? "Yes" : "No"}</div></div><div className="min-w-0"><div className="text-[10px] uppercase tracking-wide text-[#77787b]">Amount</div><div className="break-words">{money(item.item_total ?? order.total)}</div></div></div></article>; })}</div><div className="hidden justify-end px-4 pt-3 md:flex"><OrderFieldColumnSettings prefs={fieldColumns.prefs} onToggle={fieldColumns.toggle} /></div><HorizontalScrollTable contentWidth={`${2200 + fieldColumns.contentExtra}px`}>
+            <table className="w-full table-fixed text-left text-xs" style={{ minWidth: `${2200 + fieldColumns.contentExtra}px` }}>
               <colgroup>
                 {columnWidths.map((width, index) => (
                   <col
@@ -887,6 +896,7 @@ function SalesOrdersView({
                     "City",
                     "Shipping Address",
                     "Notes",
+                    ...fieldColumns.visible.map((column) => column.label),
                     "Mets Avail.",
                     "Glacier Avail.",
                     "Order Status",
@@ -935,6 +945,7 @@ function SalesOrdersView({
                         </td>
                         <td className="sticky left-[260px] z-[1] bg-white px-3 py-4 align-top">
                           {order.customer_name ?? "-"}
+                          {multiPickupLabel(order) && <div className="mt-1 text-[10px] font-semibold text-[#77787b]" data-testid="multi-pickup">{multiPickupLabel(order)}</div>}
                         </td>
                         <td className="px-3 py-4 align-top">
                           <div className="font-semibold">{lineProductName(product, item)}</div>
@@ -968,14 +979,15 @@ function SalesOrdersView({
                         >
                           {order.notes?.trim() || "—"}
                         </td>
+                        <OrderFieldCells order={order} columns={fieldColumns.visible} />
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
                           <StockQty value={lineStock(order, product, "mets")} pending={orders.data?.stock_pending} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right align-top">
                           <StockQty value={lineStock(order, product, "glacier")} pending={orders.data?.stock_pending} />
                         </td>
-                        <td className="px-3 py-4 align-top capitalize">
-                          {status(order.order_status)}
+                        <td className="px-3 py-4 align-top">
+                          <OrderStatusChip small status={effectiveOrderStatus({ stopOutcome: order.stop_outcome, orderStatus: order.order_status, shipmentStatus: order.shipment_status })} checkoutAt={order.checkout_at} />
                         </td>
                         <td className="px-3 py-4 align-top whitespace-normal">
                           {Array.from(
@@ -1018,7 +1030,7 @@ function SalesOrdersView({
                                 >
                                   Edit
                                 </button>}
-                                {!readOnly && order.assignment_status === "assigned" && (
+                                {!readOnly && canShowUnassign(order as AssignmentRuleOrder) && (
                                   <button
                                     className="text-xs font-semibold text-[#86000B] underline"
                                     onClick={(event) => {
@@ -1221,11 +1233,11 @@ function SalesOrderDetailDrawer({
     ["Order date", raw.date],
     ["Expected shipment", raw.shipment_date],
     ["Payment terms", raw.payment_terms_label ?? raw.payment_terms],
-    ["Delivery method", raw.delivery_method],
+    ["Delivery method", order.delivery_method ?? raw.delivery_method],
     ["Salesperson", raw.salesperson_name ?? order.salesperson_name],
     ["Customer PO number", raw.customer_po_number],
     ["Mode of transportation", raw.mode_of_transport],
-    ["Fulfillment type", raw.fulfillment_type ?? raw.cf_fulfillment_type],
+    ["Fulfillment type", order.fulfillment_type ?? raw.fulfillment_type ?? raw.cf_fulfillment_type],
     [
       "Payment requirement",
       raw.payment_requirement ?? raw.payment_requirements,

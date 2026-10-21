@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Loader2, MailX, RefreshCw, Send } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
-import { emailStatusView, panelHeading, shouldPollStatus } from "@/lib/emailStatus";
+import { CREW_EMAIL_TOOLTIP, crewEmailLabel, emailStatusView, panelHeading, shouldPollStatus } from "@/lib/emailStatus";
 
 /** Small status pill for the assignment email: shows what Gmail actually did, never a guess. */
 export function EmailStatusChip({
@@ -144,5 +144,64 @@ export function AssignmentEmailStatusPanel({
         )}
       </div>
     </section>
+  );
+}
+
+/** Crew email column cell: "Crew email: Not sent" + "Send to crew", then "Crew email: Sent 10:12" (Manila). Same send API as before. */
+export function CrewEmailCell({
+  status,
+  sentAt,
+  error,
+  onSend,
+  sending = false,
+  onRetry,
+  retrying = false,
+}: {
+  status?: string | null;
+  sentAt?: string | null;
+  error?: string | null;
+  onSend?: () => void;
+  sending?: boolean;
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
+  if (!status) return <span className="text-[10px] text-[#77787b]">—</span>;
+  const view = emailStatusView(status);
+  const tone = status === "sent" ? "text-[#33673B]" : status === "failed" ? "text-[#86000B]" : status === "not_sent" || status === "skipped" ? "text-[#6b4a00]" : "text-[#55565a]";
+  return (
+    <span className="inline-flex flex-col items-start gap-1" title={error || CREW_EMAIL_TOOLTIP} data-testid="crew-email-cell">
+      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${tone}`}>
+        {view?.spinner && <Loader2 size={10} className="animate-spin" />}
+        {crewEmailLabel(status, sentAt)}
+      </span>
+      {view?.canSend && onSend && (
+        <button
+          type="button"
+          title={CREW_EMAIL_TOOLTIP}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSend();
+          }}
+          disabled={sending}
+          className="inline-flex items-center gap-1 border border-black bg-black px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-50"
+        >
+          {sending ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />} Send to crew
+        </button>
+      )}
+      {view?.canRetry && onRetry && (
+        <button
+          type="button"
+          title={CREW_EMAIL_TOOLTIP}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRetry();
+          }}
+          disabled={retrying}
+          className="inline-flex items-center gap-1 border border-[#86000B]/40 px-2 py-0.5 text-[10px] font-semibold text-[#86000B] disabled:opacity-50"
+        >
+          <RefreshCw size={10} className={retrying ? "animate-spin" : ""} /> Retry
+        </button>
+      )}
+    </span>
   );
 }

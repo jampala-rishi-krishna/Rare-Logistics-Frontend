@@ -24,6 +24,8 @@ export const T = {
   lineStrong: v("line-strong"), // dashed outlines for "Not recorded" / placeholders
   inkRaised: v("ink-raised"), // tiles and badges sitting on an ink (black) panel
   onInkMuted: v("on-ink-muted"), // secondary text on ink
+  orange: v("status-orange"), // Shipped / Partially delivered
+  orangeBg: v("orange-bg"),
   orderSO: v("order-so"),
   orderWM: v("order-wm"),
   orderPO: v("order-po"),

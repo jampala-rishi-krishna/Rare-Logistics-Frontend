@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { OrderStatusChip } from "@/components/OrderStatusChip";
 import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -14,9 +15,13 @@ import { combineViews } from "@/lib/queryStatus";
 import { sessionAcknowledgedOrders } from "@/lib/acknowledgeCache";
 import { formatKgPartial } from "@/lib/kgDisplay";
 import { OrderTypeBadge } from "./OrderTypeBadge";
+import { OrderFieldCells, OrderFieldColumnSettings, useOrderFieldColumns } from "./OrderFieldColumns";
+import { orderFieldValue } from "@/lib/orderColumns";
 import { TypeFilterSelect } from "./OrderTypeControls";
 import { filterByType, idsStillPresent, mergeOrders, weightTotals, type TypeFilter } from "@/lib/orderMerge";
 import { orderTypeColor, orderTypeOfRow } from "@/lib/orderType";
+import { splitPickups, type AssignmentRuleOrder, type PickupBlock } from "@/lib/assignmentRules";
+import UnableToAssignDialog from "./UnableToAssignDialog";
 
 type Order = inventoryApi.SalesOrderSummary;
 type Product = NonNullable<Order["products"]>[number];
@@ -85,6 +90,10 @@ const STICKY_LEFT = ["left-0", "left-[44px]", "left-[164px]", "left-[294px]"];
 
 export default function LoadPlanningAssignmentTab() {
   const [, navigate] = useLocation();
+  const fieldColumns = useOrderFieldColumns();
+  // Delivery Method / Fulfillment Type sit right after Notes (index 11).
+  const columns: [string, number][] = [...COLUMNS.slice(0, 12), ...fieldColumns.headers, ...COLUMNS.slice(12)];
+  const tableWidth = 2000 + fieldColumns.contentExtra;
   const [from, setFrom] = useState(tomorrowPht());
   const [to, setTo] = useState(tomorrowPht());
   const [search, setSearch] = useState("");
@@ -92,6 +101,7 @@ export default function LoadPlanningAssignmentTab() {
   const [citiesOpen, setCitiesOpen] = useState(false);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [pickupBlocked, setPickupBlocked] = useState<{ blocked: PickupBlock[]; assignedCount: number } | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   // Unassigned transfer orders (assignment=unassigned). The key shares the "load-planning-unassigned" prefix, so
   // assigning/unassigning (which invalidates that prefix) refreshes SO and TO together.
@@ -340,11 +350,17 @@ export default function LoadPlanningAssignmentTab() {
         </label>
         <button
           disabled={!selected.length}
-          onClick={() =>
-            navigate(
-              `/app/routes?assign=${encodeURIComponent(selected.join(","))}`,
-            )
-          }
+          onClick={() => {
+            // Customer pickups never go on a truck: one "Unable to assign" popup lists them, the rest open the assignment panel.
+            const chosen = visibleOrders.filter((order) => selected.includes(order.id));
+            const { assignable, blocked } = splitPickups(chosen as AssignmentRuleOrder[]);
+            const assignableIds = selected.filter((id) => !blocked.some((b) => b.id === id));
+            if (blocked.length) {
+              setPickupBlocked({ blocked, assignedCount: assignable.length });
+              setSelected(assignableIds);
+            }
+            if (assignableIds.length) navigate(`/app/routes?assign=${encodeURIComponent(assignableIds.join(","))}`);
+          }}
           className="button-black w-full rounded-[4px] px-4 py-2 text-sm disabled:opacity-40 sm:w-auto"
         >
           Assign Selected ({selected.length})
@@ -390,8 +406,8 @@ export default function LoadPlanningAssignmentTab() {
                         {order.customer_name ?? "Unnamed customer"}
                       </h3>
                     </div>
-                    <span className="max-w-[45%] shrink-0 break-words rounded-full bg-[#fff1d6] px-2 py-1 text-center text-[10px] font-semibold uppercase">
-                      {orderTypeOfRow(order) === "TO" ? "Draft" : orderTypeOfRow(order) === "PO" ? (order.status_label ?? order.order_status ?? "PO") : "Acknowledged"}
+                    <span className="max-w-[45%] shrink-0">
+                      <OrderStatusChip small status={orderTypeOfRow(order) === "TO" ? "Draft" : orderTypeOfRow(order) === "PO" ? (order.status_label ?? order.order_status ?? "PO") : "Acknowledged"} />
                     </span>
                   </div>
                   <div className="mt-4 grid min-w-0 max-w-full gap-2 overflow-hidden border-t pt-3 text-xs text-[#55565a]">
@@ -409,6 +425,10 @@ export default function LoadPlanningAssignmentTab() {
                         {order.notes?.trim() || "—"}
                       </div>
                     </div>
+                    <div className="grid min-w-0 grid-cols-2 gap-x-3 border-t border-[#e4e3df] pt-2">
+                      <div className="min-w-0"><b className="block break-words text-black">{orderFieldValue(order, "delivery_method")}</b>Delivery method</div>
+                      <div className="min-w-0"><b className="block break-words text-black">{orderFieldValue(order, "fulfillment_type")}</b>Fulfillment type</div>
+                    </div>
                     <div className="min-w-0 overflow-hidden border-t border-[#e4e3df] pt-2">
                       <div className="grid min-w-0 max-w-full grid-cols-2 gap-x-3 gap-y-2 overflow-hidden text-[11px]">
                         <span className="font-semibold text-black">Product</span><span className="font-semibold text-black">Qty / Weight</span>
@@ -425,16 +445,17 @@ export default function LoadPlanningAssignmentTab() {
               );
             })}
           </div>
-          <HorizontalScrollTable contentWidth="2000px">
-            <table className="w-full min-w-[2000px] table-fixed text-left text-xs">
+          <div className="hidden justify-end px-4 pt-3 md:flex"><OrderFieldColumnSettings prefs={fieldColumns.prefs} onToggle={fieldColumns.toggle} /></div>
+          <HorizontalScrollTable contentWidth={`${tableWidth}px`}>
+            <table className="w-full table-fixed text-left text-xs" style={{ minWidth: `${tableWidth}px` }}>
               <colgroup>
-                {COLUMNS.map(([name, width]) => (
+                {columns.map(([name, width]) => (
                   <col key={name || "select"} style={{ width: `${width}px` }} />
                 ))}
               </colgroup>
               <thead className="sticky top-0 z-[3] border-b border-[#e4e3df] bg-[#f7f7f4] text-[10px] uppercase tracking-widest text-[#77787b]">
                 <tr>
-                  {COLUMNS.map(([name], index) => (
+                  {columns.map(([name], index) => (
                     <th
                       key={name || "select"}
                       className={`px-3 py-3 font-semibold leading-tight ${index < 4 ? `sticky z-[4] whitespace-nowrap bg-[#f7f7f4] ${STICKY_LEFT[index]}` : "whitespace-normal"}`}
@@ -469,6 +490,7 @@ export default function LoadPlanningAssignmentTab() {
                           {order.notes?.trim() || "—"}
                         </div>
                       </td>
+                      <OrderFieldCells order={order} columns={fieldColumns.visible} />
                       <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "mets")} pending={orders.data?.stock_pending} /></td>
                       <td className="whitespace-nowrap px-3 py-4 text-right align-top"><StockQty value={lineStock(order, product, "glacier")} pending={orders.data?.stock_pending} /></td>
                       <td className="whitespace-normal px-3 py-4 align-top">{lineWarehouse(order, product)}</td>
@@ -489,6 +511,7 @@ export default function LoadPlanningAssignmentTab() {
           No unassigned orders match this date, city, type, or search.
         </div>
       )}
+      {pickupBlocked && <UnableToAssignDialog blocked={pickupBlocked.blocked} assignedCount={pickupBlocked.assignedCount} onClose={() => setPickupBlocked(null)} />}
     </div>
   );
 }

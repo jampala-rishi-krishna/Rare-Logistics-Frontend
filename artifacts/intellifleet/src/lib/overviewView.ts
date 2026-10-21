@@ -71,6 +71,6 @@ export function outcomeColor(outcome: string | null | undefined): string {
   const o = (outcome ?? "").toLowerCase();
   if (o.startsWith("delivered")) return "#1e7b44";
   if (o.startsWith("partial")) return "#b07b12";
-  if (o.startsWith("failed") || o.startsWith("returned")) return "#c4291f";
+  if (o.startsWith("failed") || o.startsWith("returned") || o.startsWith("cancelled")) return "#c4291f";
   return "#55565a";
 }

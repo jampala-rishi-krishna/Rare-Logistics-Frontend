@@ -14,6 +14,7 @@ import { acknowledgePath, actionsEnabled, shiftYmd } from "@/lib/tripNav";
 import { deriveBatchState } from "@/lib/tripState";
 import type { EffectiveOrder } from "@/lib/tripState";
 import type { Batch, BatchDetail, DriverOrder } from "@/lib/tripTypes";
+import { groupLinesByWarehouse, isMultiWarehouse } from "@/lib/pickupWarehouses";
 import DriverLayout from "./DriverLayout";
 import { dayLabel, useLang, useT } from "./i18n";
 import type { Dict } from "./i18n";
@@ -29,6 +30,37 @@ function shortAddress(o: DriverOrder, t: Dict): string {
   if (o.area) return o.area;
   const lines = o.address_lines ?? [];
   return lines.length > 1 ? lines.slice(-2).join(", ") : o.address_text;
+}
+
+// Load screen: where to pick the items up. One warehouse -> one line; an SO picked from METS + GLACIER -> its items grouped per warehouse.
+function WarehouseGroups({ order, t }: { order: DriverOrder; t: Dict }) {
+  const groups = groupLinesByWarehouse(order.lines);
+  if (!groups.some((g) => g.warehouse)) return null;
+  if (!isMultiWarehouse(order.lines)) {
+    return (
+      <div data-testid="driver-ack-warehouse" style={{ fontSize: 13, fontWeight: 700, color: C.sub, marginTop: 6 }}>
+        {t.pickupAt(groups.find((g) => g.warehouse)?.warehouse ?? "")}
+      </div>
+    );
+  }
+  return (
+    <div data-testid="driver-ack-warehouse-groups" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+      {groups.map((g) => (
+        <div key={g.warehouse ?? "none"} data-testid={`driver-ack-warehouse-${g.warehouse ?? "none"}`} style={{ borderRadius: 12, background: C.soft, padding: "8px 10px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{g.warehouse ? t.pickupAt(g.warehouse) : t.noWarehouse}</div>
+          {g.lines.map((line, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, marginTop: 4 }}>
+              <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{line.name}</span>
+              <b style={{ whiteSpace: "nowrap" }}>
+                {formatQty(line.quantity)}
+                {line.unit ? ` ${line.unit}` : ""}
+              </b>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function OrderCard({ eff, n, t }: { eff: EffectiveOrder; n: number; t: Dict }) {
@@ -65,6 +97,7 @@ function OrderCard({ eff, n, t }: { eff: EffectiveOrder; n: number; t: Dict }) {
             </>
           )}
         </div>
+        <WarehouseGroups order={o} t={t} />
         {done ? (
           <div data-testid="driver-acked-line" style={{ fontSize: 13, fontWeight: 700, color: C.green, marginTop: 8 }}>
             {eff.acked && ack ? t.ackedAt(formatClock(ack.at), personName(ack.by)) : t.ackedWaiting}

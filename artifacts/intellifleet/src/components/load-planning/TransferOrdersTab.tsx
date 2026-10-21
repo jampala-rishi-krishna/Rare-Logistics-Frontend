@@ -4,6 +4,8 @@ import { Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import * as inventoryApi from "@/services/api/inventory";
 import { HorizontalScrollTable } from "./HorizontalScrollTable";
 import { OrderTypeBadge } from "./OrderTypeBadge";
+import { OrderFieldCells, OrderFieldColumnSettings, useOrderFieldColumns } from "./OrderFieldColumns";
+import { orderFieldValue } from "@/lib/orderColumns";
 import { ConnectionStatusBar, viewOfQuery } from "@/components/ui/ConnectionStatusBar";
 import { EmptyState, FilterField, ListError, Toolbar, inputClass, primaryButtonClass } from "./ToolbarControls";
 import { lastRefreshedLabel } from "@/lib/orderMerge";
@@ -39,6 +41,9 @@ const COLUMNS: [string, number][] = [
 /** Inventory > TO: Draft transfer orders between Mets and Glacier. No Acknowledge for TO. */
 export default function TransferOrdersTab() {
   const client = useQueryClient();
+  const fieldColumns = useOrderFieldColumns();
+  const columns = [...COLUMNS, ...fieldColumns.headers];
+  const tableWidth = 1400 + fieldColumns.contentExtra;
   const initial = tomorrowPht();
   const [from, setFrom] = useState(initial);
   const [to, setTo] = useState(initial);
@@ -160,20 +165,23 @@ export default function TransferOrdersTab() {
                   <div><div className="text-[10px] uppercase text-[#77787b]">Destination</div>{dash(order.destination_warehouse)}</div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Created by</div>{dash(order.created_by)}</div>
                   <div><div className="text-[10px] uppercase text-[#77787b]">Modified by</div>{dash(order.last_modified_by)}</div>
+                  <div><div className="text-[10px] uppercase text-[#77787b]">Delivery method</div>{orderFieldValue(order, "delivery_method")}</div>
+                  <div><div className="text-[10px] uppercase text-[#77787b]">Fulfillment type</div>{orderFieldValue(order, "fulfillment_type")}</div>
                 </div>
               </article>
             ))}
           </div>
-          <HorizontalScrollTable contentWidth="1400px">
-            <table className="w-full min-w-[1400px] table-fixed text-left text-xs">
+          <div className="hidden justify-end px-4 pt-3 md:flex"><OrderFieldColumnSettings prefs={fieldColumns.prefs} onToggle={fieldColumns.toggle} /></div>
+          <HorizontalScrollTable contentWidth={`${tableWidth}px`}>
+            <table className="w-full table-fixed text-left text-xs" style={{ minWidth: `${tableWidth}px` }}>
               <colgroup>
-                {COLUMNS.map(([name, width]) => (
+                {columns.map(([name, width]) => (
                   <col key={name} style={{ width: `${width}px` }} />
                 ))}
               </colgroup>
               <thead className="border-b border-[#e4e3df] bg-[#f7f7f4] text-[10px] uppercase tracking-widest text-[#77787b]">
                 <tr>
-                  {COLUMNS.map(([name]) => (
+                  {columns.map(([name]) => (
                     <th key={name} className="whitespace-normal px-3 py-3 font-semibold leading-tight">
                       {name}
                     </th>
@@ -195,6 +203,7 @@ export default function TransferOrdersTab() {
                     <td className="whitespace-normal px-3 py-4 align-top">{dash(order.destination_warehouse)}</td>
                     <td className="whitespace-normal px-3 py-4 align-top">{dash(order.created_by)}</td>
                     <td className="whitespace-normal px-3 py-4 align-top">{dash(order.last_modified_by)}</td>
+                    <OrderFieldCells order={order} columns={fieldColumns.visible} />
                   </tr>
                 ))}
               </tbody>

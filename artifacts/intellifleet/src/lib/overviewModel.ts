@@ -335,7 +335,8 @@ export function outcomeKey(
     o.startsWith("failed") ||
     o.startsWith("returned") ||
     o.startsWith("not delivered") ||
-    o.startsWith("not_delivered")
+    o.startsWith("not_delivered") ||
+    o.startsWith("cancelled") // cancelled_by_request: not delivered for every count, labelled "Cancelled"
   )
     return "failed";
   if (o.startsWith("delivered")) return "delivered";
@@ -351,7 +352,11 @@ export const OUTCOME: Record<
   failed: { glyph: "✕", word: "not delivered", tone: "bad" },
 };
 
+export const isCancelledOutcome = (outcome: string | null | undefined): boolean =>
+  (outcome ?? "").trim().toLowerCase().startsWith("cancelled");
+
 export function outcomeChipText(outcome: string | null | undefined): string {
+  if (isCancelledOutcome(outcome)) return "Cancelled";
   const k = outcomeKey(outcome);
   return k ? sentence(OUTCOME[k].word) : outcome ? outcome : "—";
 }

@@ -76,7 +76,7 @@ export function OrderList({ data, loading, error, onRetry, selected, isToday, ow
               return <li key={row.number}>
                 <a className={`otl-row${current ? " otl-current" : ""}`} href={hrefFor(row.number)} aria-current={current ? "true" : undefined} onClick={e => click(e, row.number)}>
                   <div className="otl-main">
-                    <div className="otl-top"><span className="otl-num">{row.number}</span><StatusChip status={row.status} /></div>
+                    <div className="otl-top"><span className="otl-num">{row.number}</span><StatusChip status={row.status} at={row.checkout_at ?? row.event?.at} /></div>
                     <div className="otl-cust">{row.customer}</div>
                     <div className="otl-meta">{meta(row)}</div>
                   </div>

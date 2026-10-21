@@ -14,6 +14,8 @@ export interface OrderRow {
   stop?: number | null; total_stops?: number | null;
   /** Latest recorded journey event for the list meta line, e.g. {label: "delivered", at: ISO}. */
   event?: { label: string; at: string | null } | null;
+  delivery_method?: string | null; fulfillment_type?: string | null; pickup_warehouses?: string[] | null; unassign_blocked_reason?: string | null;
+  stop_outcome?: string | null; checkout_at?: string | null;
 }
 export interface Card extends Omit<OrderRow, "payment"> {
   id: string; sections: Record<string, Fact>; contact: string;
