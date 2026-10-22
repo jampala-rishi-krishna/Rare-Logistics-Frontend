@@ -264,14 +264,10 @@ function useVehiclesData(liveTracking = true, selectedDate?: string) {
   return { ...query, data: query.data ?? [] };
 }
 
-// Calendar date (YYYY-MM-DD) in Manila, offset by whole days. Fleet defaults to today;
-// Orders defaults to the next delivery day, independently of the browser's timezone.
+// Calendar date (YYYY-MM-DD) in Manila, offset by whole days. Fleet and Orders
+// default to today, independently of the browser's timezone.
 function manilaDate(offsetDays = 0) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date(Date.now() + offsetDays * 86400000));
-}
-
-function nextExpectedDate() {
-  return manilaDate(1);
 }
 
 function useOrdersData(dateFrom: string, dateTo: string, options: { search?: string; status?: string; assignment?: "assigned" | "unassigned"; vehicle?: string; customer?: string; deliveryStatus?: string; orderTypes?: string } = {}) {
@@ -3467,8 +3463,8 @@ function DataTablePage({
     const timer = window.setInterval(refreshFleetData, 30 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, [kind, fleetRefreshing, fleetDate]);
-  const [orderFrom, setOrderFrom] = useState(nextExpectedDate);
-  const [orderTo, setOrderTo] = useState(nextExpectedDate);
+  const [orderFrom, setOrderFrom] = useState(() => manilaDate());
+  const [orderTo, setOrderTo] = useState(() => manilaDate());
   const [orderStatus, setOrderStatus] = useState("All");
   const [orderAssignment, setOrderAssignment] = useState<"assigned" | "unassigned">("assigned");
   const [orderVehicle, setOrderVehicle] = useState("");
