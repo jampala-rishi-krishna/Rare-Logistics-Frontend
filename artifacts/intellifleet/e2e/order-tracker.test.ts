@@ -11,6 +11,26 @@ let browser: Browser;
 before(async () => { await startServer(); browser = await launch(); });
 after(async () => { await browser?.close(); stopServer(); });
 
+test("Ask follow-up keeps the previous answer date and labels unknown freshness", async () => {
+  const view = await openTracker(browser, { query: "?view=ask", answer: () => ({
+    answer_id: "d".repeat(32), answer: "21 assigned orders; 9 delivered; 12 pending completion.",
+    date_from: "2026-10-14", date_to: "2026-10-14", not_recorded: false, tools: ["delivery_summary"],
+    sources: [{ source: "Confirmed assigned orders / trip workflow", as_of: null, link: null, not_recorded: false }], blocks: [],
+  }) });
+  const bodies: Array<{question: string; date_from: string; date_to: string}> = [];
+  view.page.on("request", request => { if (request.url().endsWith("/api/order-tracker/ask") && request.method() === "POST") bodies.push(request.postDataJSON()); });
+  await view.page.locator("#otq-input").fill("how many not delivered yesterday?");
+  await view.page.locator(".otq-send").click();
+  await view.page.locator(".otq-foot-src").getByText(/timestamp not recorded/).waitFor();
+  await view.page.locator("#otq-input").fill("pending?");
+  await view.page.locator(".otq-send").click();
+  await view.page.locator(".otq-turn").nth(1).locator(".otq-foot-src").waitFor();
+  assert.equal(bodies[1].date_from, "2026-10-14");
+  assert.equal(bodies[1].date_to, "2026-10-14");
+  assert.deepEqual(view.errors, []);
+  await view.context.close();
+});
+
 test("Sales and Wet Market tracker opens all orders for today and resets old date links", async () => {
   for (const role of ["sales", "wet_market"]) {
     const view = await openTracker(browser, { role, width: 1440 });

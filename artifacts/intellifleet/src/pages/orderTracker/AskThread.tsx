@@ -58,7 +58,7 @@ function AnswerCard({ turn, onOpenOrder, onVote }: { turn: Turn; onOpenOrder: (n
   const listy = blocks.some(b => b.type === "order_table" || b.type === "actions");
   const footer = <div className={names.length || linked.length ? (listy ? "otq-foot" : "otq-foot otq-foot-compact") : "otq-foot otq-foot-bare"}>
     <div className="otq-foot-src">
-      {names.length > 0 && <p className="ot-src">{names.length > 1 ? "Sources" : "Source"}: {names.join(" · ")} · as of {hhmm(asOf)}{sources.some(s => s.not_recorded) ? " · some facts not recorded" : ""}</p>}
+      {names.length > 0 && <p className="ot-src">{names.length > 1 ? "Sources" : "Source"}: {names.join(" · ")} · {asOf ? `as of ${hhmm(asOf)}` : "timestamp not recorded"}{sources.some(s => s.not_recorded) ? " · some facts not recorded" : ""}</p>}
       {linked.length > 0 && <p className="otq-links"><span>Open record:</span>{linked.map((s, i) => <button type="button" key={`${s.source}-${i}`} className="otq-link" onClick={() => navigate(safeLink(s.link)!)}>{s.source}</button>)}</p>}
     </div>
     <p className="otq-vote-msg" role="status">{turn.voteMessage ?? ""}</p>
@@ -104,6 +104,13 @@ export function AskThread({ filter, order, seed, onBack, onOpenOrder }: { filter
   const turnRefs = useRef(new Map<number, HTMLElement>());
   const scrollTo = useRef<number | null>(null);
   const filterRef = useRef(filter); filterRef.current = filter;
+  const followUpDates = useRef({ date_from: filter.date_from, date_to: filter.date_to });
+  const previousFilter = useRef(`${filter.date_from}|${filter.date_to}`);
+  const turnFilters = useRef(new Map<number, Filter>());
+  if (previousFilter.current !== `${filter.date_from}|${filter.date_to}`) {
+    previousFilter.current = `${filter.date_from}|${filter.date_to}`;
+    followUpDates.current = { date_from: filter.date_from, date_to: filter.date_to };
+  }
   const orderRef = useRef(order); orderRef.current = order;
   const busy = turns.some(t => t.state === "busy");
 
@@ -112,7 +119,11 @@ export function AskThread({ filter, order, seed, onBack, onOpenOrder }: { filter
   async function run(key: number, question: string) {
     patch(key, { state: "busy", error: undefined, answer: undefined, vote: null, voteMessage: "" });
     try {
-      const answer = await tracker.ask(question, filterRef.current, orderRef.current ?? undefined);
+      const answer = await tracker.ask(question, turnFilters.current.get(key) ?? filterRef.current, orderRef.current ?? undefined);
+      if (answer.date_from && answer.date_to) {
+        followUpDates.current = { date_from: answer.date_from, date_to: answer.date_to };
+        turnFilters.current.set(key, { ...filterRef.current, ...followUpDates.current });
+      }
       patch(key, { state: "done", answer });
     } catch (e) { patch(key, { state: "error", error: failure(e) }); }
   }
@@ -120,6 +131,7 @@ export function AskThread({ filter, order, seed, onBack, onOpenOrder }: { filter
     const question = text.trim().slice(0, MAX);
     if (question.length < MIN) return false;
     const key = nextKey.current++;
+    turnFilters.current.set(key, { ...filterRef.current, ...followUpDates.current });
     // The first question stays below the page heading; later ones scroll into view.
     scrollTo.current = key > 1 ? key : null;
     setTurns(all => [...all, { key, question, state: "busy", vote: null, voteMessage: "" }]);

@@ -14,6 +14,8 @@
 
 ## Order Tracker read model (2026-10-19)
 
+2026-10-22 Ask summary correction: counts and status groups are computed from one full existing `rows_for` projection, before pagination; pending/incomplete/rejection filters and returned-trip crew use the same already-loaded trip facts and in-memory staff directory. No new table, column, provider call or DB read/write path. Follow-up date context remains in the browser thread only; resolved dates are returned with answers. Cache/snapshot timestamps are labeled as such; missing timestamps are explicit.
+
 2026-10-20 approved fix: Tracker reads existing `trip_state.load` tables (trips, acknowledgements, stops, handovers/items, actor names) for selected assigned batches itself, single-flight with a 15-second/generation-invalidated projection cache; order/assignment records remain in the Confirmed Orders memory cache, with no Zoho calls or database writes.
 
 No tables, columns, migrations, template changes or database writes. The requested Tracker cached read paths reuse existing history tables only for **strictly past dates**: `day_model.rows_in_range` (`sales_orders`, at most a 31-day requested window), one batched `sales_order_lines` read, and existing `trip_state.load` reads for the selected batches. More than 1,000 rows or a serialized result over 64 KiB requires a smaller window. Historical results use a single-flight, five-minute cache, capped at eight entries / 1 MiB total serialized bytes. Current/future order records use memory only; selected-batch trip facts use the read below. No automatic history polling.

@@ -35,7 +35,7 @@ export type AnswerBlock =
   | { type: "bars"; title: string; unit: string; items: Array<{ label: string; value: number }>; source: string; as_of: string | null }
   | { type: "actions"; actions: Array<{ kind: "photos" | "open_order"; label: string; link: string }> };
 
-export interface Answer { answer_id: string; answer: string; sources: Source[]; tools: string[]; not_recorded: boolean; blocks?: AnswerBlock[]; language?: "en" | "tl" }
+export interface Answer { answer_id: string; answer: string; sources: Source[]; tools: string[]; not_recorded: boolean; blocks?: AnswerBlock[]; language?: "en" | "tl"; date_from?: string; date_to?: string }
 export interface Filter { date_from: string; date_to: string; q?: string; status?: string; offset?: number }
 const BASE = "/api/order-tracker";
 export const findOrders = (filter: Filter) => api.get<OrderList>(`${BASE}/orders`, { ...filter });
