@@ -52,6 +52,7 @@ export interface ApiGpsPoint {
 }
 
 export function listVehicles(status?: string, date?: string): Promise<ApiVehicle[]> {
+  // Safe for automatic polling: re-read the backend Fleet snapshot.
   return api.get<ApiVehicle[]>("/vehicles", { status, date });
 }
 
@@ -60,6 +61,7 @@ export function triggerFleetPoll(): Promise<{ status: string; vehicle_updates?: 
 }
 
 export function refreshVehicles(force = true): Promise<ApiVehicle[]> {
+  // Explicit manual refresh only; never call from a polling timer.
   return api.post<ApiVehicle[]>("/vehicles/refresh", undefined, { force: force ? 1 : 0 });
 }
 
