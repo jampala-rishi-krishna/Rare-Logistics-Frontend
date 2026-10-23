@@ -17,7 +17,7 @@ export interface ApiVehicle {
   last_updated: string;
   // The device's own timestamp for the current fix (UTC ISO); null until the first Cartrack poll after a restart.
   gps_time?: string | null;
-  associated_sos: { soNumber: string; clientName: string | null; destinationCity: string | null; warehouse: string | null; orderedWeightKg?: number | null; shippedWeightKg?: number | null; status?: string | null; shipmentStatus?: string | null; deliveryStatus?: string | null; order_type?: string | null; orderType?: string | null; destination_warehouse?: string | null; delivery_method?: string | null; fulfillment_type?: string | null; pickup_warehouses?: string[] | null; unassign_blocked_reason?: string | null; stop_outcome?: string | null; checkout_at?: string | null }[];
+  associated_sos: { soId?: string; soNumber: string; clientName: string | null; destinationCity: string | null; warehouse: string | null; orderedWeightKg?: number | null; shippedWeightKg?: number | null; status?: string | null; shipmentStatus?: string | null; deliveryStatus?: string | null; driverId?: number | null; helperIds?: number[]; order_type?: string | null; orderType?: string | null; destination_warehouse?: string | null; delivery_method?: string | null; fulfillment_type?: string | null; pickup_warehouses?: string[] | null; unassign_blocked_reason?: string | null; stop_outcome?: string | null; checkout_at?: string | null }[];
   warehouse_pickup: string | null;
   locked: boolean;
   lock_reason: string | null;
@@ -86,4 +86,14 @@ export function listGeofences(): Promise<ApiGeofence[]> {
 
 export function listDrivers(): Promise<ApiDriver[]> {
   return api.get<ApiDriver[]>("/drivers");
+}
+
+export interface StaffOption { staff_id: number; name: string; role: "driver" | "helper"; phone?: string | null; linked_user_id?: number | null; }
+
+export function listStaffOptions(role: "driver" | "helper"): Promise<StaffOption[]> {
+  return api.get<StaffOption[]>("/api/admin/staff-options", { role });
+}
+
+export function transferAssignments(body: { salesorder_ids: string[]; vehicle_id?: string; driver_id?: number | null; helper_ids: number[]; reason: string; note?: string; confirm_conflict?: boolean }) {
+  return api.post("/api/load-planning/assignments/transfer", body);
 }
