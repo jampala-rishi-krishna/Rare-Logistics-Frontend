@@ -93,6 +93,7 @@ import { RouteCostCard, RouteKpis, RouteOptionCards, RouteTimeline } from "@/com
 import { ReturnWarehousePicker } from "@/components/maps/ReturnWarehousePicker";
 import * as inventoryApi from "@/services/api/inventory";
 import * as reportsApi from "@/services/api/reports";
+import { startFleetCachePolling } from "@/lib/fleetPolling";
 import { RgfLogisticsReportView } from "@/components/reports/RgfLogisticsReport";
 import { CommsGateway } from "@/components/dispatch/CommsGateway";
 import { AdminContactControls, VoicePausedBanner, WhatsappPausedBanner } from "@/components/dispatch/VoiceCallsControl";
@@ -3402,6 +3403,38 @@ function Tower() {
   );
 }
 
+function ZohoWebhookCard({ data }: { data: adminApi.ZohoUsageHealth }) {
+  const modules = ["salesorder", "purchaseorder", "transferorder", "package", "lock-result"];
+  const outcomes = ["applied", "stale", "debounced", "skipped_window", "skipped_branch", "error"];
+  const inbound = data.webhook_in ?? {};
+  const total = Object.values(inbound).reduce((sum, value) => sum + value, 0);
+  const quota = data.webhook_org_quota ?? 1000;
+  const tone = total >= 900 ? "bg-[#b42318]" : total >= 700 ? "bg-[#b54708]" : "bg-[#1e7b44]";
+  const history = data.webhook_history ?? [];
+  return (
+    <div data-testid="zoho-webhooks-card" className="mb-4 border border-[#d8d7d2] bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-[280px] flex-1">
+          <div className="micro text-[#77787b]">Zoho webhooks</div>
+          <div className="mt-1 text-2xl font-bold">Today: {total.toLocaleString()} / {quota.toLocaleString()}</div>
+          <div className="mt-2 h-2 w-full max-w-[560px] overflow-hidden bg-[#ecebe7]" aria-label="Zoho webhook quota">
+            <div className={`h-full ${tone}`} style={{ width: `${Math.min(100, (total / quota) * 100)}%` }} />
+          </div>
+          <div className="mt-1 text-[11px] text-[#77787b]">Org-wide limit shared with other Zoho integrations; this counts IntelliFleet only.</div>
+        </div>
+        <div className="grid min-w-[250px] grid-cols-2 gap-2 text-xs md:grid-cols-5">
+          {modules.map((module) => <div key={module} className="border border-[#e4e3df] px-2 py-2"><div className="font-semibold">{(inbound[module] ?? 0).toLocaleString()}</div><div className="text-[#77787b]">{module}</div><div className="mt-1 text-[10px] text-[#9a9994]">{data.webhook_last_received?.[module] ? new Date(data.webhook_last_received[module]).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "No events"}</div></div>)}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <div><div className="micro text-[#77787b]">Outcomes</div><div className="mt-2 grid grid-cols-2 gap-1 text-xs">{outcomes.map((outcome) => <div key={outcome} className="flex justify-between border-b border-[#efeee9] py-1"><span>{outcome.replaceAll("_", " ")}</span><b>{(data.webhook_outcomes?.[outcome] ?? 0).toLocaleString()}</b></div>)}</div></div>
+        <div><div className="micro text-[#77787b]">Shadow reconciliation</div><div className="mt-2 space-y-1 text-xs"><div>OK <b>{(data.shadow_ok ?? 0).toLocaleString()}</b></div><div>Mismatch <b>{(data.shadow_mismatch ?? 0).toLocaleString()}</b></div><div>Missing <b>{(data.shadow_missing ?? 0).toLocaleString()}</b></div><div>Mapping fixes <b>{(data.webhook_mapping_fixes ?? 0).toLocaleString()}</b></div></div></div>
+        <div><div className="micro text-[#77787b]">7-day history</div><div className="mt-2 max-h-28 overflow-auto text-xs">{history.length === 0 ? <div className="text-[#9a9994]">No persisted webhook history yet.</div> : history.map((row) => <div key={row.date} className="flex justify-between border-b border-[#efeee9] py-1"><span>{row.date}</span><b>{row.total.toLocaleString()}</b></div>)}</div></div>
+      </div>
+    </div>
+  );
+}
+
 function DataTablePage({
   kind,
 }: {
@@ -3460,9 +3493,9 @@ function DataTablePage({
   };
   useEffect(() => {
     if (kind !== "fleet") return;
-    const timer = window.setInterval(refreshFleetData, 30 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, [kind, fleetRefreshing, fleetDate]);
+    // Automatic reads use GET /vehicles only; the manual button owns provider refresh.
+    return startFleetCachePolling(refetchVehicles);
+  }, [kind, fleetDate, refetchVehicles]);
   const [orderFrom, setOrderFrom] = useState(() => manilaDate());
   const [orderTo, setOrderTo] = useState(() => manilaDate());
   const [orderStatus, setOrderStatus] = useState("All");
@@ -3622,6 +3655,9 @@ function DataTablePage({
             </div>
           </div>
         </div>
+      )}
+      {kind === "users" && zohoUsage.data && (
+        <ZohoWebhookCard data={zohoUsage.data} />
       )}
       {kind === "loads" ? (
         <LoadPlanningWorkspace

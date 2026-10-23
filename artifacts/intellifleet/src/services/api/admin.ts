@@ -91,6 +91,15 @@ export interface ZohoUsageHealth {
   instance_id?: string;
   process_started_at?: string;
   usage_restored_from_db?: { restored: boolean; total: number; error?: string | null };
+  webhook_in?: Record<string, number>;
+  webhook_outcomes?: Record<string, number>;
+  shadow_ok?: number;
+  shadow_mismatch?: number;
+  shadow_missing?: number;
+  webhook_last_received?: Record<string, string>;
+  webhook_mapping_fixes?: number;
+  webhook_org_quota?: number;
+  webhook_history?: Array<{ date: string; total: number; modules: Record<string, number> }>;
   zoho_usage: {
     date: string;
     timezone: string;
