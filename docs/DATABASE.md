@@ -30,7 +30,7 @@ Existing assignment-options reads also publish their already-read `client_delive
 
 Tracker photo URLs and requests use `/api/media/{id}?read_only=true`. This disables the existing Drive name/description retry on photo viewing (Sales/Wet Market always disable it) and returns private/no-store responses varying by Authorization, so the tab cannot write Drive metadata or reuse a previous account's cached photo response. Existing crew/office photo reads keep their earlier retry behavior. Metadata authorization still uses the existing single photo-row lookup; there is no new photo query.
 
-Updated 2026-10-16. Application schema head: `t0f1a2b3c4d5` (apply via the Render pre-deploy migration before starting this version), following `s9e0f1a2b3c4` (transfer orders). Earlier documented head: `r8d9e0f1a2b3` (proof of delivery required: a new version of the Delivery time log template, data only). Earlier heads: `q7c8d9e0f1a2` (driver app rebuild: `driver_issues`, `driver_alert_reads`, 2 columns, time-log template), `p6b7c8d9e0f1` (`app_settings`), `o5a6b7c8d9e0` (trip workflow: 9 tables), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
+Updated 2026-10-23. Application schema head: `u1a2b3c4d5e6` (separate `zoho_so_live_cache` for current webhook/API snapshots; `sales_orders` history is untouched), following `t0f1a2b3c4d5` (access pickups). Apply via the Render pre-deploy migration before starting this version. Earlier documented heads include `s9e0f1a2b3c4` (transfer orders), `r8d9e0f1a2b3` (proof of delivery), `q7c8d9e0f1a2` (driver app rebuild), `p6b7c8d9e0f1` (`app_settings`), `o5a6b7c8d9e0` (trip workflow), `n4f5a6b7c8d9` (driver portal), `m3e4f5a6b7c8` (assignment_batch_id), `l2d3e4f5a6b7` (email status), `k1c2d3e4f5a6` (zoho_api_usage), `j1b2c3d4e5f6` (fleet health), and `i1a2b3c4d5e6` (`sales_orders.helper_ids` + third-party trucks).
 
 Neon stores durable business history and configuration only. Current/future Sales
 Orders, Fleet telemetry, staff directory data, alerts, routes, optimization runs,
@@ -53,6 +53,7 @@ the only date-filtered Neon reads.
 | `vehicles` | Vehicle roster plus merged capacity/operating configuration | Roster/configuration changes; no live telemetry |
 | `sales_orders` | Slim historical Sales Order snapshots and assignment state | Assignment, manifest/status transition, and delivery/completion events only |
 | `sales_order_lines` | Line-item snapshot belonging to a historical Sales Order | Replaced with its parent snapshot on the same event |
+| `zoho_so_live_cache` | Current Zoho Sales Order snapshots used to rebuild the live cache; deliberately separate from history so unassigned orders never enter historical readers | One upsert per newer/changed webhook or API snapshot; startup reads only the current window and daily cleanup removes rows with `shipment_date` before Manila today-3 |
 | `client_delivery_constraints` | Dispatcher-entered customer delivery constraints | Explicit admin/dispatcher edits only |
 | `load_manifests` | Confirmed dispatch manifests | Manifest confirmation/update only |
 | `manifest_items` | Items belonging to confirmed manifests | Manifest confirmation/update only |
