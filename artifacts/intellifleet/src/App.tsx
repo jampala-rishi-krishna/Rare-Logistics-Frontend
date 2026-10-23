@@ -3656,9 +3656,8 @@ function DataTablePage({
           </div>
         </div>
       )}
-      {kind === "users" && zohoUsage.data && (
-        <ZohoWebhookCard data={zohoUsage.data} />
-      )}
+      {/* Admin Users page: this is deliberately the next block after the Zoho usage card above. */}
+      {kind === "users" && zohoUsage.data?.zoho_usage && <ZohoWebhookCard data={zohoUsage.data} />}
       {kind === "loads" ? (
         <LoadPlanningWorkspace
           onNotice={setNotice}
